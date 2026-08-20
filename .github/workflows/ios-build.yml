@@ -27,7 +27,7 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
       
-      - name: Build unsigned
+      - name: Build unsigned (verbose)
         run: |
           xcodebuild \
             -scheme ${{ env.SCHEME }} \
@@ -37,8 +37,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY= \
             CODE_SIGNING_REQUIRED=NO \
-            -quiet \
-            build
+            build 2>&1 | tail -100
       
       - name: Find .app
         id: find_app
