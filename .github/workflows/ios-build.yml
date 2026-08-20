@@ -27,6 +27,9 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
       
+      - name: List schemes
+        run: xcodebuild -list
+      
       - name: Build unsigned (verbose)
         run: |
           xcodebuild \
@@ -38,6 +41,14 @@ jobs:
             CODE_SIGN_IDENTITY= \
             CODE_SIGNING_REQUIRED=NO \
             build 2>&1 | tail -100
+      
+      - name: Verify .app structure
+        run: |
+          APP_PATH=$(find /tmp/opencodenative_dd -name "OpencodeNative.app" -type d | head -1)
+          echo "App path: $APP_PATH"
+          ls -la "$APP_PATH/"
+          echo "---"
+          file "$APP_PATH/OpencodeNative" || echo "Executable not found"
       
       - name: Find .app
         id: find_app
