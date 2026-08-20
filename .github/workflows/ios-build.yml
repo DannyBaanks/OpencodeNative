@@ -1,4 +1,4 @@
-name: iOS Build & Sign
+name: iOS Build (unsigned IPA)
 
 on:
   push:
@@ -63,44 +63,6 @@ jobs:
           path: OpencodeNative-unsigned.ipa
           retention-days: 30
 
-  sign:
-    name: Sign with iloader (manual step)
-    runs-on: macos-latest
-    needs: build
-    if: false  # Disabled by default - enable when you have iloader configured
-    timeout-minutes: 15
-    
-    steps:
-      - name: Download unsigned IPA
-        uses: actions/download-artifact@v4
-        with:
-          name: OpencodeNative-unsigned
-          path: artifacts
-      
-      - name: Install iloader
-        run: |
-          # iloader requires Python 3.10+
-          pip3 install --user iloader
-      
-      - name: Sign IPA
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          TEAM_ID: ${{ secrets.TEAM_ID }}
-        run: |
-          cd artifacts
-          python3 -m iloader sign \
-            --apple-id "$APPLE_ID" \
-            --team-id "$TEAM_ID" \
-            OpencodeNative-unsigned.ipa \
-            -o OpencodeNative-signed.ipa
-      
-      - name: Upload signed IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpencodeNative-signed
-          path: artifacts/OpencodeNative-signed.ipa
-          retention-days: 30
-
   test:
     name: Swift syntax check
     runs-on: macos-latest
@@ -155,7 +117,7 @@ jobs:
           | Red localhost | ✅ | NWListener (Network.framework) | Solo 127.0.0.1 | `LocalPackHTTPServer` pattern |
           | Red externa | ✅ | URLSession | ATS, certificados | `ModelProvider.swift` |
           | WKWebView JS | ✅ | WebKit | Solo JS/WASM, sin filesystem directo | `WebRmmzRuntime` pattern |
-          | Code signing | ❌ Windows | Requiere macOS | GitHub Actions + SideStore | `ios-build.yml` |
+          | Code signing | ❌ Windows | Requiere macOS | Solo GitHub Actions (unsigned) | `ios-build.yml` |
           
           ## Resumen
           - **Totalmente posibles**: 10
