@@ -87,23 +87,12 @@ jobs:
       - name: Show available Simulator destinations
         run: xcrun simctl list devices available | head -40
 
-      - name: Resolve a runtime + device for testing
-        id: dest
-        run: |
-          RUNTIME=$(xcrun simctl list runtimes available -j | python3 -c "import sys, json; d=json.load(sys.stdin); print(next((r['identifier'] for r in d['runtimes'] if 'iOS' in r['name']), ''))")
-          echo "runtime=$RUNTIME" >> $GITHUB_OUTPUT
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import sys, json; d=json.load(sys.stdin); buf=[(r['identifier'], dev['udid']) for r in d['runtimes'] if 'iOS' in r['name'] for dev in d['devices'][r['identifier']] if dev['isAvailable']]; print(buf[0][1] if buf else '')")
-          echo "device=$DEVICE" >> $GITHUB_OUTPUT
-          echo "Using runtime=$RUNTIME device=$DEVICE"
-
       - name: Run tests
-        env:
-          RUNTIME: ${{ steps.dest.outputs.runtime }}
-          DEVICE: ${{ steps.dest.outputs.device }}
         run: |
+          set -o pipefail
           xcodebuild test \
             -scheme OpencodeNative \
-            -destination "id=${DEVICE},OS=latest" \
+            -destination "platform=iOS Simulator,OS=latest,name=iPhone 15" \
             -derivedDataPath /tmp/opencodenative_dd_test \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -136,53 +125,49 @@ jobs:
           cat > CAPABILITY_MATRIX.md << 'EOF'
           # Capability Matrix - OpencodeNative iOS
           
-          | Capability | iOS | Implementación | Restricción | Evidencia |
-          |---|---|---|---|---|
-          | Leer archivos | ✅ | FileManager + IOSWorkspace | Solo sandbox (App Support, Documents, tmp) | `Workspace.swift:100-115` |
-          | Escribir archivos | ✅ | FileManager.write | Solo directorios escribibles | `Workspace.swift:117-128` |
-          | Listar directorios | ✅ | contentsOfDirectory | Solo sandbox | `Workspace.swift:75-98` |
-          | Crear directorios | ✅ | createDirectory | Solo sandbox | `Workspace.swift:130-133` |
-          | Mover archivos | ✅ | moveItem | Solo sandbox | `Workspace.swift:143-156` |
-          | Borrar archivos | ✅ | removeItem | Solo sandbox | `Workspace.swift:158-168` |
-          | Buscar archivos (glob) | ✅ | Implementado en Swift (NSRegularExpression) | Sin regex, glob patterns | `FileSystemTools.swift:280-310` |
-          | File watching | ⚠️ | DispatchSource.fileSystemObject | Solo directorios propios, no recursivo profundo | No implementado |
-          | Security bookmarks | ⚠️ | URL.bookmarkData | Requiere picker + entitlement | No implementado |
-          | Ejecutar procesos | ❌ | IMPOSIBLE | Sin Process/NSTask, sandbox prohíbe fork/exec | Restricción fundamental iOS |
-          | Shell/bash | ❌ | IMPOSIBLE | No hay terminal/PTY | Restricción fundamental iOS |
-          | Git | ❌ | IMPOSIBLE | Sin libgit2 nativo | Requiere compilar o backend |
-          | Python/Node | ❌ | IMPOSIBLE | No hay binarios | Solo JS en WKWebView |
-          | Compilar código | ❌ | IMPOSIBLE | Sin toolchain | Requiere backend externo |
-          | Model API remoto | ✅ | URLSession + async/await | Red, latencia, API keys | `ModelProvider.swift:RemoteModelProvider` |
-          | Model CoreML | ✅ | CoreML + .mlpackage | Modelos <2GB, solo inference | No implementado aún |
-          | Persistencia JSON | ✅ | JSONEncoder + App Support | Ilimitado hasta storage | `Persistence.swift:IOSPersistence` |
-          | Persistencia JSONL | ✅ | Append-only events | Rotación diaria | `Persistence.swift:180-210` |
-          | Red localhost | ✅ | NWListener (Network.framework) | Solo 127.0.0.1 | `LocalPackHTTPServer` pattern |
-          | Red externa | ✅ | URLSession | ATS, certificados | `ModelProvider.swift` |
-          | WKWebView JS | ✅ | WebKit | Solo JS/WASM, sin filesystem directo | `WebRmmzRuntime` pattern |
-          | Code signing | ❌ Windows | Requiere macOS | Solo GitHub Actions (unsigned) | `ios-build.yml` |
+          > Generada por CI. Para evidencia completa ver `docs/OPENCODE_COMPAT.md`.
           
-          ## Resumen
-          - **Totalmente posibles**: 10
-          - **Posibles con restricciones**: 4  
-          - **Requieren abstracción**: 2
-          - **Imposibles directamente**: 5
-          - **Necesitan backend externo**: 4
+          ## OpenCode TUI Compatibility (anomalyco/opencode@dev, MIT)
           
-          ## Conclusión experimental
-          Un runtime tipo OpenCode **SÍ puede ejecutarse nativamente en iOS** para:
-          - Operaciones de filesystem completas dentro del sandbox
-          - Agent loop completo con tools declaradas
-          - Model providers via API remota
-          - Persistencia local completa
-          - UI nativa SwiftUI
+          | Req OpenCode | Estado iOS | Evidence |
+          |---|---|---|
+          | Binario iOS OpenCode | ❌ IMPOSIBLE | `install` script: solo linux/darwin/win × {x64,arm64}; `ios-*` -> reject |
+          | Runtime Bun 1.3.x | ❌ IMPOSIBLE | Bun no publica target `ios-arm64`; JSCore/WKWebView no cubren bun:/node:/PTY |
+          | PTY/TTY (@lydell/node-pty, @opentui) | ❌ IMPOSIBLE | No hay openpty/posix_openpt ni TTY raw en iOS SDK |
+          | spawn/exec (cross-spawn) | ❌ IMPOSIBLE | Process/NSTask ausentes en iOS SDK; sandbox prohíbe fork/execve/posix_spawn |
+          | node:fs + watch + glob | ⚠️ PARCIAL | Sources/Workspace + Sources/Tools reimplementan fs/glob en sandbox iOS |
+          | @effect/sql-sqlite-bun | ⚠️ PARCIAL | SQLite del sistema via Swift; no la variante Bun |
+          | tree-sitter native | ❌ IMPOSIBLE | tree-sitter-* requiere compilar para arm64-ios (sin toolchain en device) |
+          | TLS + WS + mDNS | ✅ POSIBLE | URLSession + URLSessionWebSocketTask + NWListener/NWBrowser |
+          | Entorno POSIX (SHELL/HOME/EDITOR) | ❌ IMPOSIBLE | No hay shell ni $HOME POSIX en iOS |
           
-          **NO puede** (sin backend externo):
-          - Ejecutar código arbitrario (shell, python, git, compiladores)
-          - Operaciones fuera del sandbox
-          - Terminal real / PTY
-          - Code signing en Windows
+          ## Veredicto
           
-          La arquitectura resultante es: **Agent Runtime + Tools declaradas + Model Provider (remoto/local) + Sandbox Filesystem**
+          **BLOCKED** — el TUI real de OpenCode no arranca en iOS. Primer hard blocker:
+          PTY/TTY (el renderer @opentui no puede inicializar). No se simula.
+          
+          ### Runtime nativo alternativo (no OpenCode) que SÍ corre en iOS
+          
+          | Capability | iOS | Implementación |
+          |---|---|---|
+          | FS sandbox (read/write/list/move/delete/create) | ✅ | `Sources/Workspace/IOSWorkspace.swift` |
+          | Glob search | ✅ | `Sources/Tools/GlobMatcher.swift` (puro Swift) |
+          | 8 tools de filesystem | ✅ | `Sources/Tools/FileSystemTools.swift` |
+          | Agent loop async multi-turn | ✅ | `Sources/Agent/AgentLoop.swift` |
+          | LLM API remoto (OpenAI-compat) | ✅ | `Sources/Model/RemoteModelProvider.swift` |
+          | Provider scripteado offline (demo/tests) | ✅ | `Sources/Model/ScriptedModelProvider.swift` |
+          | Persistencia JSON + JSONL audit | ✅ | `Sources/Persistence/IOSPersistence.swift` |
+          | TUI/console-first UI (no chat) | ✅ | `Sources/UI/ConsoleView.swift` |
+          | Capability matrix en runtime | ✅ | `Sources/Host/IOSCapabilityMatrix.swift` |
+          
+          ## Restricciones iOS (no fingidas)
+          - Ejecutar código arbitrario (shell, python, git, compiladores): IMPOSIBLE
+          - Operaciones fuera del sandbox: IMPOSIBLE
+          - Terminal real / PTY: IMPOSIBLE
+          - Code signing en Windows: requiere macOS (GitHub Actions macOS runner + iloader)
+          
+          ## Atribución
+          OpenCode © anomalyco, MIT. OpencodeNative NO es OpenCode y no está afiliado.
           EOF
       
       - name: Upload capability report
@@ -190,3 +175,51 @@ jobs:
         with:
           name: capability-report
           path: CAPABILITY_MATRIX.md
+
+  sign:
+    name: Sign IPA with iloader (optional)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 10
+    # Solo corre si el repo tiene el var ENABLE_ILOADER_SIGN='true' y los secrets APPLE_ID/TEAM_ID configurados.
+    if: ${{ vars.ENABLE_ILOADER_SIGN == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download unsigned IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: OpencodeNative-unsigned
+          path: ipa
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install iloader
+        run: |
+          python -m pip install --upgrade pip
+          pip install --user iloader
+
+      - name: Sign IPA
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          test -n "$APPLE_ID" || { echo "::error::Secret APPLE_ID missing"; exit 1; }
+          test -n "$TEAM_ID"  || { echo "::error::Secret TEAM_ID missing"; exit 1; }
+          python -m iloader sign \
+            --apple-id "$APPLE_ID" \
+            --team-id "$TEAM_ID" \
+            ipa/OpencodeNative-unsigned.ipa \
+            -o OpencodeNative-signed.ipa
+
+      - name: Upload signed IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpencodeNative-signed
+          path: OpencodeNative-signed.ipa
+          retention-days: 30
