@@ -1,4 +1,5 @@
 import SwiftUI
+import OpencodeNativeCore
 
 @main
 public struct OpencodeNativeApp: App {

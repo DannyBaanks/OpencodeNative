@@ -1,5 +1,5 @@
 import XCTest
-@testable import OpencodeNative
+@testable import OpencodeNativeCore
 
 /// Tests de Workspace / Persistence / Tools / AgentLoop end-to-end.
 /// Usan un workspace de tests aislado (raíz en App Support con prefijo único).

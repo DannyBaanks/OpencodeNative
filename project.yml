@@ -16,15 +16,34 @@ settings:
     MARKETING_VERSION: "0.1.0"
 
 targets:
-  OpencodeNative:
-    type: application
+  OpencodeNativeCore:
+    type: framework.static
     platform: iOS
     sources:
       - path: Sources
         type: group
+        excludes:
+          - OpencodeNativeApp.swift
+    settings:
+      base:
+        PRODUCT_NAME: OpencodeNativeCore
+        PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native.core
+        DEFINES_MODULE: YES
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        SKIP_INSTALL: YES
+
+  OpencodeNative:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        type: group
       - path: Assets.xcassets
       - path: LocalPacks
         type: folder
+    dependencies:
+      - target: OpencodeNativeCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native
@@ -41,7 +60,7 @@ targets:
       - path: Tests
         type: group
     dependencies:
-      - target: OpencodeNative
+      - target: OpencodeNativeCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native.tests
@@ -53,6 +72,7 @@ schemes:
   OpencodeNative:
     build:
       targets:
+        OpencodeNativeCore: all
         OpencodeNative: all
     run:
       config: Debug

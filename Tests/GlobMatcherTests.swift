@@ -1,5 +1,5 @@
 import XCTest
-@testable import OpencodeNative
+@testable import OpencodeNativeCore
 
 final class GlobMatcherTests: XCTestCase {
     func testSimpleStarExtension() {
