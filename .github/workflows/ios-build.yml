@@ -91,12 +91,9 @@ jobs:
         run: |
           set -o pipefail
           # Resolve a concrete iPhone on the latest iOS runtime installed on the runner.
-          # xcodebuild refuses 'OS=latest' alone with 'name=' when the bare 'iPhone 15'
-          # isn't installed; we find an available iPhone UDID via simctl.
           UDID=$(xcrun simctl list devices available -j | python3 -c "
           import sys, json
           d = json.load(sys.stdin)
-          # 'devices' maps runtime identifier -> list of devices
           ios_phones = []
           for runtime, devices in d.get('devices', {}).items():
             if 'iOS' not in runtime:
@@ -112,10 +109,15 @@ jobs:
             exit 1
           fi
           echo "Resolved simulator UDID: $UDID"
+
+          # Clean derived data before testing to avoid "Multiple commands produce" errors
+          rm -rf /tmp/opencodenative_dd_test
+
           xcodebuild test \
             -scheme OpencodeNative \
             -destination "id=$UDID" \
             -derivedDataPath /tmp/opencodenative_dd_test \
+            -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             2>&1 | tee test-output.log
