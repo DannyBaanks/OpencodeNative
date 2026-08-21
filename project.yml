@@ -33,3 +33,36 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     info:
       path: Info.plist
+
+  OpencodeNativeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+        type: group
+    dependencies:
+      - target: OpencodeNative
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native.tests
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+
+schemes:
+  OpencodeNative:
+    build:
+      targets:
+        OpencodeNative: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - OpencodeNativeTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

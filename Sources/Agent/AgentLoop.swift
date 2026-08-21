@@ -8,22 +8,46 @@ public struct AgentTool: Sendable, Codable {
     public let capabilities: ToolCapabilities
     
     public struct ToolSchema: Codable, Sendable {
-        public let type: String = "object"
+        public var type: String = "object"
         public let properties: [String: PropertySchema]
         public let required: [String]
+        
+        public init(properties: [String: PropertySchema], required: [String], type: String = "object") {
+            self.type = type
+            self.properties = properties
+            self.required = required
+        }
     }
     
     public struct PropertySchema: Codable, Sendable {
         public let type: String
         public let description: String?
         public let enumValues: [String]?
+        
+        public init(type: String, description: String?, enumValues: [String]? = nil) {
+            self.type = type
+            self.description = description
+            self.enumValues = enumValues
+        }
     }
     
     public struct ToolCapabilities: Codable, Sendable {
-        public let requiresNetwork: Bool = false
-        public let requiresFileSystem: Bool = false
-        public let isDestructive: Bool = false
-        public let restrictions: [String] = []
+        public var requiresNetwork: Bool = false
+        public var requiresFileSystem: Bool = false
+        public var isDestructive: Bool = false
+        public var restrictions: [String] = []
+        
+        public init(
+            requiresNetwork: Bool = false,
+            requiresFileSystem: Bool = false,
+            isDestructive: Bool = false,
+            restrictions: [String] = []
+        ) {
+            self.requiresNetwork = requiresNetwork
+            self.requiresFileSystem = requiresFileSystem
+            self.isDestructive = isDestructive
+            self.restrictions = restrictions
+        }
     }
     
     public init(
@@ -183,7 +207,13 @@ public actor AgentLoop {
                     name: tool.name,
                     description: tool.description,
                     parameters: ToolDefinition.ToolParameters(
-                        properties: tool.parameters.properties,
+                        properties: tool.parameters.properties.mapValues {
+                            ToolDefinition.PropertySchema(
+                                type: $0.type,
+                                description: $0.description,
+                                enumValues: $0.enumValues
+                            )
+                        },
                         required: tool.parameters.required
                     )
                 )
@@ -216,7 +246,7 @@ public actor AgentLoop {
                 
                 // Ejecutar cada tool call
                 for toolCall in toolCalls {
-                    let invocation = ToolInvocation(name: toolCall.name, arguments: toolCall.arguments)
+                    let invocation = ToolInvocation(id: toolCall.id, name: toolCall.name, arguments: toolCall.arguments)
                     await eventHandler?(.toolInvocation(invocation))
                     
                     let startTime = Date()
@@ -224,12 +254,12 @@ public actor AgentLoop {
                     
                     await eventHandler?(.toolResult(result))
                     
-                    // Añadir resultado a la conversación
+                    // Añadir resultado a la conversación como mensaje tool vinculado al tool_call_id original
                     let toolResultMsg = Message(
                         role: .tool,
-                        content: result.output,
+                        content: result.error != nil ? "error: \(result.error!)" : (result.output.isEmpty ? "(empty)" : result.output),
                         toolResults: [ToolResult(
-                            toolCallId: invocation.id,
+                            toolCallId: toolCall.id,
                             output: result.output,
                             error: result.error
                         )]
@@ -284,17 +314,18 @@ public actor AgentLoop {
             case .user:
                 messages.append(ModelMessage(role: .user, content: msg.content))
             case .assistant:
-                var content = msg.content
-                if let toolCalls = msg.toolCalls, !toolCalls.isEmpty {
-                    // El modelo ya incluyó los tool calls en su respuesta
-                }
-                messages.append(ModelMessage(role: .assistant, content: content))
+                let content = msg.content
+                messages.append(ModelMessage(
+                    role: .assistant,
+                    content: content,
+                    toolCalls: msg.toolCalls
+                ))
             case .tool:
                 if let toolResults = msg.toolResults {
                     for result in toolResults {
                         messages.append(ModelMessage(
                             role: .tool,
-                            content: result.output,
+                            content: result.output.isEmpty ? (result.error ?? "") : result.output,
                             toolCallId: result.toolCallId
                         ))
                     }

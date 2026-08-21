@@ -6,8 +6,7 @@ public struct OpencodeNativeApp: App {
     
     public var body: some Scene {
         WindowGroup {
-            ContentView()
-                .preferredColorScheme(.system)
+            ConsoleView()
         }
     }
 }

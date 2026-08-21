@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Capabilities que un proveedor de modelos declara.
 public struct ModelProviderCapabilities: Codable, Sendable {
@@ -129,17 +132,26 @@ public struct ModelMessage: Codable, Sendable {
     public let content: String
     public let name: String? // for tool messages
     public let toolCallId: String? // for tool results
+    public let toolCalls: [ToolCall]? // assistant tool_calls echo (history)
     public let metadata: [String: String]
     
     public enum Role: String, Codable, Sendable {
         case system, user, assistant, tool
     }
     
-    public init(role: Role, content: String, name: String? = nil, toolCallId: String? = nil, metadata: [String: String] = [:]) {
+    public init(
+        role: Role,
+        content: String,
+        name: String? = nil,
+        toolCallId: String? = nil,
+        toolCalls: [ToolCall]? = nil,
+        metadata: [String: String] = [:]
+    ) {
         self.role = role
         self.content = content
         self.name = name
         self.toolCallId = toolCallId
+        self.toolCalls = toolCalls
         self.metadata = metadata
     }
 }
@@ -214,7 +226,7 @@ public struct ModelConfiguration: Codable, Sendable {
 
 /// Proveedor remoto genérico (OpenAI-compatible API)
 /// Compatible con OpenAI, Anthropic (via proxy), Ollama, vLLM, etc.
-public actor RemoteModelProvider: ModelProvider {
+public actor RemoteModelProvider: @preconcurrency ModelProvider {
     public let id: String
     public let name: String
     public let capabilities: ModelProviderCapabilities
@@ -296,11 +308,13 @@ public actor RemoteModelProvider: ModelProvider {
         options: GenerationOptions
     ) -> AsyncThrowingStream<ModelStreamChunk, Error> {
         AsyncThrowingStream { continuation in
+            #if canImport(UIKit) || canImport(AppKit) || os(Linux)
             Task {
                 do {
                     guard let config = config else {
                         throw ModelProviderError.notConfigured("Call configure() first")
                     }
+                    _ = config
                     
                     let request = try buildRequest(messages: messages, tools: tools, options: options, stream: true)
                     let (bytes, response) = try await session.bytes(for: request)
@@ -335,6 +349,11 @@ public actor RemoteModelProvider: ModelProvider {
                     continuation.finish(throwing: error)
                 }
             }
+            #else
+            // Streaming via URLSession.bytes is unavailable on this platform toolchain
+            // (e.g. Swift CoreLibs FoundationNetworking on Windows). Non-streaming generate() works.
+            continuation.finish(throwing: ModelProviderError.unsupportedFeature("streaming not supported on this host toolchain"))
+            #endif
         }
     }
     
@@ -355,6 +374,19 @@ public actor RemoteModelProvider: ModelProvider {
                 var m: [String: Any] = ["role": msg.role.rawValue, "content": msg.content]
                 if let name = msg.name { m["name"] = name }
                 if let toolCallId = msg.toolCallId { m["tool_call_id"] = toolCallId }
+                // Echo assistant tool_calls back into history (OpenAI requires this for multi-turn tool use)
+                if msg.role == .assistant, let toolCalls = msg.toolCalls, !toolCalls.isEmpty {
+                    m["tool_calls"] = toolCalls.map { tc in
+                        [
+                            "id": tc.id,
+                            "type": "function",
+                            "function": [
+                                "name": tc.name,
+                                "arguments": (try? jsonString(from: tc.arguments)) ?? "{}"
+                            ]
+                        ] as [String: Any]
+                    }
+                }
                 return m
             },
             "stream": stream
@@ -413,7 +445,9 @@ public actor RemoteModelProvider: ModelProvider {
         }
         
         let toolCalls = choice.message.toolCalls?.map { tc in
-            ToolCall(id: tc.id, name: tc.function.name, arguments: tc.function.arguments)
+            // Function arguments arrive as a JSON string; decode to [String:String] for our contract.
+            let args = decodeArguments(tc.function.arguments)
+            return ToolCall(id: tc.id, name: tc.function.name, arguments: args)
         }
         
         let usage = decoded.usage.map { u in
@@ -428,6 +462,31 @@ public actor RemoteModelProvider: ModelProvider {
             metadata: [:]
         )
     }
+}
+
+/// Decode a model-provided JSON arguments string into a flat [String:String] dict.
+/// Returns empty dict on parse failure or non-object payload.
+private func decodeArguments(_ json: String) -> [String:String] {
+    guard let data = json.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        return [:]
+    }
+    var out: [String:String] = [:]
+    for (k, v) in obj {
+        switch v {
+        case let s as String: out[k] = s
+        case let n as NSNumber: out[k] = n.stringValue
+        case let b as Bool: out[k] = b ? "true" : "false"
+        default: out[k] = "\(v)"
+        }
+    }
+    return out
+}
+
+/// Serialize a flat [String:String] back to a JSON object string for the API.
+private func jsonString(from dict: [String:String]) throws -> String {
+    let data = try JSONSerialization.data(withJSONObject: dict)
+    return String(data: data, encoding: .utf8) ?? "{}"
 }
 
 // MARK: - Response decoding

@@ -2,7 +2,7 @@ import Foundation
 
 /// Implementación concreta de herramientas de filesystem para iOS
 /// Cada herramienta declara explícitamente sus capacidades y restricciones
-public actor FileSystemToolExecutor: ToolExecutor {
+public actor FileSystemToolExecutor: @preconcurrency ToolExecutor {
     private let workspace: any Workspace
     
     public init(workspace: any Workspace) {
@@ -380,7 +380,7 @@ public actor FileSystemToolExecutor: ToolExecutor {
                 let relativePath = dirPath.isEmpty ? item.name : "\(dirPath)/\(item.name)"
                 
                 // Match filename against glob pattern
-                if matchGlob(pattern, relativePath) {
+                if GlobMatcher.match(pattern, relativePath) {
                     matches.append(item)
                 }
                 
@@ -503,17 +503,5 @@ public actor FileSystemToolExecutor: ToolExecutor {
         )
     }
     
-    // MARK: - Glob matching helper
-    
-    private func matchGlob(_ pattern: String, _ path: String) -> Bool {
-        // Convert glob to regex
-        let regexPattern = pattern
-            .replacingOccurrences(of: ".", with: "\\.")
-            .replacingOccurrences(of: "*", with: ".*")
-            .replacingOccurrences(of: "?", with: ".")
-            .replacingOccurrences(of: "**/", with: "(.*/)?")
-        
-        let regex = "^" + regexPattern + "$"
-        return (try? NSRegularExpression(pattern: regex).firstMatch(in: path, range: NSRange(location: 0, length: path.utf16.count))) != nil
-    }
+    // MARK: - Glob matching (delegado a GlobMatcher público para testabilidad)
 }
