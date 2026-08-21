@@ -29,6 +29,7 @@ targets:
         PRODUCT_NAME: OpencodeNativeCore
         PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native.core
         DEFINES_MODULE: YES
+        GENERATE_INFOPLIST_FILE: YES
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         SKIP_INSTALL: YES
