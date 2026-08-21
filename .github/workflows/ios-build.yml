@@ -124,7 +124,8 @@ jobs:
 
       - name: Fail if tests did not run
         run: |
-          grep -E "(Test Suite '(All tests)|(Executed .* tests, with .* failures)" test-output.log || (echo "::error::No tests executed" && exit 1)
+          cat test-output.log | tr -d '\r' | sed $'s/\x1b\[[0-9;]*m//g' > test-output-clean.log
+          grep -E "(Executed [0-9]+ test|TEST (FAILED|PASSED))" test-output-clean.log || (echo "::error::No tests executed" && exit 1)
 
       - name: Upload test log
         if: always()
