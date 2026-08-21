@@ -80,7 +80,7 @@ Verificado contra el SDK iOS/Apple documentado y contra el sandbox:
 
 ## 4. COMPATIBILITY MATRIX — OpenCode req ↔ iOS
 
-Leyenda: **POSIBLE** / **PARCIAL** (alternativa nativa distinta) / **IMPOSIBLE**.
+Legend: **POSIBLE** / **PARCIAL** (native alternative exists) / **IMPOSIBLE**.
 
 | Req | Cap. iOS | Estado | Harness strategy |
 |---|---|---|---|
@@ -102,7 +102,7 @@ Leyenda: **POSIBLE** / **PARCIAL** (alternativa nativa distinta) / **IMPOSIBLE**
 Resultado de un intento de boot en iOS:
 
 - **C1**: No existe binario OpenCode para iOS. El instalador rechaza `ios-*`.
-- **C2**: No existe Bun para iOS. El binario OpenCode está compilado *con* Bun para Uno-Cargar; incluso suponiendo un cross-build Bun-IOS hipotético:
+- **C2**: No existe Bun para iOS. El binario OpenCode está compilado *con* Bun; incluso suponiendo un cross-build Bun-iOS hipotético:
 - **C3 + C10**: el TUI requiere **PTY/TTY** provistos por `@lydell/node-pty` y renderizados por `@opentui` con escapes ANSI. iOS no expone PTY ni TTY crudo. Sin estas APIs la TUI de OpenCode **no puede inicializar su pantalla**. Este es el **bloqueador histórico y sin solución** dentro del sandbox público de iOS.
 - **C4**: la herramienta `bash` (que OpenCode expone como su tool por defecto del agente `build`) necesita `cross-spawn` ⇒ `Process()`, inexistente en iOS.
 
@@ -149,16 +149,16 @@ B) *OpenCode TUI real arranca parcialmente y se documenta la capability exacta
 
 
 
-## 8. NO SON ACEPTADOS como resultado
+## 8. NOT ACCEPTED as Results
 
-- "App que se parece a OpenCode" — explícitamente rechazado.
-- "TUI inventada" — el `Sources/Host` NO crea una TUI; documenta compat.
-- "Shell/compilador fake" — no se simula lo que no existe.
-- "Bun-iOS" sin demostración — fuera del alcance.
+- "App that looks like OpenCode" — explicitly rejected.
+- "Fake TUI" — `Sources/Host` does not create a TUI; it documents compatibility.
+- "Fake shell/compiler" — does not simulate what does not exist.
+- "Bun-iOS" without demonstration — out of scope.
 
 
 
-## 9. REFERENCIAS ISSUES ABIERTOS
+## 9. OPEN ISSUES
 
 `https://github.com/anomalyco/opencode/issues` — canal oficial para trackear
 posibles vías (e.g. builds experimentales iOS) que, de existir, actualizarían
@@ -166,10 +166,10 @@ este documento.
 
 
 
-## 10. ATRIBUCIÓN
+## 10. ATTRIBUTION
 
-OpenCode es © 2025 anomalyco y contribuidores, bajo licencia MIT
+OpenCode is &copy; anomalyco and contributors, licensed MIT
 (`packages/opencode/package.json` → `"license": "MIT"`).
-Este proyecto NO es OpenCode y no está afiliado al equipo de OpenCode.
-Su nombre es "OpencodeNative" (atribución clara: REPLICA compatible para iOS).
-Se usa el nombre OpenCode únicamente para describir el objetivo de compatibilidad.
+This project is not affiliated with OpenCode.
+The name "OpencodeNative" clearly attributes the compatibility target.
+OpenCode is used solely to describe the compatibility objective.

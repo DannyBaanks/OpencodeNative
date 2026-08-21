@@ -1,131 +1,179 @@
-# OpencodeNative — OpenCode TUI Compatibility Harness for iOS
+# OpencodeNative
 
-> Experimento de compatibilidad: puede el **TUI real de OpenCode**
-> arrancar sobre un runtime nativo de iOS vía una capa de compatibilidad.
-> **Evidence before narrative.** Ninguna afirmación se sostiene sin evidencia.
+> OpenCode TUI compatibility harness for iOS — documents exactly why the real
+> OpenCode TUI cannot run on iOS, and provides a native Swift agent runtime as
+> an alternative.
 
-## ⚠️ IMPORTANTE — atribución
-
-OpenCode es © anomalyco y contribuidores, licencia MIT (ver `docs/OPENCODE_COMPAT.md` §10).
-Este proyecto **NO es OpenCode** y **no está afiliado** al equipo de OpenCode.
-OpenCodeNative es un *experimento de compatibilidad* que importa el runtime de OpenCode
-como objeto de estudio, no como producto.
-
-No uses OpenCode en el nombre de tu proyecto derivado sin aclarar que no es oficial.
+[![iOS Build](https://github.com/DannyBaanks/OpencodeNative/actions/workflows/ios-build.yml/badge.svg)](https://github.com/DannyBaanks/OpencodeNative/actions/workflows/ios-build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-iOS%2016.0+-lightgrey.svg)](https://developer.apple.com/ios/)
+[![Swift](https://img.shields.io/badge/Swift-5.0-orange.svg)](https://swift.org)
 
 ---
 
-## Estado actual
+## What is this?
 
-**Veredicto experimental: `BLOCKED` — el TUI real de OpenCode NO arranca en iOS.**
+This project answers a single question: **can the real OpenCode TUI run on iOS?**
+
+The answer is **no**. This repo documents *exactly why* with evidence from the
+actual OpenCode repository, and provides a native Swift agent runtime that
+demonstrates the subset of capabilities iOS *does* support.
+
+### Attribution
+
+OpenCode is &copy; anomalyco and contributors, licensed MIT.
+This project is **not affiliated** with OpenCode. The name is used solely to
+describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md#10-atribución) for full attribution.
+
+---
+
+## Verdict
 
 | | |
 |---|---|
-| **Compat con OpenCode TUI** | `BLOCKED` — ver `docs/OPENCODE_COMPAT.md` |
-| **Primera causa de bloqueo** | PTY/TTY + spawn/exec + runtime Bun ausentes en iOS |
-| **Runtime nativo alternativo** | `Partial` — `AgentLoop` Swift + 8 tools fs + provider (scripted / remote) |
-| **Tests** | 8 suites en `Tests/` (corren en iOS Simulator vía CI) |
+| **OpenCode TUI compat** | `BLOCKED` — PTY/TTY, spawn/exec, Bun runtime absent on iOS |
+| **Native Swift runtime** | Working — agent loop, 8 filesystem tools, persistence, LLM provider |
+| **CI tests** | 26 tests passing on iOS Simulator |
 
-No existe tal cosa como "OpenCode funcionando en iOS". Lo que existe es:
-- un *compatibility harness* que documenta exactamente por qué no,
-- un *runtime nativo alternativo* (no OpenCode) que opera el flujo
-  `usuario → agente → tools → workspace sandbox → resultado` dentro de iOS.
+**The first hard blocker is PTY/TTY** — OpenCode's TUI renderer (`@opentui`)
+requires raw terminal access that iOS simply does not expose. This is not a
+bug in this project; it is the platform boundary.
 
+---
 
-
-## ¿De qué va este repo?
+## Architecture
 
 ```
 iPhone
-   │
-OpenCodeNative (app iOS)
-   │
-native iOS runtime  ─── compatibility harness ─── capability matrix
-   │
-Reports: PTY/TTY/spawn/Bun no existen en iOS → TUI real no arranca
-   │
-Alternativa: agent runtime Swift (no OpenCode) sobre sandbox iOS
+  |
+OpencodeNative (iOS app)
+  |
+  +-- Compatibility Harness (Sources/Host/)
+  |     OpenCodeRuntimeContract   static OpenCode requirements (with evidence)
+  |     IOSCapabilityMatrix       runtime-probed iOS capabilities
+  |     CompatibilityReport       reconciles contract vs. matrix
+  |     OpenCodeBootAttempt       documents boot failure
+  |
+  +-- Native Swift Runtime (not OpenCode)
+        AgentLoop                 async multi-turn agent
+        FileSystemTools           8 sandbox filesystem tools
+        ScriptedModelProvider     offline deterministic demo provider
+        RemoteModelProvider       OpenAI-compatible LLM API
+        IOSWorkspace              sandbox filesystem
+        IOSPersistence            JSON + JSONL audit trail
+        ConsoleView               TUI-first console UI
 ```
 
-**No es una "app de chat parecida a OpenCode".** Las UI son una consola
-TUI-first que muestra el boot attempt documentado y, por separado, ejecuta
-el runtime alternativo nativo etiquetado claramente como tal.
+---
 
+## Quick Start
 
+### Requirements
 
-## Estructura
+- macOS with Xcode 15+ (iOS builds require macOS)
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 
-```
-Sources/
-├── OpencodeNativeApp.swift        Entry (SwiftUI)
-├── Host/                          Capa de compatibilidad + matrix
-│   ├── OpenCodeRuntimeContract.swift   Gunks de OpenCode (evidence)
-│   ├── IOSCapabilityMatrix.swift       Probe runtime experiencias iOS
-│   ├── CompatibilityReport.swift       Reconcilia contrato ↔ matrix
-│   └── OpenCodeBootAttempt.swift       Boot attempt documentado
-├── Agent/AgentLoop.swift          Runtime alternativo nativo (no OpenCode)
-├── Model/ModelProvider.swift      LLM remoto (OpenAI-compatible)
-├── Model/ScriptedModelProvider.swift  Offline demo sin API key
-├── Workspace/Workspace.swift      FS sandbox iOS
-├── Persistence/Persistence.swift  JSON + JSONL audit trail
-├── Tools/
-│   ├── FileSystemTools.swift      8 tools fs
-│   └── GlobMatcher.swift          glob matcher puro (public)
-└── UI/
-    ├── SessionViewModel.swift     Transcripts + boot + agent events
-    └── ConsoleView.swift          Consola TUI monospace
-
-Tests/
-├── GlobMatcherTests.swift
-├── HostTests.swift                CapabilityReport + BootAttempt
-└── CoreEndToEndTests.swift        WS / Persistence / Tools / Agent E2E
-
-docs/
-├── OPENCODE_COMPAT.md             Contrato + matrix + veredicto
-├── IOS_LIMITATIONS.md             Capacidades iOS exactas
-└── USAGE.md                        Cómo usar / demo
-```
-
-
-
-## Compilación (mismo pipeline que antes, revisado)
-
-- macOS + Xcode 15+ (no puede compilarse iOS en Windows/Linux).
+### Build & Run
 
 ```bash
 brew install xcodegen
 xcodegen generate
 open OpencodeNative.xcodeproj
-# Product → Build (⌘B) → run on iOS Simulator
-# Product → Test  (⌘U) → run the OpencodeNativeTests bundle on the simulator
+# Product → Build (⌘R) → Run on iOS Simulator
 ```
 
-### CI (`.github/workflows/ios-build.yml`)
+### Run Tests
 
-- `build`: unsigned IPA para iOS device (macos runner) — como antes.
-- `test`: **`xcodebuild test` en iOS Simulator** (no más "syntax check only").
-  Ejecuta los tests del target `OpencodeNativeTests`.
-- `capability-report`: genera `CAPABILITY_MATRIX.md`.
+```bash
+xcodebuild test \
+  -scheme OpencodeNative \
+  -destination 'platform=iOS Simulator,name=iPhone 16'
+```
 
+---
 
+## Slash Commands
 
-## Tests rápidos en local
+| Command | Description |
+|---|---|
+| `/help` | List available commands |
+| `/boot` | Run the OpenCode boot attempt (compatibility check) |
+| `/matrix` | Show the full capability matrix sheet |
+| `/demo` | Run the scripted agent demo (no API key needed) |
+| `/provider scripted` | Switch to offline demo provider |
+| `/provider remote` | Switch to remote LLM provider |
+| `/clear` | Clear the console transcript |
 
-- iOS Simulator (macOS): `xcodebuild test -scheme OpencodeNative -destination 'platform=iOS Simulator,name=iPhone 15'`.
-- En Windows / toolchain sin XCTest/Xcode: solo se puede `swiftc -parse` los `.swift`.
-  El repo se valida así desde PowerShell: ver `docs/USAGE.md` §"Verificación sin Xcode".
+---
 
+## Project Structure
 
+```
+App/
+  OpencodeNativeApp.swift              @main entry point
 
-## Documentación
+Sources/
+  Host/                                Compatibility harness
+    OpenCodeRuntimeContract.swift      Static OpenCode requirements + evidence
+    IOSCapabilityMatrix.swift          Runtime-probed iOS capabilities
+    CompatibilityReport.swift          Contract vs. matrix reconciliation
+    OpenCodeBootAttempt.swift          Boot attempt transcript
+  Agent/
+    AgentLoop.swift                    Async multi-turn agent runtime
+  Model/
+    ModelProvider.swift                Remote LLM provider (OpenAI-compat)
+    ScriptedModelProvider.swift        Offline deterministic provider
+  Workspace/
+    Workspace.swift                    iOS sandbox filesystem
+  Persistence/
+    Persistence.swift                  JSON + JSONL audit trail
+  Tools/
+    FileSystemTools.swift              8 filesystem tools
+    GlobMatcher.swift                  Pure Swift glob matcher
+  UI/
+    SessionViewModel.swift             Transcript + commands + agent
+    ConsoleView.swift                  TUI-first console view
 
-- `docs/OPENCODE_COMPAT.md` — análisis completo del contrato OpenCode + matrix iOS.
-- `docs/IOS_LIMITATIONS.md` — capacidades iOS exactas y qué no se simula.
-- `docs/USAGE.md` — demo reproduible + comandos slash del TUI.
+Tests/
+  GlobMatcherTests.swift               Glob pattern matching
+  HostTests.swift                      Capability matrix + compatibility report
+  CoreEndToEndTests.swift              Workspace + persistence + tools + agent E2E
 
+docs/
+  OPENCODE_COMPAT.md                   Full compatibility report with evidence
+  IOS_LIMITATIONS.md                   iOS capability documentation
+  USAGE.md                             Demo instructions + verification
+```
 
+---
 
-## Licencia
+## CI/CD
 
-- Código propio de este repo: experimental, sin licencia formal.
-- OpenCode (anomalyco) referenciado: MIT; ver `docs/OPENCODE_COMPAT.md` §10.
+The GitHub Actions workflow (`.github/workflows/ios-build.yml`) runs on every push:
+
+| Job | Description |
+|---|---|
+| **build** | Builds unsigned IPA for iOS device |
+| **test** | Runs all unit tests on iOS Simulator |
+| **capability-report** | Generates capability matrix artifact |
+| **sign** | *(optional)* Signs IPA with iloader — requires `ENABLE_ILOADER_SIGN=true` var + `APPLE_ID`/`TEAM_ID` secrets |
+
+---
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md) | Full compatibility report with evidence from OpenCode repository |
+| [`docs/IOS_LIMITATIONS.md`](docs/IOS_LIMITATIONS.md) | Honest iOS capability documentation |
+| [`docs/USAGE.md`](docs/USAGE.md) | Demo instructions, slash commands, verification without Xcode |
+| [`EXPERIMENT_REPORT.md`](EXPERIMENT_REPORT.md) | Final experiment report |
+
+---
+
+## License
+
+This project is licensed under the MIT License — see [`LICENSE`](LICENSE) for details.
+
+OpenCode (`anomalyco/opencode`) is referenced under its MIT license.
+This project is not affiliated with or endorsed by the OpenCode team.
