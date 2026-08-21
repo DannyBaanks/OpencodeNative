@@ -11,7 +11,7 @@ final class WorkspaceTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        try? FileManager.default.removeItem(at: workspace.rootURL)
+        try? FileManager.default.removeItem(at: await workspace.rootURL)
     }
 
     func testCreateAndReadFile() async throws {
@@ -32,14 +32,17 @@ final class WorkspaceTests: XCTestCase {
     func testMoveFile() async throws {
         try await workspace.writeFile(at: "from.txt", data: Data("x".utf8))
         try await workspace.moveFile(from: "from.txt", to: "to.txt")
-        XCTAssertTrue(await workspace.fileExists(at: "to.txt"))
-        XCTAssertFalse(await workspace.fileExists(at: "from.txt"))
+        let exists = await workspace.fileExists(at: "to.txt")
+        XCTAssertTrue(exists)
+        let gone = await workspace.fileExists(at: "from.txt")
+        XCTAssertFalse(gone)
     }
 
     func testDeleteFile() async throws {
         try await workspace.writeFile(at: "doomed.txt", data: Data("x".utf8))
         try await workspace.deleteFile(at: "doomed.txt")
-        XCTAssertFalse(await workspace.fileExists(at: "doomed.txt"))
+        let exists = await workspace.fileExists(at: "doomed.txt")
+        XCTAssertFalse(exists)
     }
 
     func testPathTraversalBlocked() async throws {
@@ -62,7 +65,7 @@ final class PersistenceTests: XCTestCase {
     }
 
     func testSaveLoadConversation() async throws {
-        let conv = Conversation(id: "t-1", title: "T")
+        var conv = Conversation(id: "t-1", title: "T")
         conv.messages.append(Message(role: .user, content: "hi"))
         try await persistence.saveConversation(conv)
         let loaded = try await persistence.loadConversation(id: "t-1")
@@ -73,7 +76,7 @@ final class PersistenceTests: XCTestCase {
     func testEventLoggingJSONL() async throws {
         let id = UUID().uuidString
         try await persistence.appendEvent(AgentEvent(conversationId: id, type: .userInput, payload: ["content": "x"]))
-        let events = try await persistence.loadEvents(conversationId: id)
+        let events = try await persistence.loadEvents(conversationId: id, since: nil)
         XCTAssertEqual(events.count, 1)
         XCTAssertEqual(events.first?.type, .userInput)
     }
@@ -92,7 +95,8 @@ final class PersistenceTests: XCTestCase {
 final class ToolsDefinitionTests: XCTestCase {
     func testAllEightToolsPresent() async throws {
         let ws = try IOSWorkspace(rootName: "tools_test_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: ws.rootURL) }
+        let rootURL = await ws.rootURL
+        defer { try? FileManager.default.removeItem(at: rootURL) }
         let exec = FileSystemToolExecutor(workspace: ws)
         let names = await exec.availableTools.map { $0.name }.sorted()
         let expected = ["create_directory","delete_file","file_info","list_directory","move_file","read_file","search_files","write_file"]
@@ -101,7 +105,8 @@ final class ToolsDefinitionTests: XCTestCase {
 
     func testWriteFileIsMarkedDestructive() async throws {
         let ws = try IOSWorkspace(rootName: "destructive_test_\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: ws.rootURL) }
+        let rootURL = await ws.rootURL
+        defer { try? FileManager.default.removeItem(at: rootURL) }
         let exec = FileSystemToolExecutor(workspace: ws)
         let write = await exec.availableTools.first { $0.name == "write_file" }
         XCTAssertTrue(write?.capabilities.isDestructive ?? false)
@@ -114,7 +119,8 @@ final class AgentEndToEndTests: XCTestCase {
     func testScriptedAgentRunsFullFlowAndWritesWorkspace() async throws {
         let rootName = "e2e_\(UUID().uuidString)"
         let ws = try IOSWorkspace(rootName: rootName)
-        defer { try? FileManager.default.removeItem(at: ws.rootURL) }
+        let rootURL = await ws.rootURL
+        defer { try? FileManager.default.removeItem(at: rootURL) }
 
         // Workspace de persisted: usamos un persistence dedicado
         let ps = try IOSPersistence()
