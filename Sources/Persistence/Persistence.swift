@@ -181,6 +181,7 @@ public actor IOSPersistence: Persistence {
     private let configFile: URL
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private let jsonlEncoder = JSONEncoder()
     
     public init() throws {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -197,6 +198,7 @@ public actor IOSPersistence: Persistence {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
+        jsonlEncoder.dateEncodingStrategy = .iso8601
     }
     
     // MARK: - Conversations
@@ -278,12 +280,14 @@ public actor IOSPersistence: Persistence {
     // MARK: - Events (JSONL append-only)
     
     public func appendEvent(_ event: AgentEvent) async throws {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        let dateStr = dateFormatter.string(from: event.timestamp)
+        let dateStr: String = {
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM-dd"
+            return df.string(from: event.timestamp)
+        }()
         let file = eventsDir.appendingPathComponent("events_\(dateStr).jsonl")
         
-        let data = try encoder.encode(event)
+        let data = try jsonlEncoder.encode(event)
         var line = String(data: data, encoding: .utf8)!
         line += "\n"
         
