@@ -77,7 +77,7 @@ public struct ConsoleView: View {
                 }
                 .padding(.vertical, 6)
             }
-            .onChange(of: vm.transcript.count) { _, _ in
+            .onChange(of: vm.transcript.count) { _ in
                 if let last = vm.transcript.last {
                     withAnimation(.easeOut(duration: 0.05)) { proxy.scrollTo(last.id, anchor: .bottom) }
                 } else if vm.isProcessing {
@@ -92,7 +92,7 @@ public struct ConsoleView: View {
             Text(vm.isProcessing ? "…" : ">")
                 .font(.system(.callout, design: .monospaced))
                 .foregroundColor(.secondary)
-            TextField(vm.inputPlaceholder, text: $vm.inputText, axis: .vertical)
+            TextField(vm.isProcessing ? "" : "mensaje o /help (Enter)", text: $vm.inputText)
                 .font(.system(.callout, design: .monospaced))
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
@@ -111,9 +111,6 @@ public struct ConsoleView: View {
         .background(.thinMaterial)
     }
 
-    private var inputPlaceholder: String {
-        vm.isProcessing ? "" : "mensaje o /help (Enter)"
-    }
     private var canSend: Bool {
         !vm.isProcessing && !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
