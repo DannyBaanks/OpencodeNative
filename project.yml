@@ -47,6 +47,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native
+        PRODUCT_NAME: OpencodeNative
+        DEFINES_MODULE: NO
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -64,6 +66,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native.tests
+        PRODUCT_NAME: OpencodeNativeTests
+        DEFINES_MODULE: NO
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
