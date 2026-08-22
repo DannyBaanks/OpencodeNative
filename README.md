@@ -33,7 +33,7 @@ describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE
 |---|---|
 | **OpenCode TUI compat** | `BLOCKED` — PTY/TTY, spawn/exec, Bun runtime absent on iOS |
 | **Native Swift runtime** | Working — agent loop, 8 filesystem tools, persistence, LLM provider |
-| **CI tests** | 23 tests passing on iOS Simulator |
+| **Test suite** | 26 tests defined; GitHub Actions runs them on iOS Simulator |
 
 **The first hard blocker is PTY/TTY** — OpenCode's TUI renderer (`@opentui`)
 requires raw terminal access that iOS simply does not expose. This is not a
@@ -61,7 +61,9 @@ OpencodeNative (iOS app)
         RemoteModelProvider       OpenAI-compatible LLM API
         IOSWorkspace              sandbox filesystem
         IOSPersistence            JSON + JSONL audit trail
-        ConsoleView               TUI-first console UI
+        SessionAdapter            bridges runtime events into the native workbench
+        ActiveSessionView         iOS workbench timeline + permissions + composer
+        ConsoleView               compatibility/debug console
 ```
 
 ---
@@ -131,8 +133,13 @@ Sources/
     FileSystemTools.swift              8 filesystem tools
     GlobMatcher.swift                  Pure Swift glob matcher
   UI/
-    SessionViewModel.swift             Transcript + commands + agent
-    ConsoleView.swift                  TUI-first console view
+    SessionAdapter.swift               Runtime ↔ workbench bridge
+    ActiveSessionView.swift            Session timeline + work surfaces
+    ComposerView.swift                 Send/stop + agent/model controls
+    TimelineViews.swift                Tool/diff/permission/todo rendering
+    Models.swift                       Workbench state + UI models
+    SessionViewModel.swift             Legacy console adapter
+    ConsoleView.swift                  Compatibility/debug console
 
 Tests/
   GlobMatcherTests.swift               Glob pattern matching

@@ -97,17 +97,18 @@ Demonstrates what iOS *can* do:
 - **RemoteModelProvider** — OpenAI-compatible LLM API
 - **IOSWorkspace** — sandbox filesystem (App Support/Documents/tmp)
 - **IOSPersistence** — JSON conversations + JSONL audit trail
-- **ConsoleView** — TUI-first console with slash commands
+- **SessionAdapter + ActiveSessionView** — native iOS workbench connected to the real Swift agent loop
+- **ConsoleView** — compatibility/debug console with slash commands
 
 ### Tests
 
-23 unit tests across 3 test files:
+26 unit tests across 3 test files:
 
 - `GlobMatcherTests` — glob pattern matching (7 tests)
 - `HostTests` — capability matrix, compatibility report, boot attempt (5 tests)
-- `CoreEndToEndTests` — workspace, persistence, tools, agent E2E (11 tests)
+- `CoreEndToEndTests` — workspace, persistence, tools, permissions, recursive delete, continuity, agent E2E (14 tests)
 
-All tests pass on iOS Simulator via GitHub Actions CI.
+GitHub Actions is configured to run the suite on an iOS Simulator after the updated copy is pushed.
 
 ---
 

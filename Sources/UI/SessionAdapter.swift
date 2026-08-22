@@ -15,9 +15,13 @@ public final class SessionAdapter: ObservableObject {
     private var persistence: IOSPersistence?
     private var modelProvider: (any ModelProvider)?
     private var toolExecutor: FileSystemToolExecutor?
-    
+    private let conversationId = UUID().uuidString
+    private var runningTask: Task<Void, Never>?
+    private var configuredModel: ModelInfo?
+
     // Permission handling
     private var pendingPermissionContinuation: CheckedContinuation<PermissionResponse, Never>?
+    private var pendingPermissionRequestId: String?
 
     public init() {
         setupDemoProject()
@@ -72,23 +76,30 @@ public final class SessionAdapter: ObservableObject {
             self.toolExecutor = exec
 
             let ctx = AgentContext(
-                conversationId: UUID().uuidString,
+                conversationId: conversationId,
                 workspace: ws,
                 persistence: ps,
                 modelProvider: provider,
+                modelName: provider.availableModels.first,
                 toolExecutor: exec,
                 systemPrompt: systemPromptText(),
                 maxTurns: 12,
                 permissionHandler: { [weak self] request in
                     return await withCheckedContinuation { continuation in
-                        Task { @MainActor in
-                            self?.pendingPermissionContinuation = continuation
-                            self?.sessionState.pendingPermission = TimelineEvent.permission(
+                        Task { @MainActor [weak self] in
+                            guard let self else {
+                                continuation.resume(returning: PermissionResponse(requestId: request.id, decision: .deny))
+                                return
+                            }
+                            self.pendingPermissionContinuation = continuation
+                            self.pendingPermissionRequestId = request.id
+                            self.sessionState.pendingPermission = TimelineEvent.permission(
+                                requestId: request.id,
                                 tool: request.toolName,
                                 command: request.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: " "),
                                 explanation: request.reason,
                                 scope: "workspace",
-                                agentMode: self?.sessionState.agentMode ?? .build
+                                agentMode: self.sessionState.agentMode
                             )
                         }
                     }
@@ -101,12 +112,16 @@ public final class SessionAdapter: ObservableObject {
             }
             self.agentLoop = loop
 
-            sessionState.selectedModel = ModelInfo(
+            let initialModel = ModelInfo(
                 name: "Demo Scripted",
                 provider: "Local",
                 providerIcon: "cpu",
-                isLocal: true
+                isLocal: true,
+                apiModelId: "scripted-1",
+                route: "scripted"
             )
+            configuredModel = initialModel
+            sessionState.selectedModel = initialModel
 
             // Add welcome message
             addSystemEvent("OpenCodeNative — iOS 27 Workbench ready")
@@ -138,18 +153,23 @@ public final class SessionAdapter: ObservableObject {
             }
             if let calls = response.toolCalls, !calls.isEmpty {
                 for call in calls {
-                    let args = call.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
-                    let event = TimelineEvent.toolCall(name: call.name, arguments: call.arguments, state: .running, agentMode: sessionState.agentMode)
+                    let event = TimelineEvent.toolCall(
+                        id: call.id,
+                        name: call.name,
+                        arguments: call.arguments,
+                        state: .running,
+                        agentMode: sessionState.agentMode
+                    )
                     sessionState.addEvent(event)
                 }
             }
 
         case .toolResult(let result):
             if let error = result.error {
-                sessionState.updateToolCall(id: findLatestToolCallId(), state: .failed, output: error, duration: 0)
+                sessionState.updateToolCall(id: result.toolCallId, state: .failed, output: error, duration: result.duration)
                 addErrorEvent("Tool error: \(error)")
             } else {
-                sessionState.updateToolCall(id: findLatestToolCallId(), state: .success, output: result.output, duration: 1.0)
+                sessionState.updateToolCall(id: result.toolCallId, state: .success, output: result.output, duration: result.duration)
             }
 
         case .error(let error):
@@ -164,35 +184,57 @@ public final class SessionAdapter: ObservableObject {
         }
     }
 
-    private func findLatestToolCallId() -> String {
-        sessionState.timelineEvents
-            .last(where: { $0.kind == .toolCall })?.id ?? ""
-    }
 
     // MARK: - User Input Handling
 
     public func sendPrompt(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty, !sessionState.isProcessing else { return }
+        guard let loop = agentLoop else {
+            addErrorEvent("Agent runtime is not ready yet")
+            return
+        }
 
-        // Add user message
-        let userEvent = TimelineEvent.userPrompt(trimmed, attachments: sessionState.composerAttachments, agentMode: sessionState.agentMode)
+        let userEvent = TimelineEvent.userPrompt(
+            trimmed,
+            attachments: sessionState.composerAttachments,
+            agentMode: sessionState.agentMode
+        )
         sessionState.addEvent(userEvent)
         sessionState.composerAttachments.removeAll()
 
-        // Send to agent
         sessionState.isProcessing = true
-        Task {
+        runningTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                _ = try await agentLoop?.run(userInput: trimmed)
-                await MainActor.run { sessionState.isProcessing = false }
+                _ = try await loop.run(userInput: trimmed)
+                guard !Task.isCancelled else { throw CancellationError() }
+                self.sessionState.isProcessing = false
+                self.runningTask = nil
+            } catch is CancellationError {
+                self.sessionState.isProcessing = false
+                self.runningTask = nil
+                self.addSystemEvent("Stopped")
             } catch {
-                await MainActor.run {
-                    sessionState.isProcessing = false
-                    addErrorEvent(error.localizedDescription)
-                }
+                self.sessionState.isProcessing = false
+                self.runningTask = nil
+                self.addErrorEvent(error.localizedDescription)
             }
         }
+    }
+
+    public func cancelCurrentRun() {
+        guard sessionState.isProcessing else { return }
+
+        if let continuation = pendingPermissionContinuation {
+            let requestId = pendingPermissionRequestId ?? sessionState.pendingPermission?.permissionRequestId ?? UUID().uuidString
+            pendingPermissionContinuation = nil
+            pendingPermissionRequestId = nil
+            sessionState.pendingPermission = nil
+            continuation.resume(returning: PermissionResponse(requestId: requestId, decision: .deny))
+        }
+
+        runningTask?.cancel()
     }
 
     // MARK: - Agent Mode Switching
@@ -206,10 +248,21 @@ public final class SessionAdapter: ObservableObject {
     // MARK: - Model Switching
 
     public func setModel(_ model: ModelInfo) {
+        let providerId = model.provider.lowercased()
+        let isScriptedDemo = providerId == "local" && model.apiModelId == "scripted-1"
+        let isSupported = isScriptedDemo || providerId == "openai"
+
+        guard isSupported else {
+            addErrorEvent("\(model.provider) requires a native provider adapter or an OpenAI-compatible proxy; direct routing is not implemented yet.")
+            if let configuredModel {
+                sessionState.selectedModel = configuredModel
+            }
+            return
+        }
+
+        guard configuredModel?.id != model.id else { return }
         sessionState.selectedModel = model
-        // Reinitialize with new model provider
         Task { await reinitializeWithModel(model) }
-        addSystemEvent("Model: \(model.name) (\(model.provider))")
     }
 
     private func reinitializeWithModel(_ model: ModelInfo) async {
@@ -221,16 +274,28 @@ public final class SessionAdapter: ObservableObject {
             }
 
             let provider: any ModelProvider
-            if model.isLocal {
+            if model.provider.lowercased() == "local", model.apiModelId == "scripted-1" {
                 provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
             } else {
-                let remote = RemoteModelProvider()
-                // Load API key from Keychain
-                let apiKey = (try? await ps.loadAPIKey(provider: model.provider.lowercased())) ?? ""
-                let baseURL = model.provider.lowercased() == "anthropic"
-                    ? "https://api.anthropic.com/v1"
-                    : "https://api.openai.com/v1"
-                try await remote.configure(ModelConfiguration(apiKey: apiKey, baseURL: baseURL))
+                let providerId = model.provider.lowercased()
+                guard providerId == "openai" else {
+                    throw ModelProviderError.unsupportedFeature(
+                        "Direct \(model.provider) protocol is not implemented; use an OpenAI-compatible proxy."
+                    )
+                }
+
+                let apiKey = (try? await ps.loadAPIKey(provider: providerId)) ?? ""
+                guard !apiKey.isEmpty else {
+                    throw ModelProviderError.notConfigured("No API key stored for \(model.provider)")
+                }
+
+                let remote = RemoteModelProvider(id: providerId, name: model.provider)
+                try await remote.configure(
+                    ModelConfiguration(
+                        apiKey: apiKey,
+                        baseURL: "https://api.openai.com/v1"
+                    )
+                )
                 provider = remote
             }
 
@@ -243,19 +308,26 @@ public final class SessionAdapter: ObservableObject {
                 workspace: ws,
                 persistence: ps,
                 modelProvider: provider,
+                modelName: model.apiModelId ?? model.name,
                 toolExecutor: exec,
                 systemPrompt: systemPromptText(),
                 maxTurns: 12,
                 permissionHandler: { [weak self] request in
                     return await withCheckedContinuation { continuation in
-                        Task { @MainActor in
-                            self?.pendingPermissionContinuation = continuation
-                            self?.sessionState.pendingPermission = TimelineEvent.permission(
+                        Task { @MainActor [weak self] in
+                            guard let self else {
+                                continuation.resume(returning: PermissionResponse(requestId: request.id, decision: .deny))
+                                return
+                            }
+                            self.pendingPermissionContinuation = continuation
+                            self.pendingPermissionRequestId = request.id
+                            self.sessionState.pendingPermission = TimelineEvent.permission(
+                                requestId: request.id,
                                 tool: request.toolName,
                                 command: request.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: " "),
                                 explanation: request.reason,
                                 scope: "workspace",
-                                agentMode: self?.sessionState.agentMode ?? .build
+                                agentMode: self.sessionState.agentMode
                             )
                         }
                     }
@@ -267,7 +339,13 @@ public final class SessionAdapter: ObservableObject {
                 await MainActor.run { self?.handleAgentEvent(event) }
             }
             self.agentLoop = loop
+            configuredModel = model
+            sessionState.selectedModel = model
+            addSystemEvent("Model: \(model.name) (\(model.provider))")
         } catch {
+            if let configuredModel {
+                sessionState.selectedModel = configuredModel
+            }
             addErrorEvent("Failed to switch model: \(error.localizedDescription)")
         }
     }
@@ -285,15 +363,11 @@ public final class SessionAdapter: ObservableObject {
     }
 
     private func addErrorEvent(_ text: String) {
-        var event = TimelineEvent.system(text)
-        event.kind = .system
-        sessionState.addEvent(event)
+        sessionState.addEvent(TimelineEvent.system("Error: \(text)"))
     }
 
     private func addSuccessEvent(_ text: String) {
-        var event = TimelineEvent.system(text)
-        event.kind = .system
-        sessionState.addEvent(event)
+        sessionState.addEvent(TimelineEvent.system(text))
     }
 
     // MARK: - Attachments
@@ -310,13 +384,17 @@ public final class SessionAdapter: ObservableObject {
     
     /// Called by UI when user responds to a permission request
     public func respondToPermission(requestId: String, decision: PermissionResponse.Decision) {
-        if let continuation = pendingPermissionContinuation {
-            pendingPermissionContinuation = nil
-            let response = PermissionResponse(requestId: requestId, decision: decision)
-            continuation.resume(returning: response)
+        guard requestId == pendingPermissionRequestId,
+              let continuation = pendingPermissionContinuation else {
+            addErrorEvent("Ignoring stale permission response \(requestId)")
+            return
         }
+
+        pendingPermissionContinuation = nil
+        pendingPermissionRequestId = nil
         sessionState.pendingPermission = nil
-        addSystemEvent("Permission \(decision.rawValue) for request \(requestId)")
+        continuation.resume(returning: PermissionResponse(requestId: requestId, decision: decision))
+        addSystemEvent("Permission \(decision.rawValue) for \(requestId)")
     }
 }
 

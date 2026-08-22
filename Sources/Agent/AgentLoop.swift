@@ -116,6 +116,7 @@ public struct AgentContext: Sendable {
     public let workspace: any Workspace
     public let persistence: any Persistence
     public let modelProvider: any ModelProvider
+    public let modelName: String?
     public let toolExecutor: any ToolExecutor
     public let systemPrompt: String?
     public let maxTurns: Int
@@ -126,6 +127,7 @@ public struct AgentContext: Sendable {
         workspace: any Workspace,
         persistence: any Persistence,
         modelProvider: any ModelProvider,
+        modelName: String? = nil,
         toolExecutor: any ToolExecutor,
         systemPrompt: String? = nil,
         maxTurns: Int = 10,
@@ -135,6 +137,7 @@ public struct AgentContext: Sendable {
         self.workspace = workspace
         self.persistence = persistence
         self.modelProvider = modelProvider
+        self.modelName = modelName
         self.toolExecutor = toolExecutor
         self.systemPrompt = systemPrompt
         self.maxTurns = maxTurns
@@ -207,6 +210,7 @@ public actor AgentLoop {
     private var currentConversation: Conversation?
     private var eventHandler: (@Sendable (AgentLoopEvent) async -> Void)?
     private var isRunning = false
+    private var alwaysAllowedTools: Set<String> = []
     
     public init(context: AgentContext) {
         self.context = context
@@ -241,16 +245,20 @@ public actor AgentLoop {
         // Añadir mensaje del usuario
         let userMessage = Message(role: .user, content: userInput)
         conversation.messages.append(userMessage)
+        currentConversation = conversation
         try await context.persistence.saveConversation(conversation)
         try await context.persistence.appendEvent(AgentEvent(conversationId: context.conversationId, type: .userInput, payload: ["content": userInput]))
-        
-        // Emit stateChange: user input received
-        await eventHandler?(.error(NSError(domain: "AgentLoop", code: 0, userInfo: [NSLocalizedDescriptionKey: "stateChange: user_input_received"])))
+        try await context.persistence.appendEvent(AgentEvent(
+            conversationId: context.conversationId,
+            type: .stateChange,
+            payload: ["state": "user_input_received"]
+        ))
         
         // Loop de turnos
         var finalResponse = ""
         
         for turn in 1...context.maxTurns {
+            try Task.checkCancellation()
             turnCount = turn
             await eventHandler?(.turnStarted(turn: turn))
             
@@ -286,6 +294,7 @@ public actor AgentLoop {
             }
             
             let options = GenerationOptions(
+                model: context.modelName,
                 temperature: 0.7,
                 maxTokens: 2048
             )
@@ -295,8 +304,17 @@ public actor AgentLoop {
                 tools: tools.isEmpty ? nil : tools,
                 options: options
             )
-            
+            try Task.checkCancellation()
+
             await eventHandler?(.modelResponse(response))
+            try await context.persistence.appendEvent(AgentEvent(
+                conversationId: context.conversationId,
+                type: .modelResponse,
+                payload: [
+                    "response": response.content,
+                    "tool_call_count": String(response.toolCalls?.count ?? 0)
+                ]
+            ))
             
             // Añadir respuesta del modelo a la conversación
             var assistantMessage = Message(role: .assistant, content: response.content)
@@ -309,7 +327,9 @@ public actor AgentLoop {
                     toolCalls: toolCalls
                 )
                 conversation.messages.append(assistantMessage)
-                
+                currentConversation = conversation
+                try await context.persistence.saveConversation(conversation)
+
                 // Ejecutar cada tool call
                 for toolCall in toolCalls {
                     let invocation = ToolInvocation(id: toolCall.id, name: toolCall.name, arguments: toolCall.arguments)
@@ -322,58 +342,114 @@ public actor AgentLoop {
                         payload: ["tool": toolCall.name, "arguments": toolCall.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")]
                     ))
                     
-                    // Check if tool is destructive and request permission
+                    // Destructive tools are fail-closed unless explicitly allowed.
                     if let tool = context.toolExecutor.availableTools.first(where: { $0.name == toolCall.name }),
-                       tool.capabilities.isDestructive {
-                        
+                       tool.capabilities.isDestructive,
+                       !alwaysAllowedTools.contains(tool.name) {
+                        try Task.checkCancellation()
+
                         let request = PermissionRequest(
                             toolName: tool.name,
                             toolDescription: tool.description,
                             arguments: toolCall.arguments,
                             reason: "This tool will modify files in your workspace. Are you sure you want to proceed?"
                         )
-                        
+
                         await eventHandler?(.permissionRequested(request))
-                        
-                        // Request permission from handler
-                        if let handler = context.permissionHandler {
-                            let response = await handler(request)
-                            
-                            switch response.decision {
-                            case .deny:
-                                let deniedResult = ToolExecutionResult(
-                                    toolCallId: invocation.id,
+
+                        guard let handler = context.permissionHandler else {
+                            let deniedResult = ToolExecutionResult(
+                                toolCallId: invocation.id,
+                                output: "",
+                                error: "Permission required but no permission handler is available",
+                                duration: 0
+                            )
+                            await eventHandler?(.toolResult(deniedResult))
+                            conversation.messages.append(Message(
+                                role: .tool,
+                                content: "error: \(deniedResult.error!)",
+                                toolResults: [ToolResult(
+                                    toolCallId: toolCall.id,
                                     output: "",
-                                    error: "Permission denied by user",
-                                    duration: Date().timeIntervalSince(Date())
-                                )
-                                await eventHandler?(.toolResult(deniedResult))
-                                
-                                let toolResultMsg = Message(
-                                    role: .tool,
-                                    content: "error: Permission denied by user",
-                                    toolResults: [ToolResult(
-                                        toolCallId: toolCall.id,
-                                        output: "",
-                                        error: "Permission denied by user"
-                                    )]
-                                )
-                                conversation.messages.append(toolResultMsg)
-                                
-                                try await context.persistence.appendEvent(AgentEvent(
-                                    conversationId: context.conversationId,
-                                    type: .toolResult,
-                                    payload: ["tool": invocation.name, "output": "", "error": "Permission denied by user"]
-                                ))
-                                continue
-                                
-                            case .allowOnce, .allowAlways:
-                                // Proceed with execution
-                                break
-                            }
+                                    error: deniedResult.error
+                                )]
+                            ))
+                            currentConversation = conversation
+                            try await context.persistence.saveConversation(conversation)
+                            try await context.persistence.appendEvent(AgentEvent(
+                                conversationId: context.conversationId,
+                                type: .toolResult,
+                                payload: ["tool": invocation.name, "output": "", "error": deniedResult.error ?? ""]
+                            ))
+                            continue
+                        }
+
+                        let permission = await handler(request)
+                        try Task.checkCancellation()
+
+                        guard permission.requestId == request.id else {
+                            let deniedResult = ToolExecutionResult(
+                                toolCallId: invocation.id,
+                                output: "",
+                                error: "Permission response did not match request",
+                                duration: 0
+                            )
+                            await eventHandler?(.toolResult(deniedResult))
+                            conversation.messages.append(Message(
+                                role: .tool,
+                                content: "error: \(deniedResult.error!)",
+                                toolResults: [ToolResult(
+                                    toolCallId: toolCall.id,
+                                    output: "",
+                                    error: deniedResult.error
+                                )]
+                            ))
+                            currentConversation = conversation
+                            try await context.persistence.saveConversation(conversation)
+                            try await context.persistence.appendEvent(AgentEvent(
+                                conversationId: context.conversationId,
+                                type: .toolResult,
+                                payload: ["tool": invocation.name, "output": "", "error": deniedResult.error ?? ""]
+                            ))
+                            continue
+                        }
+
+                        switch permission.decision {
+                        case .deny:
+                            let deniedResult = ToolExecutionResult(
+                                toolCallId: invocation.id,
+                                output: "",
+                                error: "Permission denied by user",
+                                duration: 0
+                            )
+                            await eventHandler?(.toolResult(deniedResult))
+                            conversation.messages.append(Message(
+                                role: .tool,
+                                content: "error: Permission denied by user",
+                                toolResults: [ToolResult(
+                                    toolCallId: toolCall.id,
+                                    output: "",
+                                    error: deniedResult.error
+                                )]
+                            ))
+                            currentConversation = conversation
+                            try await context.persistence.saveConversation(conversation)
+                            try await context.persistence.appendEvent(AgentEvent(
+                                conversationId: context.conversationId,
+                                type: .toolResult,
+                                payload: ["tool": invocation.name, "output": "", "error": deniedResult.error ?? ""]
+                            ))
+                            continue
+
+                        case .allowOnce:
+                            break
+
+                        case .allowAlways:
+                            alwaysAllowedTools.insert(tool.name)
                         }
                     }
-                    
+
+                    try Task.checkCancellation()
                     let startTime = Date()
                     let result = await context.toolExecutor.execute(invocation)
                     
@@ -390,7 +466,9 @@ public actor AgentLoop {
                         )]
                     )
                     conversation.messages.append(toolResultMsg)
-                    
+                    currentConversation = conversation
+                    try await context.persistence.saveConversation(conversation)
+
                     try await context.persistence.appendEvent(AgentEvent(
                         conversationId: context.conversationId,
                         type: .toolResult,
@@ -404,6 +482,8 @@ public actor AgentLoop {
                 // No hay tool calls, respuesta final
                 finalResponse = response.content
                 conversation.messages.append(Message(role: .assistant, content: finalResponse))
+                currentConversation = conversation
+                try await context.persistence.saveConversation(conversation)
                 break
             }
         }
@@ -419,8 +499,8 @@ public actor AgentLoop {
         try await context.persistence.saveConversation(conversation)
         try await context.persistence.appendEvent(AgentEvent(
             conversationId: context.conversationId,
-            type: .modelResponse,
-            payload: ["response": finalResponse]
+            type: .stateChange,
+            payload: ["state": "finished"]
         ))
         
         await eventHandler?(.finished(finalResponse: finalResponse))
