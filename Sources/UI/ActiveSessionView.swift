@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 
 // MARK: - Active Session View
 
@@ -108,10 +108,7 @@ public struct ActiveSessionView: View {
                 }
             )
             .presentationDetents([.medium, .large])
-<<<<<<< HEAD
             .interactiveDismissDisabled()
-=======
->>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         }
         .onReceive(NotificationCenter.default.publisher(for: .composerSend)) { notification in
             if let text = notification.object as? String {
@@ -556,7 +553,7 @@ struct FileViewerView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                Text(content.isEmpty ? "Loading…" : content)
+                Text(content.isEmpty ? "Loadingâ€¦" : content)
                     .font(OCTypography.code)
                     .foregroundColor(OCColor.textPrimary)
                     .textSelection(.enabled)

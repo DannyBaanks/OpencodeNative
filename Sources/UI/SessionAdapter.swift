@@ -1,4 +1,4 @@
-import Foundation
+﻿import Foundation
 import SwiftUI
 
 // MARK: - Session View Model Adapter
@@ -28,15 +28,12 @@ public final class SessionAdapter: ObservableObject {
     private var runningTask: Task<Void, Never>?
     private var configuredModel: ModelInfo?
 
-<<<<<<< HEAD
     // Official OpenCode headless server backend
     private var remoteClient: OpenCodeRemoteClient?
     private var remoteEventTask: Task<Void, Never>?
     private var remotePartTimelineIDs: [String: String] = [:]
     private var remotePermissionSessionID: String?
 
-=======
->>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
     // Permission handling
     private var pendingPermissionContinuation: CheckedContinuation<PermissionResponse, Never>?
     private var pendingPermissionRequestId: String?
@@ -103,7 +100,7 @@ public final class SessionAdapter: ObservableObject {
                     isLocal: false,
                     route: "opencode-server"
                 )
-                self.connectionStatus = "connected · OpenCode \(health.version) · \(pairing.host):\(pairing.port)"
+                self.connectionStatus = "connected Â· OpenCode \(health.version) Â· \(pairing.host):\(pairing.port)"
                 self.isConnecting = false
                 self.sessionState.clearTimeline()
                 self.addSystemEvent("OpenCode \(health.version) connected")
@@ -235,7 +232,7 @@ public final class SessionAdapter: ObservableObject {
             sessionState.selectedModel = initialModel
 
             // Add welcome message
-            addSystemEvent("OpenCodeNative — iOS 27 Workbench ready")
+            addSystemEvent("OpenCodeNative â€” iOS 27 Workbench ready")
             addSystemEvent("Agent mode: \(sessionState.agentMode.rawValue) | Model: \(sessionState.selectedModel?.name ?? "none")")
         } catch {
             addErrorEvent("Runtime init failed: \(error.localizedDescription)")
@@ -255,7 +252,7 @@ public final class SessionAdapter: ObservableObject {
     private func handleAgentEvent(_ event: AgentLoopEvent) {
         switch event {
         case .turnStarted(let turn):
-            addSystemEvent("— turn \(turn) —")
+            addSystemEvent("â€” turn \(turn) â€”")
 
         case .modelResponse(let response):
             if !response.content.isEmpty {
@@ -301,7 +298,6 @@ public final class SessionAdapter: ObservableObject {
     public func sendPrompt(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !sessionState.isProcessing else { return }
-<<<<<<< HEAD
 
         if backendMode == .remote {
             sendRemotePrompt(trimmed)
@@ -313,13 +309,6 @@ public final class SessionAdapter: ObservableObject {
             return
         }
 
-=======
-        guard let loop = agentLoop else {
-            addErrorEvent("Agent runtime is not ready yet")
-            return
-        }
-
->>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         let userEvent = TimelineEvent.userPrompt(
             trimmed,
             attachments: sessionState.composerAttachments,
@@ -351,7 +340,6 @@ public final class SessionAdapter: ObservableObject {
     public func cancelCurrentRun() {
         guard sessionState.isProcessing else { return }
 
-<<<<<<< HEAD
         if backendMode == .remote {
             let sessionID = sessionState.currentSession?.id
             let client = remoteClient
@@ -365,8 +353,6 @@ public final class SessionAdapter: ObservableObject {
             return
         }
 
-=======
->>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         if let continuation = pendingPermissionContinuation {
             let requestId = pendingPermissionRequestId ?? sessionState.pendingPermission?.permissionRequestId ?? UUID().uuidString
             pendingPermissionContinuation = nil
@@ -389,14 +375,11 @@ public final class SessionAdapter: ObservableObject {
     // MARK: - Model Switching
 
     public func setModel(_ model: ModelInfo) {
-<<<<<<< HEAD
         if backendMode == .remote {
             addSystemEvent("Remote model/provider selection is controlled by the linked OpenCode server")
             return
         }
 
-=======
->>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         let providerId = model.provider.lowercased()
         let isScriptedDemo = providerId == "local" && model.apiModelId == "scripted-1"
         let isSupported = isScriptedDemo || providerId == "openai"
@@ -533,7 +516,6 @@ public final class SessionAdapter: ObservableObject {
     
     /// Called by UI when user responds to a permission request
     public func respondToPermission(requestId: String, decision: PermissionResponse.Decision) {
-<<<<<<< HEAD
         if backendMode == .remote {
             guard let client = remoteClient, let sessionID = remotePermissionSessionID else {
                 addErrorEvent("No remote permission request is pending")
@@ -564,14 +546,6 @@ public final class SessionAdapter: ObservableObject {
             return
         }
 
-=======
-        guard requestId == pendingPermissionRequestId,
-              let continuation = pendingPermissionContinuation else {
-            addErrorEvent("Ignoring stale permission response \(requestId)")
-            return
-        }
-
->>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         pendingPermissionContinuation = nil
         pendingPermissionRequestId = nil
         sessionState.pendingPermission = nil
@@ -627,7 +601,7 @@ public final class SessionAdapter: ObservableObject {
                 return
             } catch {
                 await MainActor.run {
-                    self?.connectionStatus = "error: event stream disconnected · \(error.localizedDescription)"
+                    self?.connectionStatus = "error: event stream disconnected Â· \(error.localizedDescription)"
                     self?.sessionState.isProcessing = false
                 }
             }
@@ -681,7 +655,7 @@ public final class SessionAdapter: ObservableObject {
         case .reasoning:
             guard let text = part.text, !text.isEmpty else { return }
             if remotePartTimelineIDs[part.id] == nil {
-                let event = TimelineEvent.system("thinking · \(text)")
+                let event = TimelineEvent.system("thinking Â· \(text)")
                 remotePartTimelineIDs[part.id] = event.id
                 sessionState.addEvent(event)
             }

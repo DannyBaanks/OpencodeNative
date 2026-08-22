@@ -1,6 +1,6 @@
-# OpencodeNative
+﻿# OpencodeNative
 
-> OpenCode TUI compatibility harness for iOS — documents exactly why the real
+> OpenCode TUI compatibility harness for iOS â€” documents exactly why the real
 > OpenCode TUI cannot run on iOS, and provides a native Swift agent runtime as
 > an alternative.
 
@@ -23,7 +23,7 @@ demonstrates the subset of capabilities iOS *does* support.
 
 OpenCode is &copy; anomalyco and contributors, licensed MIT.
 This project is **not affiliated** with OpenCode. The name is used solely to
-describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md#10-atribución) for full attribution.
+describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md#10-atribuciÃ³n) for full attribution.
 
 ---
 
@@ -31,15 +31,11 @@ describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE
 
 | | |
 |---|---|
-| **OpenCode TUI compat** | `BLOCKED` — PTY/TTY, spawn/exec, Bun runtime absent on iOS |
-| **Native Swift runtime** | Working — agent loop, 8 filesystem tools, persistence, LLM provider |
-<<<<<<< HEAD
+| **OpenCode TUI compat** | `BLOCKED` â€” PTY/TTY, spawn/exec, Bun runtime absent on iOS |
+| **Native Swift runtime** | Working â€” agent loop, 8 filesystem tools, persistence, LLM provider |
 | **Test suite** | 29 tests defined; GitHub Actions runs them on iOS Simulator |
-=======
-| **Test suite** | 26 tests defined; GitHub Actions runs them on iOS Simulator |
->>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
 
-**The first hard blocker is PTY/TTY** — OpenCode's TUI renderer (`@opentui`)
+**The first hard blocker is PTY/TTY** â€” OpenCode's TUI renderer (`@opentui`)
 requires raw terminal access that iOS simply does not expose. This is not a
 bug in this project; it is the platform boundary.
 
@@ -85,7 +81,7 @@ OpencodeNative (iOS app)
 brew install xcodegen
 xcodegen generate
 open OpencodeNative.xcodeproj
-# Product → Build (⌘R) → Run on iOS Simulator
+# Product â†’ Build (âŒ˜R) â†’ Run on iOS Simulator
 ```
 
 ### Run Tests
@@ -102,8 +98,8 @@ xcodebuild test \
 
 OpencodeNative now has two runtime modes behind the same SwiftUI workbench:
 
-- **Link Desktop** — connects to the official OpenCode headless server running on your computer. OpenCode itself owns models, sessions, tools, permissions and file edits.
-- **Native Swift** — runs the project's sandboxed Swift `AgentLoop` directly on iOS with the configured model provider.
+- **Link Desktop** â€” connects to the official OpenCode headless server running on your computer. OpenCode itself owns models, sessions, tools, permissions and file edits.
+- **Native Swift** â€” runs the project's sandboxed Swift `AgentLoop` directly on iOS with the configured model provider.
 
 ### Link the real OpenCode runtime
 
@@ -162,11 +158,8 @@ Sources/
   Remote/
     OpenCodeRemoteClient.swift       Official OpenCode HTTP/SSE client
   UI/
-<<<<<<< HEAD
     ConnectionView.swift             Desktop pairing / native runtime chooser
-=======
->>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
-    SessionAdapter.swift               Runtime ↔ workbench bridge
+    SessionAdapter.swift               Runtime â†” workbench bridge
     ActiveSessionView.swift            Session timeline + work surfaces
     ComposerView.swift                 Send/stop + agent/model controls
     TimelineViews.swift                Tool/diff/permission/todo rendering
@@ -198,7 +191,7 @@ The GitHub Actions workflow (`.github/workflows/ios-build.yml`) runs on every pu
 | **build** | Builds unsigned IPA for iOS device |
 | **test** | Runs all unit tests on iOS Simulator |
 | **capability-report** | Generates capability matrix artifact |
-| **sign** | *(optional)* Signs IPA with iloader — requires `ENABLE_ILOADER_SIGN=true` var + `APPLE_ID`/`TEAM_ID` secrets |
+| **sign** | *(optional)* Signs IPA with iloader â€” requires `ENABLE_ILOADER_SIGN=true` var + `APPLE_ID`/`TEAM_ID` secrets |
 
 ---
 
@@ -215,7 +208,7 @@ The GitHub Actions workflow (`.github/workflows/ios-build.yml`) runs on every pu
 
 ## License
 
-This project is licensed under the MIT License — see [`LICENSE`](LICENSE) for details.
+This project is licensed under the MIT License â€” see [`LICENSE`](LICENSE) for details.
 
 OpenCode (`anomalyco/opencode`) is referenced under its MIT license.
 This project is not affiliated with or endorsed by the OpenCode team.
