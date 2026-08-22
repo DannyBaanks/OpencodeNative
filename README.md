@@ -33,7 +33,7 @@ describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE
 |---|---|
 | **OpenCode TUI compat** | `BLOCKED` — PTY/TTY, spawn/exec, Bun runtime absent on iOS |
 | **Native Swift runtime** | Working — agent loop, 8 filesystem tools, persistence, LLM provider |
-| **CI tests** | 23 tests passing on iOS Simulator |
+| **Test suite** | 29 tests defined; GitHub Actions runs them on iOS Simulator |
 
 **The first hard blocker is PTY/TTY** — OpenCode's TUI renderer (`@opentui`)
 requires raw terminal access that iOS simply does not expose. This is not a
@@ -61,7 +61,9 @@ OpencodeNative (iOS app)
         RemoteModelProvider       OpenAI-compatible LLM API
         IOSWorkspace              sandbox filesystem
         IOSPersistence            JSON + JSONL audit trail
-        ConsoleView               TUI-first console UI
+        SessionAdapter            bridges runtime events into the native workbench
+        ActiveSessionView         iOS workbench timeline + permissions + composer
+        ConsoleView               compatibility/debug console
 ```
 
 ---
@@ -89,6 +91,29 @@ xcodebuild test \
   -scheme OpencodeNative \
   -destination 'platform=iOS Simulator,name=iPhone 16'
 ```
+
+---
+
+## Use it on your iPhone
+
+OpencodeNative now has two runtime modes behind the same SwiftUI workbench:
+
+- **Link Desktop** — connects to the official OpenCode headless server running on your computer. OpenCode itself owns models, sessions, tools, permissions and file edits.
+- **Native Swift** — runs the project's sandboxed Swift `AgentLoop` directly on iOS with the configured model provider.
+
+### Link the real OpenCode runtime
+
+On the computer that already has OpenCode installed, open the project you want to work on and run:
+
+```bash
+npx --yes github:DannyBaanks/OpencodeNative link
+```
+
+The command launches a password-protected `opencode serve` on the local network and prints an `opencodenative://pair?...` link. Paste that link into the first screen of the iOS app (or open the link directly once the app is installed). Keep the terminal open while using the remote session.
+
+Remote mode uses OpenCode's own HTTP/SSE API (`/session`, `/prompt_async`, `/abort`, `/permissions`, `/event`); it does not emulate tool execution on the phone. See [`docs/REMOTE.md`](docs/REMOTE.md).
+
+> Local linking uses HTTP Basic Auth on the LAN. Use a trusted network. Do not port-forward the OpenCode server directly to the public internet; use a TLS VPN/tunnel for remote access.
 
 ---
 
@@ -130,19 +155,29 @@ Sources/
   Tools/
     FileSystemTools.swift              8 filesystem tools
     GlobMatcher.swift                  Pure Swift glob matcher
+  Remote/
+    OpenCodeRemoteClient.swift       Official OpenCode HTTP/SSE client
   UI/
-    SessionViewModel.swift             Transcript + commands + agent
-    ConsoleView.swift                  TUI-first console view
+    ConnectionView.swift             Desktop pairing / native runtime chooser
+    SessionAdapter.swift               Runtime ↔ workbench bridge
+    ActiveSessionView.swift            Session timeline + work surfaces
+    ComposerView.swift                 Send/stop + agent/model controls
+    TimelineViews.swift                Tool/diff/permission/todo rendering
+    Models.swift                       Workbench state + UI models
+    SessionViewModel.swift             Legacy console adapter
+    ConsoleView.swift                  Compatibility/debug console
 
 Tests/
   GlobMatcherTests.swift               Glob pattern matching
   HostTests.swift                      Capability matrix + compatibility report
   CoreEndToEndTests.swift              Workspace + persistence + tools + agent E2E
+  RemotePairingTests.swift             Pairing URL parser and defaults
 
 docs/
   OPENCODE_COMPAT.md                   Full compatibility report with evidence
   IOS_LIMITATIONS.md                   iOS capability documentation
   USAGE.md                             Demo instructions + verification
+  REMOTE.md                            Link iPhone to real OpenCode server
 ```
 
 ---

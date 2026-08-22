@@ -213,7 +213,6 @@ public struct SessionRow: View {
                             Circle()
                                 .fill(session.agentMode.color)
                                 .frame(width: 6, height: 6)
-                                .symbolEffect(.pulse, options: .repeating)
                         }
                     }
 

@@ -77,6 +77,7 @@ public struct TimelineEvent: Identifiable, Sendable {
     public var codeFileName: String?
 
     // Permission
+    public var permissionRequestId: String?
     public var permissionTool: String?
     public var permissionCommand: String?
     public var permissionExplanation: String?
@@ -120,8 +121,8 @@ public struct TimelineEvent: Identifiable, Sendable {
         return event
     }
 
-    public static func toolCall(name: String, arguments: [String: String], state: ToolCallState = .running, agentMode: AgentMode) -> TimelineEvent {
-        var event = TimelineEvent(kind: .toolCall, agentMode: agentMode)
+    public static func toolCall(id: String = UUID().uuidString, name: String, arguments: [String: String], state: ToolCallState = .running, agentMode: AgentMode) -> TimelineEvent {
+        var event = TimelineEvent(id: id, kind: .toolCall, agentMode: agentMode)
         event.toolName = name
         event.toolArguments = arguments
         event.toolState = state
@@ -151,8 +152,9 @@ public struct TimelineEvent: Identifiable, Sendable {
         return event
     }
 
-    public static func permission(tool: String, command: String, explanation: String, scope: String, agentMode: AgentMode) -> TimelineEvent {
-        var event = TimelineEvent(kind: .permission, agentMode: agentMode)
+    public static func permission(requestId: String, tool: String, command: String, explanation: String, scope: String, agentMode: AgentMode) -> TimelineEvent {
+        var event = TimelineEvent(id: requestId, kind: .permission, agentMode: agentMode)
+        event.permissionRequestId = requestId
         event.permissionTool = tool
         event.permissionCommand = command
         event.permissionExplanation = explanation
@@ -305,9 +307,11 @@ public struct ModelInfo: Identifiable, Hashable, Sendable {
     public let supportsReasoning: Bool
     public let supportsImages: Bool
     public let isLocal: Bool
+    /// Exact model identifier sent to the provider API. Display names stay UI-only.
+    public let apiModelId: String?
     public let route: String?
 
-    public init(id: String = UUID().uuidString, name: String, provider: String, providerIcon: String? = nil, contextWindow: Int? = nil, supportsReasoning: Bool = false, supportsImages: Bool = false, isLocal: Bool = false, route: String? = nil) {
+    public init(id: String = UUID().uuidString, name: String, provider: String, providerIcon: String? = nil, contextWindow: Int? = nil, supportsReasoning: Bool = false, supportsImages: Bool = false, isLocal: Bool = false, apiModelId: String? = nil, route: String? = nil) {
         self.id = id
         self.name = name
         self.provider = provider
@@ -316,6 +320,7 @@ public struct ModelInfo: Identifiable, Hashable, Sendable {
         self.supportsReasoning = supportsReasoning
         self.supportsImages = supportsImages
         self.isLocal = isLocal
+        self.apiModelId = apiModelId
         self.route = route
     }
 }
@@ -385,10 +390,12 @@ public extension Session {
 
 public extension ModelInfo {
     static let demoModels: [ModelInfo] = [
+        ModelInfo(name: "Demo Scripted", provider: "Local", providerIcon: "cpu", isLocal: true, apiModelId: "scripted-1", route: "scripted"),
+        ModelInfo(name: "GPT-4o", provider: "OpenAI", providerIcon: "cpu", contextWindow: 128000, supportsReasoning: false, supportsImages: true, apiModelId: "gpt-4o", route: "openai"),
+        ModelInfo(name: "GPT-4o mini", provider: "OpenAI", providerIcon: "cpu", contextWindow: 128000, supportsReasoning: false, supportsImages: true, apiModelId: "gpt-4o-mini", route: "openai"),
+        // Visible as future adapters; SessionAdapter rejects direct routing until a native adapter/proxy exists.
         ModelInfo(name: "Claude 3.5 Sonnet", provider: "Anthropic", providerIcon: "cpu", contextWindow: 200000, supportsReasoning: true, supportsImages: true, route: "anthropic"),
         ModelInfo(name: "Claude 3 Opus", provider: "Anthropic", providerIcon: "cpu", contextWindow: 200000, supportsReasoning: true, supportsImages: true, route: "anthropic"),
-        ModelInfo(name: "GPT-4o", provider: "OpenAI", providerIcon: "cpu", contextWindow: 128000, supportsReasoning: false, supportsImages: true, route: "openai"),
-        ModelInfo(name: "GPT-4o mini", provider: "OpenAI", providerIcon: "cpu", contextWindow: 128000, supportsReasoning: false, supportsImages: true, route: "openai"),
         ModelInfo(name: "Gemini 1.5 Pro", provider: "Google", providerIcon: "cpu", contextWindow: 1000000, supportsReasoning: true, supportsImages: true, route: "google"),
         ModelInfo(name: "Llama 3.1 405B", provider: "Meta", providerIcon: "cpu", contextWindow: 128000, supportsReasoning: false, supportsImages: false, isLocal: true, route: "local"),
     ]

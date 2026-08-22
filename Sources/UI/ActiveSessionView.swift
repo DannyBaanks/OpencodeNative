@@ -69,8 +69,8 @@ public struct ActiveSessionView: View {
                         Image(systemName: "doc.on.doc")
                             .font(.system(size: 17))
                     }
-                    Button { } label: {
-                        Image(systemName: "ellipsis")
+                    Button { sessionAdapter.disconnect() } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
                             .font(.system(size: 17))
                     }
                 }
@@ -85,10 +85,38 @@ public struct ActiveSessionView: View {
         .sheet(isPresented: $sessionState.showModelPicker) {
             ModelPickerSheet(selectedModel: $sessionState.selectedModel)
         }
+        .sheet(item: $sessionState.pendingPermission) { event in
+            PermissionView(
+                event: event,
+                onAllow: {
+                    sessionAdapter.respondToPermission(
+                        requestId: event.permissionRequestId ?? event.id,
+                        decision: .allowOnce
+                    )
+                },
+                onDeny: {
+                    sessionAdapter.respondToPermission(
+                        requestId: event.permissionRequestId ?? event.id,
+                        decision: .deny
+                    )
+                },
+                onPersistent: {
+                    sessionAdapter.respondToPermission(
+                        requestId: event.permissionRequestId ?? event.id,
+                        decision: .allowAlways
+                    )
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .interactiveDismissDisabled()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .composerSend)) { notification in
             if let text = notification.object as? String {
                 sessionAdapter.sendPrompt(text)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .composerStop)) { _ in
+            sessionAdapter.cancelCurrentRun()
         }
     }
 
@@ -135,13 +163,13 @@ struct TimelineEventContainer: View {
                 PermissionView(
                     event: event,
                     onAllow: {
-                        sessionAdapter.respondToPermission(requestId: event.id, decision: .allowOnce)
+                        sessionAdapter.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowOnce)
                     },
                     onDeny: {
-                        sessionAdapter.respondToPermission(requestId: event.id, decision: .deny)
+                        sessionAdapter.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .deny)
                     },
                     onPersistent: {
-                        sessionAdapter.respondToPermission(requestId: event.id, decision: .allowAlways)
+                        sessionAdapter.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways)
                     }
                 )
 

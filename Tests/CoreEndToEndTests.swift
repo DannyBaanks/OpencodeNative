@@ -111,6 +111,26 @@ final class ToolsDefinitionTests: XCTestCase {
         let write = await exec.availableTools.first { $0.name == "write_file" }
         XCTAssertTrue(write?.capabilities.isDestructive ?? false)
     }
+
+    func testRecursiveDeleteRemovesNestedTree() async throws {
+        let ws = try IOSWorkspace(rootName: "recursive_delete_\(UUID().uuidString)")
+        let rootURL = await ws.rootURL
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        try await ws.createDirectory(at: "a")
+        try await ws.createDirectory(at: "a/b")
+        try await ws.writeFile(at: "a/b/file.txt", data: Data("x".utf8))
+
+        let exec = FileSystemToolExecutor(workspace: ws)
+        let result = await exec.execute(ToolInvocation(
+            name: "delete_file",
+            arguments: ["path": "a", "recursive": "true"]
+        ))
+
+        XCTAssertNil(result.error)
+        let exists = await ws.fileExists(at: "a")
+        XCTAssertFalse(exists)
+    }
 }
 
 /// End-to-end: AgentLoop con ScriptedModelProvider sobre workspace sandbox real.
@@ -133,7 +153,10 @@ final class AgentEndToEndTests: XCTestCase {
             modelProvider: provider,
             toolExecutor: exec,
             systemPrompt: "test",
-            maxTurns: 15
+            maxTurns: 15,
+            permissionHandler: { request in
+                PermissionResponse(requestId: request.id, decision: .allowAlways)
+            }
         )
         let loop = AgentLoop(context: ctx)
 
@@ -149,6 +172,10 @@ final class AgentEndToEndTests: XCTestCase {
         }
         XCTAssertFalse(toolResults.isEmpty)
         XCTAssertTrue(toolResults.allSatisfy { $0.error == nil }, "alguna tool falló: \(toolResults)")
+        let permissionRequests = events.compactMap { event -> PermissionRequest? in
+            if case .permissionRequested(let request) = event { return request } else { return nil }
+        }
+        XCTAssertEqual(permissionRequests.count, 1, "allowAlways debe evitar repetir el permiso para write_file")
         // El archivo notes.txt debe existir y tener 2 líneas al final.
         let exists = await ws.fileExists(at: "notes.txt")
         XCTAssertTrue(exists, "notes.txt no creado por el agente")
@@ -156,4 +183,65 @@ final class AgentEndToEndTests: XCTestCase {
         let content = String(data: data, encoding: .utf8) ?? ""
         XCTAssertEqual(content.split(separator: "\n", omittingEmptySubsequences: true).count, 2)
     }
+
+    func testDestructiveToolsFailClosedWithoutPermissionHandler() async throws {
+        let rootName = "e2e_fail_closed_\(UUID().uuidString)"
+        let ws = try IOSWorkspace(rootName: rootName)
+        let rootURL = await ws.rootURL
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let ps = try IOSPersistence()
+        let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
+        let exec = FileSystemToolExecutor(workspace: ws)
+        let ctx = AgentContext(
+            conversationId: UUID().uuidString,
+            workspace: ws,
+            persistence: ps,
+            modelProvider: provider,
+            toolExecutor: exec,
+            systemPrompt: "test",
+            maxTurns: 15
+        )
+        let loop = AgentLoop(context: ctx)
+
+        var denied = false
+        await loop.setEventHandler { event in
+            if case .toolResult(let result) = event,
+               result.error?.contains("Permission required") == true {
+                denied = true
+            }
+        }
+
+        _ = try await loop.run(userInput: "demo")
+        XCTAssertTrue(denied)
+    }
+    func testConversationContinuesAcrossMultipleUserPrompts() async throws {
+        let rootName = "e2e_continuity_\(UUID().uuidString)"
+        let ws = try IOSWorkspace(rootName: rootName)
+        let rootURL = await ws.rootURL
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let ps = try IOSPersistence()
+        let conversationId = UUID().uuidString
+        let provider = ScriptedModelProvider(scriptResponses: ["first response", "second response"])
+        let exec = FileSystemToolExecutor(workspace: ws)
+        let ctx = AgentContext(
+            conversationId: conversationId,
+            workspace: ws,
+            persistence: ps,
+            modelProvider: provider,
+            toolExecutor: exec,
+            systemPrompt: "test",
+            maxTurns: 2
+        )
+        let loop = AgentLoop(context: ctx)
+
+        _ = try await loop.run(userInput: "first prompt")
+        _ = try await loop.run(userInput: "second prompt")
+
+        let saved = try await ps.loadConversation(id: conversationId)
+        let userMessages = saved?.messages.filter { $0.role == .user }.map { $0.content } ?? []
+        XCTAssertEqual(userMessages, ["first prompt", "second prompt"])
+    }
+
 }

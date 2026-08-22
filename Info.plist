@@ -24,10 +24,6 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -37,5 +33,18 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to the OpenCode server running on your computer over your local network.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.opencode.native.pair</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>opencodenative</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

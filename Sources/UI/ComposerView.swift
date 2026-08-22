@@ -47,7 +47,11 @@ public struct ComposerView: View {
 
                 // Send/Stop button
                 SendStopButton(isProcessing: sessionState.isProcessing, agentColor: sessionState.agentMode.color) {
-                    handleSend()
+                    if sessionState.isProcessing {
+                        NotificationCenter.default.post(name: .composerStop, object: nil)
+                    } else {
+                        handleSend()
+                    }
                 }
             }
             .padding(.horizontal, OCSpacing.lg)
@@ -80,6 +84,7 @@ public struct ComposerView: View {
     }
 
     private func handleSend() {
+        guard !sessionState.isProcessing else { return }
         guard !sessionState.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         // This will be handled by the parent view model
         NotificationCenter.default.post(name: .composerSend, object: sessionState.composerText)
@@ -612,4 +617,5 @@ public struct ModelPickerRow: View {
 
 extension Notification.Name {
     static let composerSend = Notification.Name("composerSend")
+    static let composerStop = Notification.Name("composerStop")
 }

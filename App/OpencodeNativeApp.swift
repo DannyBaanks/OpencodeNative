@@ -24,14 +24,24 @@ struct RootView: View {
     @EnvironmentObject private var sessionState: ActiveSessionState
 
     var body: some View {
-        NavigationStack {
-            if sessionState.currentProject == nil {
-                ProjectListView()
-            } else if sessionState.currentSession == nil {
-                SessionListView(project: sessionState.currentProject!)
+        Group {
+            if adapter.backendMode == .unconfigured {
+                ConnectionView()
             } else {
-                ActiveSessionView()
+                NavigationStack {
+                    if sessionState.currentProject == nil {
+                        ProjectListView()
+                    } else if sessionState.currentSession == nil {
+                        SessionListView(project: sessionState.currentProject!)
+                    } else {
+                        ActiveSessionView()
+                    }
+                }
             }
+        }
+        .onOpenURL { url in
+            guard url.scheme == "opencodenative" else { return }
+            adapter.connectRemote(url.absoluteString)
         }
     }
 }
@@ -39,8 +49,9 @@ struct RootView: View {
 // MARK: - Preview
 
 #Preview {
-    RootView()
-        .environmentObject(SessionAdapter.preview())
-        .environmentObject(SessionAdapter.preview().sessionState)
+    let adapter = SessionAdapter.preview()
+    return RootView()
+        .environmentObject(adapter)
+        .environmentObject(adapter.sessionState)
         .preferredColorScheme(.dark)
 }
