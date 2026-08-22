@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import OpencodeNativeCore
 
 // MARK: - Session View Model Adapter
 
@@ -16,6 +15,9 @@ public final class SessionAdapter: ObservableObject {
     private var persistence: IOSPersistence?
     private var modelProvider: (any ModelProvider)?
     private var toolExecutor: FileSystemToolExecutor?
+    
+    // Permission handling
+    private var pendingPermissionContinuation: CheckedContinuation<PermissionResponse, Never>?
 
     public init() {
         setupDemoProject()
@@ -78,19 +80,18 @@ public final class SessionAdapter: ObservableObject {
                 systemPrompt: systemPromptText(),
                 maxTurns: 12,
                 permissionHandler: { [weak self] request in
-                    // Forward to UI for user decision
-                    await MainActor.run {
-                        self?.sessionState.pendingPermission = TimelineEvent.permission(
-                            tool: request.toolName,
-                            command: request.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: " "),
-                            explanation: request.reason,
-                            scope: "workspace",
-                            agentMode: self?.sessionState.agentMode ?? .build
-                        )
+                    return await withCheckedContinuation { continuation in
+                        Task { @MainActor in
+                            self?.pendingPermissionContinuation = continuation
+                            self?.sessionState.pendingPermission = TimelineEvent.permission(
+                                tool: request.toolName,
+                                command: request.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: " "),
+                                explanation: request.reason,
+                                scope: "workspace",
+                                agentMode: self?.sessionState.agentMode ?? .build
+                            )
+                        }
                     }
-                    // Wait for user decision (in real implementation, this would be async)
-                    // For now, auto-allow for demo
-                    return PermissionResponse(requestId: request.id, decision: .allowOnce)
                 }
             )
 
@@ -206,9 +207,69 @@ public final class SessionAdapter: ObservableObject {
 
     public func setModel(_ model: ModelInfo) {
         sessionState.selectedModel = model
-        // Reinitialize with new model
-        Task { await initializeRuntime() }
+        // Reinitialize with new model provider
+        Task { await reinitializeWithModel(model) }
         addSystemEvent("Model: \(model.name) (\(model.provider))")
+    }
+
+    private func reinitializeWithModel(_ model: ModelInfo) async {
+        do {
+            // Keep existing workspace and persistence
+            guard let ws = workspace, let ps = persistence else {
+                await initializeRuntime()
+                return
+            }
+
+            let provider: any ModelProvider
+            if model.isLocal {
+                provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
+            } else {
+                let remote = RemoteModelProvider()
+                // Load API key from Keychain
+                let apiKey = (try? await ps.loadAPIKey(provider: model.provider.lowercased())) ?? ""
+                let baseURL = model.provider.lowercased() == "anthropic"
+                    ? "https://api.anthropic.com/v1"
+                    : "https://api.openai.com/v1"
+                try await remote.configure(ModelConfiguration(apiKey: apiKey, baseURL: baseURL))
+                provider = remote
+            }
+
+            self.modelProvider = provider
+            let exec = FileSystemToolExecutor(workspace: ws)
+            self.toolExecutor = exec
+
+            let ctx = AgentContext(
+                conversationId: conversationId,
+                workspace: ws,
+                persistence: ps,
+                modelProvider: provider,
+                toolExecutor: exec,
+                systemPrompt: systemPromptText(),
+                maxTurns: 12,
+                permissionHandler: { [weak self] request in
+                    return await withCheckedContinuation { continuation in
+                        Task { @MainActor in
+                            self?.pendingPermissionContinuation = continuation
+                            self?.sessionState.pendingPermission = TimelineEvent.permission(
+                                tool: request.toolName,
+                                command: request.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: " "),
+                                explanation: request.reason,
+                                scope: "workspace",
+                                agentMode: self?.sessionState.agentMode ?? .build
+                            )
+                        }
+                    }
+                }
+            )
+
+            let loop = AgentLoop(context: ctx)
+            await loop.setEventHandler { [weak self] event in
+                await MainActor.run { self?.handleAgentEvent(event) }
+            }
+            self.agentLoop = loop
+        } catch {
+            addErrorEvent("Failed to switch model: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Helper Methods
@@ -249,8 +310,12 @@ public final class SessionAdapter: ObservableObject {
     
     /// Called by UI when user responds to a permission request
     public func respondToPermission(requestId: String, decision: PermissionResponse.Decision) {
-        // In a real implementation, this would resume the waiting permission handler
-        // For now, we just log it
+        if let continuation = pendingPermissionContinuation {
+            pendingPermissionContinuation = nil
+            let response = PermissionResponse(requestId: requestId, decision: decision)
+            continuation.resume(returning: response)
+        }
+        sessionState.pendingPermission = nil
         addSystemEvent("Permission \(decision.rawValue) for request \(requestId)")
     }
 }

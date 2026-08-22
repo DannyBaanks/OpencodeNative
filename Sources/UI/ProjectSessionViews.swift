@@ -121,13 +121,13 @@ public struct ProjectListView: View {
             .navigationTitle("OpenCode")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button { showNewProjectSheet = true } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 17, weight: .semibold))
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button { } label: {
                         Image(systemName: "gearshape")
                             .font(.system(size: 17))
@@ -137,7 +137,7 @@ public struct ProjectListView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .onChange(of: selectedProject) { _, newProject in
+            .onChange(of: selectedProject) { newProject in
                 if let project = newProject {
                     sessionState.currentProject = project
                     // Navigate to session list would happen via NavigationLink in real implementation
@@ -303,7 +303,7 @@ public struct SessionListView: View {
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showNewSessionSheet = true } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 17, weight: .semibold))
@@ -316,7 +316,7 @@ public struct SessionListView: View {
         .onAppear {
             sessions = Session.demoSessions(for: project)
         }
-        .onChange(of: selectedSession) { _, newSession in
+        .onChange(of: selectedSession) { newSession in
             if let session = newSession {
                 sessionState.currentSession = session
             }

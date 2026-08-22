@@ -4,6 +4,7 @@ import SwiftUI
 
 public struct ActiveSessionView: View {
     @EnvironmentObject private var sessionState: ActiveSessionState
+    @EnvironmentObject private var sessionAdapter: SessionAdapter
     @State private var scrollProxy: ScrollViewProxy?
     @State private var keyboardHeight: CGFloat = 0
     @FocusState private var isComposerFocused: Bool
@@ -29,11 +30,16 @@ public struct ActiveSessionView: View {
                     .padding(.bottom, composerHeight + OCSpacing.lg)
                 }
                 .onAppear { scrollProxy = proxy }
-                .onChange(of: sessionState.timelineEvents.count) { _, _ in
+                .onChange(of: sessionState.timelineEvents.count) { _ in
                     scrollToBottom()
                 }
-                .onChange(of: sessionState.isProcessing) { _, processing in
+                .onChange(of: sessionState.isProcessing) { processing in
                     if !processing { scrollToBottom() }
+                }
+                .onChange(of: sessionState.selectedModel) { model in
+                    if let model = model {
+                        sessionAdapter.setModel(model)
+                    }
                 }
             }
 
@@ -50,14 +56,14 @@ public struct ActiveSessionView: View {
         .navigationTitle(sessionState.currentSession?.title ?? "Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItem(placement: .navigationBarLeading) {
                 SessionNavTitle(
                     title: sessionState.currentSession?.title ?? "Session",
                     subtitle: sessionState.currentProject?.name ?? "Project"
                 )
             }
 
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: OCSpacing.xs) {
                     Button { } label: {
                         Image(systemName: "doc.on.doc")
@@ -81,7 +87,7 @@ public struct ActiveSessionView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .composerSend)) { notification in
             if let text = notification.object as? String {
-                handleUserPrompt(text)
+                sessionAdapter.sendPrompt(text)
             }
         }
     }
@@ -98,66 +104,13 @@ public struct ActiveSessionView: View {
             proxy.scrollTo(lastEvent.id, anchor: .bottom)
         }
     }
-
-    private func handleUserPrompt(_ text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        // Add user prompt to timeline
-        let userEvent = TimelineEvent.userPrompt(trimmed, attachments: sessionState.composerAttachments, agentMode: sessionState.agentMode)
-        sessionState.addEvent(userEvent)
-        sessionState.composerAttachments.removeAll()
-
-        // Simulate agent response (replace with actual agent integration)
-        simulateAgentResponse(to: trimmed)
-    }
-
-    private func simulateAgentResponse(to prompt: String) {
-        sessionState.isProcessing = true
-
-        // Add thinking indicator
-        let thinkingEvent = TimelineEvent.thinking(label: "Working", elapsed: 0, agentMode: sessionState.agentMode)
-        sessionState.addEvent(thinkingEvent)
-
-        // Simulate async response
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-
-            await MainActor.run {
-                // Remove thinking, add response
-                sessionState.timelineEvents.removeLast() // remove thinking
-
-                let responseEvent = TimelineEvent.assistantText("I'll help you with that. Let me start by examining the relevant files.", agentMode: sessionState.agentMode)
-                sessionState.addEvent(responseEvent)
-
-                // Simulate tool call
-                let toolEvent = TimelineEvent.toolCall(name: "Read", arguments: ["path": "Sources/UI/SessionViewModel.swift"], agentMode: sessionState.agentMode)
-                sessionState.addEvent(toolEvent)
-
-                // Simulate tool completion
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-                    sessionState.updateToolCall(
-                        id: toolEvent.id,
-                        state: .success,
-                        output: "Content of SessionViewModel.swift:\n\nimport Foundation\n...\n// 232 lines total",
-                        duration: 0.8
-                    )
-
-                    // Add follow-up response
-                    let followupEvent = TimelineEvent.assistantText("I can see the SessionViewModel. Now I'll make the necessary changes.", agentMode: sessionState.agentMode)
-                    sessionState.addEvent(followupEvent)
-
-                    sessionState.isProcessing = false
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Timeline Event Container
 
 struct TimelineEventContainer: View {
     @EnvironmentObject private var sessionState: ActiveSessionState
+    @EnvironmentObject private var sessionAdapter: SessionAdapter
     let event: TimelineEvent
 
     var body: some View {
@@ -182,15 +135,13 @@ struct TimelineEventContainer: View {
                 PermissionView(
                     event: event,
                     onAllow: {
-                        // In real implementation, this would resume the AgentLoop
-                        // For now, we just log
-                        print("Permission allowed for \(event.permissionTool ?? "unknown")")
+                        sessionAdapter.respondToPermission(requestId: event.id, decision: .allowOnce)
                     },
                     onDeny: {
-                        print("Permission denied for \(event.permissionTool ?? "unknown")")
+                        sessionAdapter.respondToPermission(requestId: event.id, decision: .deny)
                     },
                     onPersistent: {
-                        print("Permission always allowed for \(event.permissionTool ?? "unknown")")
+                        sessionAdapter.respondToPermission(requestId: event.id, decision: .allowAlways)
                     }
                 )
 
@@ -307,7 +258,7 @@ public struct TerminalView: View {
                         }
                         .padding(.vertical, OCSpacing.base)
                     }
-                    .onChange(of: output.count) { _, _ in
+                    .onChange(of: output.count) { _ in
                         if let last = output.last {
                             proxy.scrollTo(last.id, anchor: .bottom)
                         }
@@ -407,7 +358,7 @@ public struct FilesView: View {
             .navigationTitle("Files")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button { } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 17, weight: .semibold))
@@ -585,14 +536,14 @@ struct FileViewerView: View {
             .navigationTitle(file.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Text(file.path)
                         .font(OCTypography.metaMono)
                         .foregroundColor(OCColor.textFaint)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: OCSpacing.base) {
                         Button {
                             UIPasteboard.general.string = content
