@@ -28,12 +28,15 @@ public final class SessionAdapter: ObservableObject {
     private var runningTask: Task<Void, Never>?
     private var configuredModel: ModelInfo?
 
+<<<<<<< HEAD
     // Official OpenCode headless server backend
     private var remoteClient: OpenCodeRemoteClient?
     private var remoteEventTask: Task<Void, Never>?
     private var remotePartTimelineIDs: [String: String] = [:]
     private var remotePermissionSessionID: String?
 
+=======
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
     // Permission handling
     private var pendingPermissionContinuation: CheckedContinuation<PermissionResponse, Never>?
     private var pendingPermissionRequestId: String?
@@ -298,6 +301,7 @@ public final class SessionAdapter: ObservableObject {
     public func sendPrompt(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !sessionState.isProcessing else { return }
+<<<<<<< HEAD
 
         if backendMode == .remote {
             sendRemotePrompt(trimmed)
@@ -309,6 +313,13 @@ public final class SessionAdapter: ObservableObject {
             return
         }
 
+=======
+        guard let loop = agentLoop else {
+            addErrorEvent("Agent runtime is not ready yet")
+            return
+        }
+
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         let userEvent = TimelineEvent.userPrompt(
             trimmed,
             attachments: sessionState.composerAttachments,
@@ -340,6 +351,7 @@ public final class SessionAdapter: ObservableObject {
     public func cancelCurrentRun() {
         guard sessionState.isProcessing else { return }
 
+<<<<<<< HEAD
         if backendMode == .remote {
             let sessionID = sessionState.currentSession?.id
             let client = remoteClient
@@ -353,6 +365,8 @@ public final class SessionAdapter: ObservableObject {
             return
         }
 
+=======
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         if let continuation = pendingPermissionContinuation {
             let requestId = pendingPermissionRequestId ?? sessionState.pendingPermission?.permissionRequestId ?? UUID().uuidString
             pendingPermissionContinuation = nil
@@ -375,11 +389,14 @@ public final class SessionAdapter: ObservableObject {
     // MARK: - Model Switching
 
     public func setModel(_ model: ModelInfo) {
+<<<<<<< HEAD
         if backendMode == .remote {
             addSystemEvent("Remote model/provider selection is controlled by the linked OpenCode server")
             return
         }
 
+=======
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         let providerId = model.provider.lowercased()
         let isScriptedDemo = providerId == "local" && model.apiModelId == "scripted-1"
         let isSupported = isScriptedDemo || providerId == "openai"
@@ -516,6 +533,7 @@ public final class SessionAdapter: ObservableObject {
     
     /// Called by UI when user responds to a permission request
     public func respondToPermission(requestId: String, decision: PermissionResponse.Decision) {
+<<<<<<< HEAD
         if backendMode == .remote {
             guard let client = remoteClient, let sessionID = remotePermissionSessionID else {
                 addErrorEvent("No remote permission request is pending")
@@ -546,6 +564,14 @@ public final class SessionAdapter: ObservableObject {
             return
         }
 
+=======
+        guard requestId == pendingPermissionRequestId,
+              let continuation = pendingPermissionContinuation else {
+            addErrorEvent("Ignoring stale permission response \(requestId)")
+            return
+        }
+
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         pendingPermissionContinuation = nil
         pendingPermissionRequestId = nil
         sessionState.pendingPermission = nil

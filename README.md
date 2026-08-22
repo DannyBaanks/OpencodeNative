@@ -33,7 +33,11 @@ describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE
 |---|---|
 | **OpenCode TUI compat** | `BLOCKED` — PTY/TTY, spawn/exec, Bun runtime absent on iOS |
 | **Native Swift runtime** | Working — agent loop, 8 filesystem tools, persistence, LLM provider |
+<<<<<<< HEAD
 | **Test suite** | 29 tests defined; GitHub Actions runs them on iOS Simulator |
+=======
+| **Test suite** | 26 tests defined; GitHub Actions runs them on iOS Simulator |
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
 
 **The first hard blocker is PTY/TTY** — OpenCode's TUI renderer (`@opentui`)
 requires raw terminal access that iOS simply does not expose. This is not a
@@ -158,7 +162,10 @@ Sources/
   Remote/
     OpenCodeRemoteClient.swift       Official OpenCode HTTP/SSE client
   UI/
+<<<<<<< HEAD
     ConnectionView.swift             Desktop pairing / native runtime chooser
+=======
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
     SessionAdapter.swift               Runtime ↔ workbench bridge
     ActiveSessionView.swift            Session timeline + work surfaces
     ComposerView.swift                 Send/stop + agent/model controls

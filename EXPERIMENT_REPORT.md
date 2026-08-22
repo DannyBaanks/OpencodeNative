@@ -97,18 +97,29 @@ Demonstrates what iOS *can* do:
 - **RemoteModelProvider** — OpenAI-compatible LLM API
 - **IOSWorkspace** — sandbox filesystem (App Support/Documents/tmp)
 - **IOSPersistence** — JSON conversations + JSONL audit trail
+<<<<<<< HEAD
 - **SessionAdapter + ActiveSessionView** — native iOS workbench connected to the Swift agent loop or the official OpenCode server
 - **OpenCodeRemoteClient** — HTTP/SSE client for real remote OpenCode sessions, tools, permissions and abort
+=======
+- **SessionAdapter + ActiveSessionView** — native iOS workbench connected to the real Swift agent loop
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
 - **ConsoleView** — compatibility/debug console with slash commands
 
 ### Tests
 
+<<<<<<< HEAD
 29 unit tests across 4 test files:
+=======
+26 unit tests across 3 test files:
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
 
 - `GlobMatcherTests` — glob pattern matching (7 tests)
 - `HostTests` — capability matrix, compatibility report, boot attempt (5 tests)
 - `CoreEndToEndTests` — workspace, persistence, tools, permissions, recursive delete, continuity, agent E2E (14 tests)
+<<<<<<< HEAD
 - `RemotePairingTests` — desktop pairing URL validation and defaults (3 tests)
+=======
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
 
 GitHub Actions is configured to run the suite on an iOS Simulator after the updated copy is pushed.
 

@@ -108,7 +108,10 @@ public struct ActiveSessionView: View {
                 }
             )
             .presentationDetents([.medium, .large])
+<<<<<<< HEAD
             .interactiveDismissDisabled()
+=======
+>>>>>>> 491ea5be3f2c0d54594b87b23fca16c4960e13be
         }
         .onReceive(NotificationCenter.default.publisher(for: .composerSend)) { notification in
             if let text = notification.object as? String {
