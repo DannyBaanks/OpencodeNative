@@ -61,7 +61,8 @@ public enum OpenCodeRuntimeContract {
     }
 
     /// Versión del contrato OpenCode referenciada (package.json de packages/opencode).
-    public static let openCodeVersion = "1.18.19"
+/// Observed at commit 3a31c4ea801915c0b050df4b3842997ea62b6e93 on 2026-08-22.
+    public static let openCodeVersion = "1.18.21"
     /// Licencia del repo OpenCode (ver `docs/OPENCODE_COMPAT.md` §10 atribución).
     public static let openCodeLicense = "MIT"
 }

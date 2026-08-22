@@ -1,4 +1,5 @@
 import Foundation
+import OpencodeNativeCore
 #if canImport(SwiftUI)
 import SwiftUI
 #endif
@@ -59,6 +60,8 @@ public final class SessionViewModel: ObservableObject {
     private let commands: [String] = ["/help", "/matrix", "/boot", "/demo", "/clear", "/provider scripted", "/provider remote"]
 
     public func handleEnter() {
+        guard !isProcessing else { return }
+        
         let raw = inputText
         guard !raw.isEmpty else { return }
         inputText = ""
@@ -137,8 +140,11 @@ public final class SessionViewModel: ObservableObject {
             case .remote:
                 let remote = RemoteModelProvider()
                 let savedConfig = try? await ps.loadConfiguration()
-                let apiKey = savedConfig?.apiKeys["remote"] ?? ""
-                let baseURL = "https://api.openai.com/v1"
+                // Cargar API key desde Keychain
+                let apiKey = (try? await ps.loadAPIKey(provider: "remote")) ?? ""
+                let baseURL = savedConfig?.defaultModelProvider == "anthropic" 
+                    ? "https://api.anthropic.com/v1" 
+                    : (savedConfig?.workspacePath ?? "https://api.openai.com/v1")
                 try await remote.configure(ModelConfiguration(apiKey: apiKey, baseURL: baseURL))
                 provider = remote
             }
@@ -152,7 +158,12 @@ public final class SessionViewModel: ObservableObject {
                 modelProvider: provider,
                 toolExecutor: exec,
                 systemPrompt: systemPromptText(),
-                maxTurns: 12
+                maxTurns: 12,
+                permissionHandler: { [weak self] request in
+                    // En una implementación real, esto mostraría UI y esperaría respuesta
+                    // Por ahora, auto-permitimos para demo
+                    return PermissionResponse(requestId: request.id, decision: .allowOnce)
+                }
             )
             let loop = AgentLoop(context: ctx)
             await loop.setEventHandler { [weak self] event in

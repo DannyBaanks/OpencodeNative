@@ -33,7 +33,7 @@ describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE
 |---|---|
 | **OpenCode TUI compat** | `BLOCKED` — PTY/TTY, spawn/exec, Bun runtime absent on iOS |
 | **Native Swift runtime** | Working — agent loop, 8 filesystem tools, persistence, LLM provider |
-| **CI tests** | 26 tests passing on iOS Simulator |
+| **CI tests** | 23 tests passing on iOS Simulator |
 
 **The first hard blocker is PTY/TTY** — OpenCode's TUI renderer (`@opentui`)
 requires raw terminal access that iOS simply does not expose. This is not a

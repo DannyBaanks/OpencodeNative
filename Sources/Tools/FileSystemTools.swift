@@ -463,26 +463,32 @@ public actor FileSystemToolExecutor: @preconcurrency ToolExecutor {
         }
         
         if recursive {
-            // For recursive, we need to list and delete all contents first
-            let items = try await workspace.listDirectory(at: path)
-            for item in items {
-                let itemPath = path.isEmpty ? item.name : "\(path)/\(item.name)"
-                if item.isDirectory {
-                    try await workspace.deleteFile(at: itemPath) // This will fail if not empty, which is correct
-                } else {
-                    try await workspace.deleteFile(at: itemPath)
-                }
-            }
+            // Truly recursive delete: delete all contents first (depth-first)
+            try await deleteRecursive(at: path)
         }
         
         try await workspace.deleteFile(at: path)
         
         return ToolExecutionResult(
             toolCallId: invocation.id,
-            output: "Deleted: \(path)",
+            output: "Deleted: \(path)\(recursive ? " (recursive)" : "")",
             error: nil,
             duration: Date().timeIntervalSince(startTime)
         )
+    }
+    
+    /// Recursively deletes a directory and all its contents
+    private func deleteRecursive(at path: String) async throws {
+        let items = try await workspace.listDirectory(at: path)
+        for item in items {
+            let itemPath = path.isEmpty ? item.name : "\(path)/\(item.name)"
+            if item.isDirectory {
+                // Recursively delete subdirectory contents first
+                try await deleteRecursive(at: itemPath)
+            }
+            // Delete the item itself (file or now-empty directory)
+            try await workspace.deleteFile(at: itemPath)
+        }
     }
     
     private func executeMoveFile(_ invocation: ToolInvocation, startTime: Date) async throws -> ToolExecutionResult {

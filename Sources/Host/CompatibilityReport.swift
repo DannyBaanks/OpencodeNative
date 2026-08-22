@@ -33,6 +33,12 @@ public struct CompatibilityReport: Sendable, Codable {
     /// HARD BLOCKERS aquí: `nativeExecutable`, `bunRuntime`, `ptyTTY`, `spawnExec`, `treeSitterNative` (sin éstas no arranca).
     public let canOpenCodeBoot: Bool
     public let firstBlocker: Entry?
+    
+    /// Primer bloqueador fundamental de runtime (PTY/TTY), asumiendo que existiera un binario iOS.
+    /// Útil para narrativa: "PTY/TTY es el primer bloqueador de runtime real".
+    public var fundamentalRuntimeBlocker: Entry? {
+        entries.first { $0.requirement == "ptyTTY" && $0.verdict == .unsupported }
+    }
 
     public static func generate(from matrix: IOSCapabilityMatrix) -> CompatibilityReport {
         if !matrix.isIOS {
@@ -77,7 +83,7 @@ public struct CompatibilityReport: Sendable, Codable {
     }
 
     private static let hardBlockers: Set<OpenCodeRuntimeContract.Requirement> = [
-        .nativeExecutable, .bunRuntime, .ptyTTY, .spawnExec
+        .nativeExecutable, .bunRuntime, .ptyTTY, .spawnExec, .treeSitterNative
     ]
 
     private static func verdict(for req: OpenCodeRuntimeContract.Requirement, from m: IOSCapabilityMatrix) -> Entry.Verdict {

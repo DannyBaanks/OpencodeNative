@@ -119,6 +119,7 @@ public struct AgentContext: Sendable {
     public let toolExecutor: any ToolExecutor
     public let systemPrompt: String?
     public let maxTurns: Int
+    public let permissionHandler: (@Sendable (PermissionRequest) async -> PermissionResponse)?
     
     public init(
         conversationId: String,
@@ -127,7 +128,8 @@ public struct AgentContext: Sendable {
         modelProvider: any ModelProvider,
         toolExecutor: any ToolExecutor,
         systemPrompt: String? = nil,
-        maxTurns: Int = 10
+        maxTurns: Int = 10,
+        permissionHandler: (@Sendable (PermissionRequest) async -> PermissionResponse)? = nil
     ) {
         self.conversationId = conversationId
         self.workspace = workspace
@@ -136,6 +138,51 @@ public struct AgentContext: Sendable {
         self.toolExecutor = toolExecutor
         self.systemPrompt = systemPrompt
         self.maxTurns = maxTurns
+        self.permissionHandler = permissionHandler
+    }
+}
+
+/// Solicitud de permiso para herramienta destructiva
+public struct PermissionRequest: Codable, Sendable, Identifiable {
+    public let id: String
+    public let toolName: String
+    public let toolDescription: String
+    public let arguments: [String: String]
+    public let reason: String
+    public let timestamp: Date
+    
+    public init(
+        id: String = UUID().uuidString,
+        toolName: String,
+        toolDescription: String,
+        arguments: [String: String],
+        reason: String
+    ) {
+        self.id = id
+        self.toolName = toolName
+        self.toolDescription = toolDescription
+        self.arguments = arguments
+        self.reason = reason
+        self.timestamp = Date()
+    }
+}
+
+/// Respuesta de permiso
+public struct PermissionResponse: Codable, Sendable {
+    public let requestId: String
+    public let decision: Decision
+    public let timestamp: Date
+    
+    public enum Decision: String, Codable, Sendable {
+        case allowOnce
+        case allowAlways
+        case deny
+    }
+    
+    public init(requestId: String, decision: Decision) {
+        self.requestId = requestId
+        self.decision = decision
+        self.timestamp = Date()
     }
 }
 
@@ -146,6 +193,7 @@ public enum AgentLoopEvent: Sendable {
     case modelResponse(ModelResponse)
     case toolInvocation(ToolInvocation)
     case toolResult(ToolExecutionResult)
+    case permissionRequested(PermissionRequest)
     case turnCompleted
     case error(Error)
     case finished(finalResponse: String)
@@ -158,6 +206,7 @@ public actor AgentLoop {
     private var turnCount = 0
     private var currentConversation: Conversation?
     private var eventHandler: (@Sendable (AgentLoopEvent) async -> Void)?
+    private var isRunning = false
     
     public init(context: AgentContext) {
         self.context = context
@@ -170,6 +219,12 @@ public actor AgentLoop {
     /// Ejecuta un turno completo del agente
     /// Retorna la respuesta final del asistente
     public func run(userInput: String) async throws -> String {
+        guard !isRunning else {
+            throw AgentError.toolError("AgentLoop already running")
+        }
+        isRunning = true
+        defer { isRunning = false }
+        
         // Cargar o crear conversación
         if currentConversation == nil {
             if let existing = try await context.persistence.loadConversation(id: context.conversationId) {
@@ -189,6 +244,9 @@ public actor AgentLoop {
         try await context.persistence.saveConversation(conversation)
         try await context.persistence.appendEvent(AgentEvent(conversationId: context.conversationId, type: .userInput, payload: ["content": userInput]))
         
+        // Emit stateChange: user input received
+        await eventHandler?(.error(NSError(domain: "AgentLoop", code: 0, userInfo: [NSLocalizedDescriptionKey: "stateChange: user_input_received"])))
+        
         // Loop de turnos
         var finalResponse = ""
         
@@ -200,6 +258,14 @@ public actor AgentLoop {
             let modelMessages = buildModelMessages(from: conversation)
             
             await eventHandler?(.modelRequest(messages: modelMessages))
+            
+            // Persist model request event
+            let requestPayload = try JSONEncoder().encode(modelMessages)
+            try await context.persistence.appendEvent(AgentEvent(
+                conversationId: context.conversationId,
+                type: .modelRequest,
+                payload: ["request": String(data: requestPayload, encoding: .utf8) ?? "[]"]
+            ))
             
             // Llamar al modelo
             let tools = context.toolExecutor.availableTools.map { tool in
@@ -249,6 +315,65 @@ public actor AgentLoop {
                     let invocation = ToolInvocation(id: toolCall.id, name: toolCall.name, arguments: toolCall.arguments)
                     await eventHandler?(.toolInvocation(invocation))
                     
+                    // Persist tool call event
+                    try await context.persistence.appendEvent(AgentEvent(
+                        conversationId: context.conversationId,
+                        type: .toolCall,
+                        payload: ["tool": toolCall.name, "arguments": toolCall.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")]
+                    ))
+                    
+                    // Check if tool is destructive and request permission
+                    if let tool = context.toolExecutor.availableTools.first(where: { $0.name == toolCall.name }),
+                       tool.capabilities.isDestructive {
+                        
+                        let request = PermissionRequest(
+                            toolName: tool.name,
+                            toolDescription: tool.description,
+                            arguments: toolCall.arguments,
+                            reason: "This tool will modify files in your workspace. Are you sure you want to proceed?"
+                        )
+                        
+                        await eventHandler?(.permissionRequested(request))
+                        
+                        // Request permission from handler
+                        if let handler = context.permissionHandler {
+                            let response = await handler(request)
+                            
+                            switch response.decision {
+                            case .deny:
+                                let deniedResult = ToolExecutionResult(
+                                    toolCallId: invocation.id,
+                                    output: "",
+                                    error: "Permission denied by user",
+                                    duration: Date().timeIntervalSince(Date())
+                                )
+                                await eventHandler?(.toolResult(deniedResult))
+                                
+                                let toolResultMsg = Message(
+                                    role: .tool,
+                                    content: "error: Permission denied by user",
+                                    toolResults: [ToolResult(
+                                        toolCallId: toolCall.id,
+                                        output: "",
+                                        error: "Permission denied by user"
+                                    )]
+                                )
+                                conversation.messages.append(toolResultMsg)
+                                
+                                try await context.persistence.appendEvent(AgentEvent(
+                                    conversationId: context.conversationId,
+                                    type: .toolResult,
+                                    payload: ["tool": invocation.name, "output": "", "error": "Permission denied by user"]
+                                ))
+                                continue
+                                
+                            case .allowOnce, .allowAlways:
+                                // Proceed with execution
+                                break
+                            }
+                        }
+                    }
+                    
                     let startTime = Date()
                     let result = await context.toolExecutor.execute(invocation)
                     
@@ -286,6 +411,9 @@ public actor AgentLoop {
         if finalResponse.isEmpty {
             finalResponse = "Max turns reached without final response"
         }
+        
+        // Actualizar conversación en memoria ANTES de persistir
+        currentConversation = conversation
         
         // Guardar conversación actualizada
         try await context.persistence.saveConversation(conversation)

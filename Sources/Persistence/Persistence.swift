@@ -1,7 +1,9 @@
 import Foundation
+import Security
 
 /// Protocolo de persistencia para el runtime del agente.
 /// Almacena conversaciones, eventos, estado del agente, configuración.
+/// Secrets (API keys) se gestionan via Keychain.
 public protocol Persistence: Sendable {
     func saveConversation(_ conversation: Conversation) async throws
     func loadConversation(id: String) async throws -> Conversation?
@@ -13,6 +15,11 @@ public protocol Persistence: Sendable {
     
     func saveConfiguration(_ config: Configuration) async throws
     func loadConfiguration() async throws -> Configuration?
+    
+    // Keychain methods for secrets
+    func saveAPIKey(provider: String, key: String) async throws
+    func loadAPIKey(provider: String) async throws -> String?
+    func deleteAPIKey(provider: String) async throws
     
     func appendEvent(_ event: AgentEvent) async throws
     func loadEvents(conversationId: String, since: Date?) async throws -> [AgentEvent]
@@ -156,22 +163,22 @@ public struct AgentEvent: Codable, Sendable, Identifiable {
 public struct Configuration: Codable, Sendable {
     public var defaultModelProvider: String?
     public var defaultModelName: String?
-    public var apiKeys: [String: String] // Stored in Keychain in production
+    // apiKeys se almacenan en Keychain, no en JSON
     public var workspacePath: String?
-    public var theme: String
-    public var fontSize: Double
-    public var autoSave: Bool
+    public var theme: String?
+    public var fontSize: Double?
+    public var autoSave: Bool?
     
     public init() {
         self.theme = "system"
         self.fontSize = 14
         self.autoSave = true
-        self.apiKeys = [:]
     }
 }
 
 /// Implementación nativa iOS usando JSONL en Application Support
 /// Formato simple, auditable, append-only para eventos.
+/// Secrets (API keys) se almacenan en Keychain, no en disco.
 public actor IOSPersistence: Persistence {
     private let fileManager = FileManager.default
     private let baseURL: URL
@@ -182,6 +189,8 @@ public actor IOSPersistence: Persistence {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let jsonlEncoder = JSONEncoder()
+    private let keychain = KeychainHelper.shared
+    private let keychainPrefix = "apikey_"
     
     public init() throws {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -267,14 +276,54 @@ public actor IOSPersistence: Persistence {
     // MARK: - Configuration
     
     public func saveConfiguration(_ config: Configuration) async throws {
-        let data = try encoder.encode(config)
+        // Guardar config sin apiKeys en JSON
+        var configToSave = config
+        // apiKeys se guardan por separado en Keychain
+        let data = try encoder.encode(configToSave)
         try data.write(to: configFile, options: .atomic)
     }
     
     public func loadConfiguration() async throws -> Configuration? {
         guard fileManager.fileExists(atPath: configFile.path) else { return nil }
         let data = try Data(contentsOf: configFile)
-        return try decoder.decode(Configuration.self, from: data)
+        var config = try decoder.decode(Configuration.self, from: data)
+        
+        // Cargar apiKeys desde Keychain
+        // Nota: en una implementación real, necesitaríamos saber qué keys buscar
+        // Por ahora, intentamos cargar keys conocidas
+        let knownKeys = ["remote", "openai", "anthropic", "google", "local"]
+        do {
+            let apiKeys = try keychain.loadAll(keys: knownKeys.map { keychainPrefix + $0 })
+            // Convertir de keychainPrefix + key a solo key
+            var cleanedKeys: [String: String] = [:]
+            for (key, value) in apiKeys {
+                if key.hasPrefix(keychainPrefix) {
+                    let cleanKey = String(key.dropFirst(keychainPrefix.count))
+                    cleanedKeys[cleanKey] = value
+                }
+            }
+            // Note: Configuration no tiene apiKeys property ahora
+            // Las claves se acceden via KeychainHelper directamente
+        } catch {
+            // Keychain vacío o error, continuar sin keys
+        }
+        
+        return config
+    }
+    
+    /// Guarda una API key en Keychain
+    public func saveAPIKey(provider: String, key: String) async throws {
+        try keychain.save(key: keychainPrefix + provider, value: key)
+    }
+    
+    /// Carga una API key desde Keychain
+    public func loadAPIKey(provider: String) async throws -> String? {
+        return try keychain.load(key: keychainPrefix + provider)
+    }
+    
+    /// Elimina una API key de Keychain
+    public func deleteAPIKey(provider: String) async throws {
+        try keychain.delete(key: keychainPrefix + provider)
     }
     
     // MARK: - Events (JSONL append-only)

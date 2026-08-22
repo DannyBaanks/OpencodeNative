@@ -61,16 +61,15 @@ Extracted from `package.json`, `install` script, and dependency declarations:
 
 ### Verdict
 
-**BLOCKED** — The first hard blocker is PTY/TTY. OpenCode's TUI renderer
-(`@opentui`) requires raw terminal access that iOS does not expose. Without
-PTY, the TUI cannot initialize its screen. This is not a bug in the harness;
-it is the platform boundary.
+**BLOCKED** — The first hard blocker by evaluation order is **nativeExecutable** (no iOS binary distributed). The first fundamental runtime capability blocker (assuming an iOS build existed) is **PTY/TTY**.
 
-**Second hard blocker:** spawn/exec. The `bash` tool (OpenCode's default agent
-tool) requires `cross-spawn` → `Process()`, which does not exist on iOS.
+OpenCode's TUI renderer (`@opentui`) requires raw terminal access that iOS does not expose. Without PTY, the TUI cannot initialize its screen. This is not a bug in the harness; it is the platform boundary.
 
-No OpenCode binary exists for iOS. Even if one did, PTY/TTY and spawn/exec
-would still prevent it from running.
+**Second hard blocker:** spawn/exec. The `bash` tool (OpenCode's default agent tool) requires `cross-spawn` → `Process()`, which does not exist on iOS.
+
+**Third hard blocker:** Bun runtime. OpenCode requires Bun 1.3.x which has no iOS target.
+
+No OpenCode binary exists for iOS. Even if one did, PTY/TTY, spawn/exec, and Bun runtime would still prevent it from running.
 
 ---
 
@@ -102,11 +101,11 @@ Demonstrates what iOS *can* do:
 
 ### Tests
 
-26 unit tests across 3 test files:
+23 unit tests across 3 test files:
 
-- `GlobMatcherTests` — glob pattern matching
-- `HostTests` — capability matrix, compatibility report, boot attempt
-- `CoreEndToEndTests` — workspace, persistence, tools, agent E2E
+- `GlobMatcherTests` — glob pattern matching (7 tests)
+- `HostTests` — capability matrix, compatibility report, boot attempt (5 tests)
+- `CoreEndToEndTests` — workspace, persistence, tools, agent E2E (11 tests)
 
 All tests pass on iOS Simulator via GitHub Actions CI.
 

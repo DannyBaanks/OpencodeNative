@@ -42,9 +42,16 @@ public struct OpenCodeBootAttempt: Sendable, Codable {
         if report.canOpenCodeBoot {
             lines.append("opencode-boot> OK — no hard blocker detected.")
         } else if let b = report.firstBlocker {
-            lines.append("opencode-boot> BLOCKED at first hard blocker: \(b.requirementLabel)")
+            lines.append("opencode-boot> BLOCKED at first hard blocker (evaluation order): \(b.requirementLabel)")
             lines.append("opencode-boot> evidence: \(b.evidence)")
             lines.append("opencode-boot> harness strategy: \(b.href ?? "n/a")")
+        }
+        // Fundamental runtime blocker (what blocks actual TUI execution if binary existed)
+        if let runtimeBlocker = report.fundamentalRuntimeBlocker {
+            lines.append("opencode-boot> fundamental runtime blocker: \(runtimeBlocker.requirementLabel)")
+            lines.append("opencode-boot> evidence: \(runtimeBlocker.evidence)")
+        }
+        if !report.canOpenCodeBoot {
             lines.append("opencode-boot> OpenCode TUI cannot initialize on this host. NOT simulated.")
         }
         lines.append("opencode-boot> exiting boot attempt.")
