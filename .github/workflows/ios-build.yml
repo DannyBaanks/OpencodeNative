@@ -171,19 +171,19 @@ jobs:
           **BLOCKED** — el TUI real de OpenCode no arranca en iOS. Primer hard blocker:
           PTY/TTY (el renderer @opentui no puede inicializar). No se simula.
           
-          ### Runtime nativo alternativo (no OpenCode) que SÍ corre en iOS
-          
-          | Capability | iOS | Implementación |
-          |---|---|---|
-| FS sandbox (read/write/list/move/delete/create) | ✅ | `Sources/Workspace/Workspace.swift` |
-| Glob search | ✅ | `Sources/Tools/GlobMatcher.swift` (puro Swift) |
-| 8 tools de filesystem | ✅ | `Sources/Tools/FileSystemTools.swift` |
-| Agent loop async multi-turn | ✅ | `Sources/Agent/AgentLoop.swift` |
-| LLM API remoto (OpenAI-compat) | ✅ | `Sources/Model/ModelProvider.swift` |
-| Provider scripteado offline (demo/tests) | ✅ | `Sources/Model/ScriptedModelProvider.swift` |
-| Persistencia JSON + JSONL audit | ✅ | `Sources/Persistence/Persistence.swift` |
-| TUI/console-first UI (no chat) | ✅ | `Sources/UI/ConsoleView.swift` |
-| Capability matrix en runtime | ✅ | `Sources/Host/IOSCapabilityMatrix.swift` |
+### Runtime nativo alternativo (no OpenCode) que SÍ corre en iOS
+           
+           | Capability | iOS | Implementación |
+           |---|---|---|
+           | FS sandbox (read/write/list/move/delete/create) | ✅ | `Sources/Workspace/Workspace.swift` |
+           | Glob search | ✅ | `Sources/Tools/GlobMatcher.swift` (puro Swift) |
+           | 8 tools de filesystem | ✅ | `Sources/Tools/FileSystemTools.swift` |
+           | Agent loop async multi-turn | ✅ | `Sources/Agent/AgentLoop.swift` |
+           | LLM API remoto (OpenAI-compat) | ✅ | `Sources/Model/ModelProvider.swift` |
+           | Provider scripteado offline (demo/tests) | ✅ | `Sources/Model/ScriptedModelProvider.swift` |
+           | Persistencia JSON + JSONL audit | ✅ | `Sources/Persistence/Persistence.swift` |
+           | TUI/console-first UI (no chat) | ✅ | `Sources/UI/ConsoleView.swift` |
+           | Capability matrix en runtime | ✅ | `Sources/Host/IOSCapabilityMatrix.swift` |
           
           ## Restricciones iOS (no fingidas)
           - Ejecutar código arbitrario (shell, python, git, compiladores): IMPOSIBLE
