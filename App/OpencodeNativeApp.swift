@@ -45,13 +45,3 @@ struct RootView: View {
         }
     }
 }
-
-// MARK: - Preview
-
-#Preview {
-    let adapter = SessionAdapter.preview()
-    RootView()
-        .environmentObject(adapter)
-        .environmentObject(adapter.sessionState)
-        .preferredColorScheme(.dark)
-}

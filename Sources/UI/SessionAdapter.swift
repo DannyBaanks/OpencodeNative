@@ -100,7 +100,7 @@ public final class SessionAdapter: ObservableObject {
                     isLocal: false,
                     route: "opencode-server"
                 )
-                self.connectionStatus = "connected Â· OpenCode \(health.version) Â· \(pairing.host):\(pairing.port)"
+                self.connectionStatus = "connected · OpenCode \(health.version) · \(pairing.host):\(pairing.port)"
                 self.isConnecting = false
                 self.sessionState.clearTimeline()
                 self.addSystemEvent("OpenCode \(health.version) connected")
@@ -601,7 +601,7 @@ public final class SessionAdapter: ObservableObject {
                 return
             } catch {
                 await MainActor.run {
-                    self?.connectionStatus = "error: event stream disconnected Â· \(error.localizedDescription)"
+                    self?.connectionStatus = "error: event stream disconnected · \(error.localizedDescription)"
                     self?.sessionState.isProcessing = false
                 }
             }
@@ -655,7 +655,7 @@ public final class SessionAdapter: ObservableObject {
         case .reasoning:
             guard let text = part.text, !text.isEmpty else { return }
             if remotePartTimelineIDs[part.id] == nil {
-                let event = TimelineEvent.system("thinking Â· \(text)")
+                let event = TimelineEvent.system("thinking · \(text)")
                 remotePartTimelineIDs[part.id] = event.id
                 sessionState.addEvent(event)
             }
@@ -716,21 +716,4 @@ public final class SessionAdapter: ObservableObject {
         }
     }
 
-}
-
-// MARK: - Preview Helper
-
-extension SessionAdapter {
-    public static func preview() -> SessionAdapter {
-        let adapter = SessionAdapter()
-        adapter.backendMode = .native
-        adapter.setupDemoProject()
-        // Add demo timeline events
-        adapter.sessionState.addEvent(TimelineEvent.userPrompt("Fix the provider picker", agentMode: .build))
-        adapter.sessionState.addEvent(TimelineEvent.assistantText("I'll help you fix the provider picker. Let me first examine the current implementation.", agentMode: .build))
-        adapter.sessionState.addEvent(TimelineEvent.toolCall(name: "Read", arguments: ["path": "Sources/UI/ProviderPickerView.swift"], state: .success, agentMode: .build))
-        adapter.sessionState.addEvent(TimelineEvent.toolResult(name: "Read", output: "// ProviderPickerView.swift\n// ... file content", duration: 0.3, state: .success, agentMode: .build))
-        adapter.sessionState.addEvent(TimelineEvent.assistantText("Now I can see the issue. The picker isn't properly handling the provider selection.", agentMode: .build))
-        return adapter
-    }
 }

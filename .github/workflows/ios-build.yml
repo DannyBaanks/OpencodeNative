@@ -17,6 +17,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Preflight repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- ':!*.xcresult' ; then
+            echo "::error::Unresolved source-control conflict markers found."
+            exit 1
+          fi
+          if git grep -n $'\xEF\xBB\xBF' -- '*.swift' ; then
+            echo "::warning::UTF-8 BOM detected in Swift sources."
+          fi
       
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -32,6 +44,7 @@ jobs:
       
       - name: Build unsigned (verbose)
         run: |
+          set -o pipefail
           xcodebuild \
             -scheme ${{ env.SCHEME }} \
             -configuration Release \
@@ -40,7 +53,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY= \
             CODE_SIGNING_REQUIRED=NO \
-            build 2>&1 | tail -100
+            build 2>&1 | tee build-output.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: build-output.log
+          retention-days: 14
       
       - name: Verify .app structure
         run: |
@@ -77,6 +98,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Preflight repository hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- ':!*.xcresult' ; then
+            echo "::error::Unresolved source-control conflict markers found."
+            exit 1
+          fi
+          if git grep -n $'\xEF\xBB\xBF' -- '*.swift' ; then
+            echo "::warning::UTF-8 BOM detected in Swift sources."
+          fi
 
       - name: Install XcodeGen
         run: brew install xcodegen

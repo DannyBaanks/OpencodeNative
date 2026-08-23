@@ -1,5 +1,4 @@
 import Foundation
-import OpencodeNativeCore
 #if canImport(SwiftUI)
 import SwiftUI
 #endif
