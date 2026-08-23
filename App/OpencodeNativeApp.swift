@@ -50,7 +50,7 @@ struct RootView: View {
 
 #Preview {
     let adapter = SessionAdapter.preview()
-    return RootView()
+    RootView()
         .environmentObject(adapter)
         .environmentObject(adapter.sessionState)
         .preferredColorScheme(.dark)
