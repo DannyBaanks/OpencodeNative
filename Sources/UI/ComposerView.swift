@@ -75,7 +75,7 @@ public struct ComposerView: View {
                     RoundedRectangle(cornerRadius: OCRadius.r24)
                         .stroke(OCColor.borderBase, lineWidth: 1)
                 )
-                .shadow(color: OCColor.shadowComposer.color, radius: OCColor.shadowComposer.radius, x: OCColor.shadowComposer.x, y: OCColor.shadowComposer.y)
+                .shadow(color: OCShadow.composer.color, radius: OCShadow.composer.radius, x: OCShadow.composer.x, y: OCShadow.composer.y)
         )
         .padding(.horizontal, OCSpacing.compactMargin)
         .padding(.bottom, OCSpacing.compactMargin)

@@ -192,7 +192,7 @@ public struct ShadowStyle {
 
 // MARK: - Agent Mode Enum
 
-public enum AgentMode: String, CaseIterable, Sendable {
+public enum AgentMode: String, CaseIterable, Identifiable, Sendable {
     case build   = "build"
     case plan    = "plan"
     case explore = "explore"
@@ -200,6 +200,8 @@ public enum AgentMode: String, CaseIterable, Sendable {
     case custom  = "custom"
 
     public var displayName: String { rawValue }
+
+    public var id: String { rawValue }
 
     public var color: Color {
         switch self {
@@ -297,11 +299,13 @@ public enum TimelineEventKind: String, Sendable {
 
 // MARK: - Work Surface
 
-public enum WorkSurface: String, CaseIterable, Sendable {
+public enum WorkSurface: String, CaseIterable, Identifiable, Sendable {
     case chat    = "Chat"
     case files   = "Files"
     case review  = "Review"
     case terminal = "Terminal"
+
+    public var id: String { rawValue }
 
     public var icon: String {
         switch self {
