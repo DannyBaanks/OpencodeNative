@@ -1,55 +1,36 @@
 import SwiftUI
 
-// MARK: - Active Session View
-
 public struct ActiveSessionView: View {
     @EnvironmentObject private var sessionState: ActiveSessionState
-    @EnvironmentObject private var sessionAdapter: SessionAdapter
+    @EnvironmentObject private var store: WorkbenchStore
     @State private var scrollProxy: ScrollViewProxy?
     @State private var keyboardHeight: CGFloat = 0
     @FocusState private var isComposerFocused: Bool
-
+    
     public init() {}
-
+    
     public var body: some View {
         ZStack(alignment: .bottom) {
-            // Background
             OCColor.bgDeep.ignoresSafeArea()
-
-            // Timeline
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(sessionState.timelineEvents) { event in
-                            TimelineEventContainer(event: event)
-                                .id(event.id)
-                        }
-                    }
-                    .padding(.horizontal, OCSpacing.contentMargin)
-                    .padding(.top, OCSpacing.lg)
-                    .padding(.bottom, composerHeight + OCSpacing.lg)
-                }
-                .onAppear { scrollProxy = proxy }
-                .onChange(of: sessionState.timelineEvents.count) { _ in
-                    scrollToBottom()
-                }
-                .onChange(of: sessionState.isProcessing) { processing in
-                    if !processing { scrollToBottom() }
-                }
-                .onChange(of: sessionState.selectedModel) { model in
-                    if let model = model {
-                        sessionAdapter.setModel(model)
-                    }
+            
+            Group {
+                switch sessionState.activeSurface {
+                case .chat:
+                    ChatSurfaceView()
+                case .files:
+                    FilesSurfaceView()
+                case .review:
+                    ReviewSurfaceView()
+                case .terminal:
+                    TerminalSurfaceView()
                 }
             }
-
-            // Composer - floating at bottom
+            
             VStack(spacing: 0) {
-                // Work surface switcher (condensed)
                 WorkSurfaceSwitcher(selectedSurface: $sessionState.activeSurface)
                     .padding(.horizontal, OCSpacing.contentMargin)
                     .padding(.top, OCSpacing.xs)
-
+                
                 ComposerView()
             }
         }
@@ -62,14 +43,25 @@ public struct ActiveSessionView: View {
                     subtitle: sessionState.currentProject?.name ?? "Project"
                 )
             }
-
+            
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: OCSpacing.xs) {
-                    Button { } label: {
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 17))
+                    if sessionState.activeSurface == .files {
+                        Button { Task { await store.loadFiles() } } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 17))
+                        }
+                        .disabled(store.fileTree.isEmpty)
                     }
-                    Button { sessionAdapter.disconnect() } label: {
+                    
+                    if sessionState.activeSurface == .review {
+                        Button { Task { await store.loadDiff(sessionID: sessionState.currentSession?.id ?? "") } } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 17))
+                        }
+                    }
+                    
+                    Button { Task { await store.disconnect() } } label: {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                             .font(.system(size: 17))
                     }
@@ -80,31 +72,22 @@ public struct ActiveSessionView: View {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .sheet(isPresented: $sessionState.showAgentPicker) {
-            AgentPickerSheet(selectedMode: $sessionState.agentMode)
+            AgentPickerSheet(selectedMode: $sessionState.agentMode, availableModes: availableModesForPicker)
         }
         .sheet(isPresented: $sessionState.showModelPicker) {
-            ModelPickerSheet(selectedModel: $sessionState.selectedModel)
+            ModelPickerSheet(selectedModel: $sessionState.selectedModel, models: store.availableModels.isEmpty ? ModelInfo.demoModels : store.availableModels)
         }
         .sheet(item: $sessionState.pendingPermission) { event in
             PermissionView(
                 event: event,
                 onAllow: {
-                    sessionAdapter.respondToPermission(
-                        requestId: event.permissionRequestId ?? event.id,
-                        decision: .allowOnce
-                    )
+                    store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowOnce)
                 },
                 onDeny: {
-                    sessionAdapter.respondToPermission(
-                        requestId: event.permissionRequestId ?? event.id,
-                        decision: .deny
-                    )
+                    store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .deny)
                 },
                 onPersistent: {
-                    sessionAdapter.respondToPermission(
-                        requestId: event.permissionRequestId ?? event.id,
-                        decision: .allowAlways
-                    )
+                    store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways)
                 }
             )
             .presentationDetents([.medium, .large])
@@ -112,19 +95,61 @@ public struct ActiveSessionView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .composerSend)) { notification in
             if let text = notification.object as? String {
-                sessionAdapter.sendPrompt(text)
+                store.sendPrompt(text)
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .composerStop)) { _ in
-            sessionAdapter.cancelCurrentRun()
+            store.cancelCurrentRun()
+        }
+        .onChange(of: sessionState.activeSurface) { newSurface in
+            if newSurface == .files {
+                Task { await store.loadFiles() }
+            } else if newSurface == .review, let sessionID = sessionState.currentSession?.id {
+                Task { await store.loadDiff(sessionID: sessionID) }
+            }
         }
     }
-
+    
+    private var availableModesForPicker: [AgentMode] {
+        if store.backendMode == .remote, !store.availableAgents.isEmpty {
+            return store.availableAgents.compactMap { AgentMode(rawValue: $0) }
+        }
+        return AgentMode.allCases
+    }
+    
     private var composerHeight: CGFloat {
-        // Estimate based on content - in real implementation this would be measured
         140 + (sessionState.composerAttachments.isEmpty ? 0 : 44)
     }
+}
 
+struct ChatSurfaceView: View {
+    @EnvironmentObject private var sessionState: ActiveSessionState
+    @EnvironmentObject private var store: WorkbenchStore
+    @State private var scrollProxy: ScrollViewProxy?
+    
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(sessionState.timelineEvents) { event in
+                        TimelineEventContainer(event: event)
+                            .id(event.id)
+                    }
+                }
+                .padding(.horizontal, OCSpacing.contentMargin)
+                .padding(.top, OCSpacing.lg)
+                .padding(.bottom, 140 + (sessionState.composerAttachments.isEmpty ? 0 : 44) + OCSpacing.lg)
+            }
+            .onAppear { scrollProxy = proxy }
+            .onChange(of: sessionState.timelineEvents.count) { _ in
+                scrollToBottom()
+            }
+            .onChange(of: sessionState.isProcessing) { processing in
+                if !processing { scrollToBottom() }
+            }
+        }
+    }
+    
     private func scrollToBottom() {
         guard let proxy = scrollProxy,
               let lastEvent = sessionState.timelineEvents.last else { return }
@@ -134,356 +159,67 @@ public struct ActiveSessionView: View {
     }
 }
 
-// MARK: - Timeline Event Container
-
-struct TimelineEventContainer: View {
-    @EnvironmentObject private var sessionState: ActiveSessionState
-    @EnvironmentObject private var sessionAdapter: SessionAdapter
-    let event: TimelineEvent
-
+struct FilesSurfaceView: View {
+    @EnvironmentObject private var store: WorkbenchStore
+    @State private var expandedFolders: Set<String> = []
+    @State private var selectedFile: WorkbenchFileNode?
+    @State private var fileContent: WorkbenchFileContent?
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: OCSpacing.timelineBlockGap) {
-            switch event.kind {
-            case .userPrompt:
-                UserPromptView(event: event, agentColor: event.agentMode?.color ?? OCColor.agentBuild)
-
-            case .assistantText:
-                AssistantTextView(event: event)
-
-            case .toolCall, .toolResult:
-                ToolCallView(event: event, agentColor: event.agentMode?.color ?? OCColor.agentBuild)
-
-            case .diff:
-                DiffView(event: event)
-
-            case .codeBlock:
-                CodeBlockView(event: event)
-
-            case .permission:
-                PermissionView(
-                    event: event,
-                    onAllow: {
-                        sessionAdapter.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowOnce)
-                    },
-                    onDeny: {
-                        sessionAdapter.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .deny)
-                    },
-                    onPersistent: {
-                        sessionAdapter.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways)
-                    }
-                )
-
-            case .question:
-                QuestionView(
-                    event: event,
-                    onSelect: { _ in /* handle select */ },
-                    onFreeform: { _ in /* handle freeform */ }
-                )
-
-            case .thinking:
-                ThinkingView(event: event, agentColor: event.agentMode?.color ?? OCColor.agentBuild)
-
-            case .todo:
-                TodoView(event: event, agentColor: event.agentMode?.color ?? OCColor.agentBuild)
-
-            case .system:
-                SystemMessageView(event: event)
-            }
-        }
-        .padding(.bottom, OCSpacing.timelineEventGap)
-    }
-}
-
-// MARK: - Session Navigation Title
-
-struct SessionNavTitle: View {
-    let title: String
-    let subtitle: String
-
-    var body: some View {
-        VStack(alignment: .center, spacing: 2) {
-            Text(title)
-                .font(OCTypography.navTitle)
-                .foregroundColor(OCColor.textPrimary)
-                .lineLimit(1)
-
-            Text(subtitle)
-                .font(OCTypography.navSubtitle)
-                .foregroundColor(OCColor.textFaint)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: 238)
-    }
-}
-
-// MARK: - Work Surface Switcher
-
-struct WorkSurfaceSwitcher: View {
-    @Binding var selectedSurface: WorkSurface
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: OCSpacing.xs) {
-                ForEach(WorkSurface.allCases) { surface in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            selectedSurface = surface
-                        }
-                    } label: {
-                        HStack(spacing: OCSpacing.xs) {
-                            Image(systemName: surface.icon)
-                                .font(.system(size: 14, weight: .medium))
-                            Text(surface.rawValue)
-                                .font(OCTypography.control)
-                        }
-                        .foregroundColor(selectedSurface == surface ? OCColor.bgDeep : OCColor.textPrimary)
-                        .padding(.horizontal, OCSpacing.base)
-                        .frame(height: 28)
-                        .background(
-                            RoundedRectangle(cornerRadius: OCRadius.r14)
-                                .fill(selectedSurface == surface ? OCColor.agentBuild : OCColor.bgLayer1)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: OCRadius.r14)
-                                        .stroke(selectedSurface == surface ? Color.clear : OCColor.borderBase, lineWidth: 1)
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .frame(height: 36)
-    }
-}
-
-// MARK: - Terminal View
-
-public struct TerminalView: View {
-    @State private var output: [TerminalLine] = []
-    @State private var input = ""
-    @FocusState private var isFocused: Bool
-
-    public init() {}
-
-    public var body: some View {
-        ZStack {
-            OCColor.bgDeep.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                // Terminal content
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(output) { line in
-                                Text(line.text)
-                                    .font(OCTypography.code)
-                                    .foregroundColor(line.color)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, OCSpacing.lg)
-                                    .padding(.vertical, 1)
-                                    .id(line.id)
+        List {
+            ForEach(store.fileTree) { item in
+                FileTreeRowView(
+                    item: item,
+                    expandedFolders: $expandedFolders,
+                    selectedFile: $selectedFile,
+                    onTap: { file in
+                        if !file.isDirectory {
+                            selectedFile = file
+                            Task {
+                                if let content = await store.loadFileContent(path: file.path) {
+                                    fileContent = content
+                                }
                             }
                         }
-                        .padding(.vertical, OCSpacing.base)
                     }
-                    .onChange(of: output.count) { _ in
-                        if let last = output.last {
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                        }
-                    }
-                }
-
-                // Input line
-                HStack(spacing: OCSpacing.base) {
-                    Text("$")
-                        .font(OCTypography.code)
-                        .foregroundColor(OCColor.iconMuted)
-
-                    TextField("command", text: $input)
-                        .font(OCTypography.code)
-                        .foregroundColor(OCColor.textPrimary)
-                        .textFieldStyle(.plain)
-                        .focused($isFocused)
-                        .submitLabel(.send)
-                        .onSubmit { executeCommand() }
-                }
-                .padding(.horizontal, OCSpacing.lg)
-                .padding(.vertical, OCSpacing.base)
-                .background(OCColor.bgBase)
-                .overlay(
-                    Rectangle()
-                        .frame(height: 0.5)
-                        .foregroundColor(OCColor.borderBase),
-                    alignment: .top
                 )
             }
         }
-        .navigationTitle("Terminal")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(OCColor.bgDeep)
+        .sheet(item: $selectedFile) { file in
+            FileViewerView(file: file, content: fileContent?.content ?? "")
+        }
         .onAppear {
-            output.append(TerminalLine(text: "Welcome to OpenCodeNative Terminal", color: OCColor.textFaint))
-            output.append(TerminalLine(text: "Type 'help' for available commands", color: OCColor.textFaint))
-            output.append(TerminalLine(text: "", color: OCColor.textPrimary))
-        }
-    }
-
-    private func executeCommand() {
-        let cmd = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cmd.isEmpty else { return }
-
-        output.append(TerminalLine(text: "$ \(cmd)", color: OCColor.textSecondary))
-        input = ""
-
-        // Simulate command output
-        if cmd == "help" {
-            output.append(TerminalLine(text: "Available commands:", color: OCColor.textPrimary))
-            output.append(TerminalLine(text: "  help     - Show this help", color: OCColor.textPrimary))
-            output.append(TerminalLine(text: "  ls       - List files", color: OCColor.textPrimary))
-            output.append(TerminalLine(text: "  pwd      - Print working directory", color: OCColor.textPrimary))
-            output.append(TerminalLine(text: "  clear    - Clear terminal", color: OCColor.textPrimary))
-        } else if cmd == "clear" {
-            output.removeAll()
-        } else if cmd == "pwd" {
-            output.append(TerminalLine(text: "/Users/user/Development/OpencodeNative", color: OCColor.textPrimary))
-        } else if cmd == "ls" {
-            output.append(TerminalLine(text: "App/          Sources/        Tests/", color: OCColor.textPrimary))
-            output.append(TerminalLine(text: "Assets.xcassets/  project.yml   README.md", color: OCColor.textPrimary))
-        } else {
-            output.append(TerminalLine(text: "Command not found: \(cmd)", color: OCColor.danger))
-        }
-
-        output.append(TerminalLine(text: "", color: OCColor.textPrimary))
-    }
-}
-
-struct TerminalLine: Identifiable {
-    let id = UUID().uuidString
-    let text: String
-    let color: Color
-}
-
-// MARK: - Files View
-
-public struct FilesView: View {
-    @State private var expandedFolders: Set<String> = []
-    @State private var selectedFile: FileItem?
-
-    public init() {}
-
-    public var body: some View {
-        NavigationStack {
-            List {
-                ForEach(rootItems) { item in
-                    FileRowView(item: item, expandedFolders: $expandedFolders, selectedFile: $selectedFile, indent: 0)
-                }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(OCColor.bgDeep)
-            .navigationTitle("Files")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-                }
-            }
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .sheet(item: $selectedFile) { file in
-                FileViewerView(file: file)
+            if store.fileTree.isEmpty {
+                Task { await store.loadFiles() }
             }
         }
     }
-
-    private var rootItems: [FileItem] {
-        [
-            FileItem(name: "App", path: "App", isDirectory: true, children: [
-                FileItem(name: "OpencodeNativeApp.swift", path: "App/OpencodeNativeApp.swift", isDirectory: false)
-            ]),
-            FileItem(name: "Sources", path: "Sources", isDirectory: true, children: [
-                FileItem(name: "UI", path: "Sources/UI", isDirectory: true, children: [
-                    FileItem(name: "SessionViewModel.swift", path: "Sources/UI/SessionViewModel.swift", isDirectory: false),
-                    FileItem(name: "ConsoleView.swift", path: "Sources/UI/ConsoleView.swift", isDirectory: false),
-                    FileItem(name: "DesignSystem.swift", path: "Sources/UI/DesignSystem.swift", isDirectory: false),
-                    FileItem(name: "Models.swift", path: "Sources/UI/Models.swift", isDirectory: false),
-                    FileItem(name: "TimelineViews.swift", path: "Sources/UI/TimelineViews.swift", isDirectory: false),
-                    FileItem(name: "ComposerView.swift", path: "Sources/UI/ComposerView.swift", isDirectory: false),
-                    FileItem(name: "ActiveSessionView.swift", path: "Sources/UI/ActiveSessionView.swift", isDirectory: false),
-                    FileItem(name: "ProjectSessionViews.swift", path: "Sources/UI/ProjectSessionViews.swift", isDirectory: false),
-                ]),
-                FileItem(name: "Agent", path: "Sources/Agent", isDirectory: true, children: [
-                    FileItem(name: "AgentLoop.swift", path: "Sources/Agent/AgentLoop.swift", isDirectory: false)
-                ]),
-                FileItem(name: "Model", path: "Sources/Model", isDirectory: true, children: [
-                    FileItem(name: "ModelProvider.swift", path: "Sources/Model/ModelProvider.swift", isDirectory: false),
-                    FileItem(name: "ScriptedModelProvider.swift", path: "Sources/Model/ScriptedModelProvider.swift", isDirectory: false)
-                ]),
-                FileItem(name: "Workspace", path: "Sources/Workspace", isDirectory: true, children: [
-                    FileItem(name: "Workspace.swift", path: "Sources/Workspace/Workspace.swift", isDirectory: false)
-                ]),
-                FileItem(name: "Persistence", path: "Sources/Persistence", isDirectory: true, children: [
-                    FileItem(name: "Persistence.swift", path: "Sources/Persistence/Persistence.swift", isDirectory: false)
-                ]),
-                FileItem(name: "Tools", path: "Sources/Tools", isDirectory: true, children: [
-                    FileItem(name: "FileSystemTools.swift", path: "Sources/Tools/FileSystemTools.swift", isDirectory: false),
-                    FileItem(name: "GlobMatcher.swift", path: "Sources/Tools/GlobMatcher.swift", isDirectory: false)
-                ]),
-                FileItem(name: "Host", path: "Sources/Host", isDirectory: true, children: [
-                    FileItem(name: "OpenCodeRuntimeContract.swift", path: "Sources/Host/OpenCodeRuntimeContract.swift", isDirectory: false),
-                    FileItem(name: "IOSCapabilityMatrix.swift", path: "Sources/Host/IOSCapabilityMatrix.swift", isDirectory: false),
-                    FileItem(name: "CompatibilityReport.swift", path: "Sources/Host/CompatibilityReport.swift", isDirectory: false),
-                    FileItem(name: "OpenCodeBootAttempt.swift", path: "Sources/Host/OpenCodeBootAttempt.swift", isDirectory: false)
-                ])
-            ]),
-            FileItem(name: "Tests", path: "Tests", isDirectory: true, children: [
-                FileItem(name: "GlobMatcherTests.swift", path: "Tests/GlobMatcherTests.swift", isDirectory: false),
-                FileItem(name: "HostTests.swift", path: "Tests/HostTests.swift", isDirectory: false),
-                FileItem(name: "CoreEndToEndTests.swift", path: "Tests/CoreEndToEndTests.swift", isDirectory: false)
-            ]),
-            FileItem(name: "project.yml", path: "project.yml", isDirectory: false),
-            FileItem(name: "README.md", path: "README.md", isDirectory: false),
-            FileItem(name: "Info.plist", path: "Info.plist", isDirectory: false),
-            FileItem(name: "LICENSE", path: "LICENSE", isDirectory: false)
-        ]
-    }
 }
 
-public struct FileItem: Identifiable, Hashable {
-    public let id = UUID().uuidString
-    let name: String
-    let path: String
-    let isDirectory: Bool
-    var children: [FileItem]?
-
-    public init(name: String, path: String, isDirectory: Bool, children: [FileItem]? = nil) {
-        self.name = name
-        self.path = path
-        self.isDirectory = isDirectory
-        self.children = children
-    }
-}
-
-struct FileRowView: View {
-    let item: FileItem
+struct FileTreeRowView: View {
+    let item: WorkbenchFileNode
     @Binding var expandedFolders: Set<String>
-    @Binding var selectedFile: FileItem?
+    @Binding var selectedFile: WorkbenchFileNode?
+    let onTap: (WorkbenchFileNode) -> Void
     let indent: Int
-
+    
+    init(item: WorkbenchFileNode, expandedFolders: Binding<Set<String>>, selectedFile: Binding<WorkbenchFileNode?>, onTap: @escaping (WorkbenchFileNode) -> Void, indent: Int = 0) {
+        self.item = item
+        self._expandedFolders = expandedFolders
+        self._selectedFile = selectedFile
+        self.onTap = onTap
+        self.indent = indent
+    }
+    
     var body: some View {
         HStack(spacing: OCSpacing.xs) {
-            // Indent
             if indent > 0 {
                 Spacer().frame(width: CGFloat(indent) * 16)
             }
-
-            // Disclosure
+            
             if item.isDirectory {
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) {
@@ -491,6 +227,9 @@ struct FileRowView: View {
                             expandedFolders.remove(item.path)
                         } else {
                             expandedFolders.insert(item.path)
+                            Task {
+                                await store.loadFiles(path: item.path)
+                            }
                         }
                     }
                 } label: {
@@ -505,29 +244,29 @@ struct FileRowView: View {
             } else {
                 Spacer().frame(width: 32)
             }
-
-            // Icon
+            
             Image(systemName: item.isDirectory ? "folder.fill" : "doc.text")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(item.isDirectory ? OCColor.agentBuild : OCColor.iconPrimary)
-
-            // Name
+            
             Text(item.name)
                 .font(OCTypography.fileRow)
                 .foregroundColor(OCColor.textPrimary)
                 .lineLimit(1)
-
+            
+            if let status = item.status, status == "ignored" {
+                Image(systemName: "eye.slash")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(OCColor.textFaint)
+            }
+            
             Spacer()
-
-            // Dirty indicator would go here
         }
         .padding(.horizontal, OCSpacing.contentMargin)
         .frame(height: 40)
         .contentShape(Rectangle())
         .onTapGesture {
-            if !item.isDirectory {
-                selectedFile = item
-            }
+            onTap(item)
         }
         .background(
             selectedFile?.id == item.id ? OCColor.bgLayer1.opacity(0.5) : Color.clear
@@ -543,13 +282,11 @@ struct FileRowView: View {
     }
 }
 
-// MARK: - File Viewer
-
 struct FileViewerView: View {
     @Environment(\.dismiss) private var dismiss
-    let file: FileItem
-    @State private var content = ""
-
+    let file: WorkbenchFileNode
+    let content: String
+    
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -586,12 +323,281 @@ struct FileViewerView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
-            .onAppear { loadContent() }
         }
     }
+}
 
-    private func loadContent() {
-        // In real implementation, read from workspace
-        content = "// \(file.name)\n// Path: \(file.path)\n\n// File content would be loaded from the workspace\n// This is a placeholder for the file viewer implementation"
+struct ReviewSurfaceView: View {
+    @EnvironmentObject private var store: WorkbenchStore
+    @State private var selectedDiff: SessionDiffFile?
+    
+    var body: some View {
+        if store.diffFiles.isEmpty {
+            EmptyReviewView()
+        } else {
+            List {
+                ForEach(store.diffFiles) { diff in
+                    Button {
+                        selectedDiff = diff
+                    } label: {
+                        DiffFileRowView(diff: diff)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(OCColor.bgDeep)
+            .sheet(item: $selectedDiff) { diff in
+                DiffViewerView(diff: diff)
+            }
+        }
     }
+}
+
+struct EmptyReviewView: View {
+    @EnvironmentObject private var sessionState: ActiveSessionState
+    @EnvironmentObject private var store: WorkbenchStore
+    
+    var body: some View {
+        VStack(spacing: OCSpacing.xl) {
+            Image(systemName: "arrow.left.arrow.right")
+                .font(.system(size: 48, weight: .light))
+                .foregroundColor(OCColor.iconMuted)
+            
+            VStack(spacing: OCSpacing.xs) {
+                Text("No Changes")
+                    .font(OCTypography.bodyStrong)
+                    .foregroundColor(OCColor.textPrimary)
+                
+                Text("No diff available for this session")
+                    .font(OCTypography.meta)
+                    .foregroundColor(OCColor.textFaint)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Button("Refresh") {
+                if let sessionID = sessionState.currentSession?.id {
+                    Task { await store.loadDiff(sessionID: sessionID) }
+                }
+            }
+            .font(OCTypography.control)
+            .padding(.horizontal, OCSpacing.xl)
+            .padding(.vertical, OCSpacing.base)
+            .background(OCColor.agentBuild)
+            .foregroundColor(OCColor.bgDeep)
+            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r24))
+        }
+        .padding(OCSpacing.huge)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct DiffFileRowView: View {
+    let diff: SessionDiffFile
+    
+    var body: some View {
+        HStack(spacing: OCSpacing.base) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(diff.path)
+                    .font(OCTypography.fileRow)
+                    .foregroundColor(OCColor.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                
+                HStack(spacing: OCSpacing.sm) {
+                    if diff.additions > 0 {
+                        Label("+\(diff.additions)", systemImage: "plus")
+                            .font(OCTypography.metaMono)
+                            .foregroundColor(OCColor.diffAddFg)
+                    }
+                    if diff.deletions > 0 {
+                        Label("-\(diff.deletions)", systemImage: "minus")
+                            .font(OCTypography.metaMono)
+                            .foregroundColor(OCColor.diffDeleteFg)
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(OCColor.iconMuted)
+        }
+        .padding(.horizontal, OCSpacing.contentMargin)
+        .padding(.vertical, OCSpacing.lg)
+        .background(Color.clear)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .overlay(
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(OCColor.borderMuted),
+            alignment: .bottom
+        )
+    }
+}
+
+struct DiffViewerView: View {
+    @Environment(\.dismiss) private var dismiss
+    let diff: SessionDiffFile
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: OCSpacing.lg) {
+                    Text(diff.path)
+                        .font(OCTypography.code)
+                        .foregroundColor(OCColor.textFaint)
+                        .padding(.horizontal, OCSpacing.lg)
+                    
+                    if let before = diff.before {
+                        VStack(alignment: .leading, spacing: OCSpacing.xs) {
+                            Text("Before")
+                                .font(OCTypography.sectionLabel)
+                                .foregroundColor(OCColor.textFaint)
+                            Text(before)
+                                .font(OCTypography.code)
+                                .foregroundColor(OCColor.textSecondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(OCSpacing.lg)
+                                .background(OCColor.diffContextBg)
+                                .cornerRadius(OCRadius.r8)
+                        }
+                    }
+                    
+                    if let after = diff.after {
+                        VStack(alignment: .leading, spacing: OCSpacing.xs) {
+                            Text("After")
+                                .font(OCTypography.sectionLabel)
+                                .foregroundColor(OCColor.textFaint)
+                            Text(after)
+                                .font(OCTypography.code)
+                                .foregroundColor(OCColor.textPrimary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(OCSpacing.lg)
+                                .background(OCColor.diffAddBg)
+                                .cornerRadius(OCRadius.r8)
+                        }
+                    }
+                }
+                .padding(OCSpacing.lg)
+            }
+            .background(OCColor.bgDeep)
+            .navigationTitle("Diff")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+        }
+    }
+}
+
+struct TerminalSurfaceView: View {
+    @EnvironmentObject private var sessionState: ActiveSessionState
+    @EnvironmentObject private var store: WorkbenchStore
+    @State private var command = ""
+    @FocusState private var isFocused: Bool
+    @State private var output: [TerminalOutput] = []
+    
+    var body: some View {
+        ZStack {
+            OCColor.bgDeep.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(output) { line in
+                                Text(line.text)
+                                    .font(OCTypography.code)
+                                    .foregroundColor(line.color)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, OCSpacing.lg)
+                                    .padding(.vertical, 1)
+                                    .id(line.id)
+                            }
+                        }
+                        .padding(.vertical, OCSpacing.base)
+                    }
+                    .onChange(of: output.count) { _ in
+                        if let last = output.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
+                
+                HStack(spacing: OCSpacing.base) {
+                    Text("$")
+                        .font(OCTypography.code)
+                        .foregroundColor(OCColor.iconMuted)
+                    
+                    TextField("command", text: $command)
+                        .font(OCTypography.code)
+                        .foregroundColor(OCColor.textPrimary)
+                        .textFieldStyle(.plain)
+                        .focused($isFocused)
+                        .submitLabel(.send)
+                        .onSubmit { executeCommand() }
+                }
+                .padding(.horizontal, OCSpacing.lg)
+                .padding(.vertical, OCSpacing.base)
+                .background(OCColor.bgBase)
+                .overlay(
+                    Rectangle()
+                        .frame(height: 0.5)
+                        .foregroundColor(OCColor.borderBase),
+                    alignment: .top
+                )
+            }
+        }
+        .navigationTitle("Terminal")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .onAppear {
+            if output.isEmpty {
+                output.append(TerminalOutput(text: "OpenCodeNative Terminal — commands run via OpenCode server", color: OCColor.textFaint))
+                output.append(TerminalOutput(text: "Type a command and press Enter", color: OCColor.textFaint))
+                output.append(TerminalOutput(text: "", color: OCColor.textPrimary))
+            }
+        }
+    }
+    
+    private func executeCommand() {
+        let cmd = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cmd.isEmpty else { return }
+        
+        output.append(TerminalOutput(text: "$ \(cmd)", color: OCColor.textSecondary))
+        command = ""
+        
+        let agent = sessionState.agentMode.rawValue.lowercased()
+        Task {
+            await store.runShellCommand(cmd, agent: agent)
+            if let last = store.shellHistory.last {
+                for text in last.result?.textParts ?? [] {
+                    output.append(TerminalOutput(text: text, color: OCColor.textPrimary))
+                }
+                if let error = last.result?.error {
+                    output.append(TerminalOutput(text: "Error: \(error)", color: OCColor.danger))
+                }
+                output.append(TerminalOutput(text: "", color: OCColor.textPrimary))
+            }
+        }
+    }
+}
+
+struct TerminalOutput: Identifiable {
+    let id = UUID().uuidString
+    let text: String
+    let color: Color
 }

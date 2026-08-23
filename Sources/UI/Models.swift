@@ -367,7 +367,7 @@ public final class ActiveSessionState: ObservableObject {
     }
 }
 
-// MARK: - Demo Data
+// MARK: - Demo Data (ONLY for SwiftUI previews and tests — NOT for production)
 
 public extension Project {
     static let demoProjects: [Project] = [
@@ -393,7 +393,7 @@ public extension ModelInfo {
         ModelInfo(name: "Demo Scripted", provider: "Local", providerIcon: "cpu", isLocal: true, apiModelId: "scripted-1", route: "scripted"),
         ModelInfo(name: "GPT-4o", provider: "OpenAI", providerIcon: "cpu", contextWindow: 128000, supportsReasoning: false, supportsImages: true, apiModelId: "gpt-4o", route: "openai"),
         ModelInfo(name: "GPT-4o mini", provider: "OpenAI", providerIcon: "cpu", contextWindow: 128000, supportsReasoning: false, supportsImages: true, apiModelId: "gpt-4o-mini", route: "openai"),
-        // Visible as future adapters; SessionAdapter rejects direct routing until a native adapter/proxy exists.
+        // Visible as future adapters; direct routing rejected until native adapter/proxy exists.
         ModelInfo(name: "Claude 3.5 Sonnet", provider: "Anthropic", providerIcon: "cpu", contextWindow: 200000, supportsReasoning: true, supportsImages: true, route: "anthropic"),
         ModelInfo(name: "Claude 3 Opus", provider: "Anthropic", providerIcon: "cpu", contextWindow: 200000, supportsReasoning: true, supportsImages: true, route: "anthropic"),
         ModelInfo(name: "Gemini 1.5 Pro", provider: "Google", providerIcon: "cpu", contextWindow: 1000000, supportsReasoning: true, supportsImages: true, route: "google"),

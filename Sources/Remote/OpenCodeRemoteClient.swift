@@ -59,6 +59,22 @@ public struct OpenCodePairing: Equatable, Sendable {
     public var baseURL: URL {
         URL(string: "http://\(host):\(port)")!
     }
+    
+    public var rawValue: String {
+        var components = URLComponents()
+        components.scheme = "opencodenative"
+        components.host = "pair"
+        components.queryItems = [
+            URLQueryItem(name: "host", value: host),
+            URLQueryItem(name: "port", value: String(port)),
+            URLQueryItem(name: "username", value: username),
+            URLQueryItem(name: "password", value: password)
+        ]
+        if !directory.isEmpty {
+            components.queryItems?.append(URLQueryItem(name: "directory", value: directory))
+        }
+        return components.url?.absoluteString ?? ""
+    }
 }
 
 public struct OpenCodeRemoteHealth: Sendable {
@@ -207,7 +223,7 @@ public actor OpenCodeRemoteClient {
         }
     }
 
-    private func request(path: String, method: String = "GET", jsonBody: [String: Any]? = nil) async throws -> Data {
+    nonisolated func request(path: String, method: String = "GET", jsonBody: [String: Any]? = nil) async throws -> Data {
         let request = makeRequest(path: path, method: method, jsonBody: jsonBody)
         let (data, response) = try await session.data(for: request)
         try validate(response: response, data: data)
@@ -240,7 +256,7 @@ public actor OpenCodeRemoteClient {
         }
     }
 
-    private func jsonObject(_ data: Data) throws -> [String: Any] {
+    func jsonObject(_ data: Data) throws -> [String: Any] {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw OpenCodeRemoteError.invalidResponse
         }
@@ -327,5 +343,213 @@ public actor OpenCodeRemoteClient {
         default:
             return .other(type)
         }
+    }
+
+    // MARK: - Extended API (v1.18+)
+
+    public struct RemoteFileNode: Sendable {
+        public let name: String
+        public let path: String
+        public let absolutePath: String?
+        public let isDirectory: Bool
+        public let type: String?
+        public let ignored: Bool?
+
+        public init(name: String, path: String, absolutePath: String? = nil, isDirectory: Bool = false, type: String? = nil, ignored: Bool? = nil) {
+            self.name = name
+            self.path = path
+            self.absolutePath = absolutePath
+            self.isDirectory = isDirectory
+            self.type = type
+            self.ignored = ignored
+        }
+    }
+
+    public struct RemoteFileContent: Sendable {
+        public let path: String
+        public let type: String
+        public let content: String
+        public let mimeType: String?
+        public let encoding: String?
+    }
+
+    public struct RemoteFileStatus: Sendable {
+        public let path: String
+        public let status: String
+        public let added: Bool?
+        public let removed: Bool?
+    }
+
+    public struct SessionDiff: Sendable {
+        public let file: String
+        public let additions: Int
+        public let deletions: Int
+        public let before: String?
+        public let after: String?
+    }
+
+    public struct ShellResult: Sendable {
+        public let sessionID: String
+        public let messageID: String
+        public let parts: [OpenCodeRemotePart]
+    }
+
+    public struct ProviderInfo: Sendable {
+        public let id: String
+        public let name: String
+        public let models: [String: [String: Any]]?
+    }
+
+    public struct ProviderListResult: Sendable {
+        public let all: [ProviderInfo]
+        public let connected: [String]
+        public let default: String?
+    }
+
+    public struct ConfigInfo: Sendable {
+        public let agents: [String: [String: Any]]?
+        public let provider: [String: Any]?
+    }
+
+    public struct CommandInfo: Sendable {
+        public let name: String
+        public let description: String?
+    }
+
+    public func renameSession(sessionID: String, title: String) async throws {
+        var body: [String: Any] = ["title": title]
+        _ = try await request(path: "/session/\(sessionID)", method: "PATCH", jsonBody: body)
+    }
+
+    public func deleteSession(sessionID: String) async throws {
+        _ = try await request(path: "/session/\(sessionID)", method: "DELETE", jsonBody: nil)
+    }
+
+    public func sessionDiff(sessionID: String) async throws -> [SessionDiff] {
+        let data = try await request(path: "/session/\(sessionID)/diff")
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw OpenCodeRemoteError.invalidResponse
+        }
+        return array.compactMap { json in
+            guard let file = json["file"] as? String else { return nil }
+            let additions = json["additions"] as? Int ?? 0
+            let deletions = json["deletions"] as? Int ?? 0
+            let before = json["before"] as? String
+            let after = json["after"] as? String
+            return SessionDiff(file: file, additions: additions, deletions: deletions, before: before, after: after)
+        }
+    }
+
+    public func listFiles(path: String = "") async throws -> [RemoteFileNode] {
+        let query = path.isEmpty ? "" : "?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        let data = try await request(path: "/file\(query)")
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw OpenCodeRemoteError.invalidResponse
+        }
+        return array.compactMap { json in
+            guard let name = json["name"] as? String,
+                  let path = json["path"] as? String else { return nil }
+            let absolute = json["absolute"] as? String
+            let isDir = (json["type"] as? String == "directory") || (json["type"] as? String == "folder")
+            let ignored = json["ignored"] as? Bool
+            return RemoteFileNode(name: name, path: path, absolutePath: absolute, isDirectory: isDir, type: json["type"] as? String, ignored: ignored)
+        }
+    }
+
+    public func fileContent(path: String) async throws -> RemoteFileContent {
+        let query = "?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        let data = try await request(path: "/file/content\(query)")
+        let json = try jsonObject(data)
+        return RemoteFileContent(
+            path: json["path"] as? String ?? path,
+            type: json["type"] as? String ?? "text",
+            content: json["content"] as? String ?? "",
+            mimeType: json["mimeType"] as? String,
+            encoding: json["encoding"] as? String
+        )
+    }
+
+    public func fileStatus() async throws -> [RemoteFileStatus] {
+        let data = try await request(path: "/file/status")
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw OpenCodeRemoteError.invalidResponse
+        }
+        return array.compactMap { json in
+            guard let path = json["path"] as? String,
+                  let status = json["status"] as? String else { return nil }
+            return RemoteFileStatus(path: path, status: status, added: json["added"] as? Bool, removed: json["removed"] as? Bool)
+        }
+    }
+
+    public func findFiles(query: String) async throws -> [String] {
+        let q = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let data = try await request(path: "/find/file?query=\(q)")
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [String] else {
+            throw OpenCodeRemoteError.invalidResponse
+        }
+        return array
+    }
+
+    public func runShell(sessionID: String, command: String, agent: String? = nil, workdir: String? = nil) async throws -> ShellResult {
+        var body: [String: Any] = ["command": command]
+        if let agent { body["agent"] = agent }
+        if let workdir { body["workdir"] = workdir }
+        let data = try await request(path: "/session/\(sessionID)/shell", method: "POST", jsonBody: body)
+        let json = try jsonObject(data)
+        guard let info = json["info"] as? [String: Any],
+              let messageID = info["id"] as? String,
+              let partsJSON = json["parts"] as? [[String: Any]] else {
+            throw OpenCodeRemoteError.invalidResponse
+        }
+        let parts = partsJSON.compactMap(Self.parsePart)
+        return ShellResult(sessionID: sessionID, messageID: messageID, parts: parts)
+    }
+
+    public func providers() async throws -> ProviderListResult {
+        let data = try await request(path: "/provider")
+        let json = try jsonObject(data)
+        let all = (json["all"] as? [[String: Any]] ?? []).compactMap { dict in
+            guard let id = dict["id"] as? String else { return nil }
+            return ProviderInfo(id: id, name: dict["name"] as? String ?? id, models: dict["models"] as? [String: [String: Any]])
+        }
+        let connected = json["connected"] as? [String] ?? []
+        let defaultProv = json["default"] as? String
+        return ProviderListResult(all: all, connected: connected, default: defaultProv)
+    }
+
+    public func config() async throws -> ConfigInfo {
+        let data = try await request(path: "/config")
+        let json = try jsonObject(data)
+        return ConfigInfo(
+            agents: json["agent"] as? [String: [String: Any]],
+            provider: json["provider"] as? [String: Any]
+        )
+    }
+
+    public func commands() async throws -> [CommandInfo] {
+        let data = try await request(path: "/command")
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw OpenCodeRemoteError.invalidResponse
+        }
+        return array.compactMap { dict in
+            guard let name = dict["name"] as? String else { return nil }
+            return CommandInfo(name: name, description: dict["description"] as? String)
+        }
+    }
+
+    public func getPath() async throws -> String {
+        let data = try await request(path: "/path")
+        let json = try jsonObject(data)
+        return json["path"] as? String ?? ""
+    }
+
+    public func sendPromptAsyncWithModel(sessionID: String, text: String, agent: String? = nil, modelProvider: String? = nil, modelID: String? = nil) async throws {
+        var parts: [[String: Any]] = [["type": "text", "text": text]]
+        var body: [String: Any] = ["parts": parts]
+        if let agent { body["agent"] = agent }
+        if let modelProvider, let modelID {
+            body["model"] = ["providerID": modelProvider, "modelID": modelID]
+        }
+        _ = try await request(path: "/session/\(sessionID)/prompt_async", method: "POST", jsonBody: body)
     }
 }

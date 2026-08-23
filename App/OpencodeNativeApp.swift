@@ -3,15 +3,15 @@ import OpencodeNativeCore
 
 @main
 public struct OpencodeNativeApp: App {
-    @StateObject private var sessionAdapter = SessionAdapter()
+    @StateObject private var store = WorkbenchStore()
 
     public init() {}
 
     public var body: some Scene {
         WindowGroup {
             RootView()
-                .environmentObject(sessionAdapter)
-                .environmentObject(sessionAdapter.sessionState)
+                .environmentObject(store)
+                .environmentObject(store.sessionState)
                 .preferredColorScheme(.dark)
         }
     }
@@ -20,12 +20,12 @@ public struct OpencodeNativeApp: App {
 // MARK: - Root View
 
 struct RootView: View {
-    @EnvironmentObject private var adapter: SessionAdapter
+    @EnvironmentObject private var store: WorkbenchStore
     @EnvironmentObject private var sessionState: ActiveSessionState
 
     var body: some View {
         Group {
-            if adapter.backendMode == .unconfigured {
+            if store.backendMode == .unconfigured {
                 ConnectionView()
             } else {
                 NavigationStack {
@@ -41,7 +41,7 @@ struct RootView: View {
         }
         .onOpenURL { url in
             guard url.scheme == "opencodenative" else { return }
-            adapter.connectRemote(url.absoluteString)
+            Task { await store.connectRemote(url.absoluteString) }
         }
     }
 }

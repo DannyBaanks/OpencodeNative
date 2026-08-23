@@ -1,22 +1,19 @@
 import SwiftUI
 
-// MARK: - Project Row
-
 public struct ProjectRow: View {
     let project: Project
     let isSelected: Bool
     let onTap: () -> Void
-
+    
     public init(project: Project, isSelected: Bool = false, onTap: @escaping () -> Void) {
         self.project = project
         self.isSelected = isSelected
         self.onTap = onTap
     }
-
+    
     public var body: some View {
         Button(action: onTap) {
             HStack(spacing: OCSpacing.base) {
-                // Avatar
                 ZStack {
                     RoundedRectangle(cornerRadius: OCRadius.r8)
                         .fill(project.avatarColor?.opacity(0.3) ?? OCColor.bgLayer1)
@@ -25,23 +22,22 @@ public struct ProjectRow: View {
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(project.avatarColor ?? OCColor.iconPrimary)
                 }
-
+                
                 VStack(alignment: .leading, spacing: 2) {
                     Text(project.name)
                         .font(OCTypography.rowPrimary)
                         .foregroundColor(OCColor.textPrimary)
                         .lineLimit(1)
-
+                    
                     Text(project.path.replacingOccurrences(of: "~/", with: "~/"))
                         .font(OCTypography.rowSecondary)
                         .foregroundColor(OCColor.textFaint)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-
+                
                 Spacer()
-
-                // Trailing
+                
                 HStack(spacing: OCSpacing.sm) {
                     if project.sessionCount > 0 {
                         Text("\(project.sessionCount)")
@@ -52,7 +48,7 @@ public struct ProjectRow: View {
                             .background(OCColor.bgLayer1)
                             .clipShape(RoundedRectangle(cornerRadius: OCRadius.r4))
                     }
-
+                    
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(OCColor.iconMuted)
@@ -77,42 +73,40 @@ public struct ProjectRow: View {
     }
 }
 
-// MARK: - Project List View
-
 public struct ProjectListView: View {
+    @EnvironmentObject private var store: WorkbenchStore
     @EnvironmentObject private var sessionState: ActiveSessionState
-    @State private var projects: [Project] = Project.demoProjects
     @State private var selectedProject: Project?
-    @State private var showNewProjectSheet = false
-
+    @State private var showSettings = false
+    
     public init() {}
-
+    
     public var body: some View {
         NavigationStack {
             List {
-                Section {
-                    ForEach(projects) { project in
-                        ProjectRow(
-                            project: project,
-                            isSelected: selectedProject?.id == project.id,
-                            onTap: { selectedProject = project }
-                        )
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                    }
-                } header: {
-                    Text("PROJECTS")
-                        .font(OCTypography.sectionLabel)
-                        .foregroundColor(OCColor.textFaint)
-                        .padding(.horizontal, OCSpacing.contentMargin)
-                        .padding(.top, OCSpacing.xl)
-                        .padding(.bottom, OCSpacing.xs)
-                        .textCase(nil)
-                }
-
-                if projects.isEmpty {
+                if store.projects.isEmpty {
                     emptyState
+                } else {
+                    Section {
+                        ForEach(store.projects) { project in
+                            ProjectRow(
+                                project: project,
+                                isSelected: selectedProject?.id == project.id,
+                                onTap: { selectedProject = project }
+                            )
+                            .listRowInsets(EdgeInsets())
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                        }
+                    } header: {
+                        Text("PROJECTS")
+                            .font(OCTypography.sectionLabel)
+                            .foregroundColor(OCColor.textFaint)
+                            .padding(.horizontal, OCSpacing.contentMargin)
+                            .padding(.top, OCSpacing.xl)
+                            .padding(.bottom, OCSpacing.xs)
+                            .textCase(nil)
+                    }
                 }
             }
             .listStyle(.plain)
@@ -122,13 +116,17 @@ public struct ProjectListView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button { showNewProjectSheet = true } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .semibold))
+                    if store.backendMode == .native {
+                        Button { } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        .disabled(true)
+                        .opacity(0.3)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { } label: {
+                    Button { showSettings = true } label: {
                         Image(systemName: "gearshape")
                             .font(.system(size: 17))
                     }
@@ -140,39 +138,45 @@ public struct ProjectListView: View {
             .onChange(of: selectedProject) { newProject in
                 if let project = newProject {
                     sessionState.currentProject = project
-                    // Navigate to session list would happen via NavigationLink in real implementation
+                    Task { await store.selectProject(project) }
                 }
             }
-            .sheet(isPresented: $showNewProjectSheet) {
-                NewProjectSheet()
+            .sheet(isPresented: $showSettings) {
+                SettingsSheet(store: store)
             }
         }
     }
-
+    
     private var emptyState: some View {
         VStack(spacing: OCSpacing.xl) {
             Image(systemName: "folder.badge.plus")
                 .font(.system(size: 48, weight: .light))
                 .foregroundColor(OCColor.iconMuted)
-
+            
             VStack(spacing: OCSpacing.xs) {
                 Text("No Projects")
                     .font(OCTypography.bodyStrong)
                     .foregroundColor(OCColor.textPrimary)
-
-                Text("Open a project to start a session")
+                
+                Text(store.backendMode == .remote
+                     ? "Connect to an OpenCode server to see projects"
+                     : "Start the native runtime to create a workspace")
                     .font(OCTypography.meta)
                     .foregroundColor(OCColor.textFaint)
                     .multilineTextAlignment(.center)
             }
-
-            Button("Open Project") { showNewProjectSheet = true }
-                .font(OCTypography.control)
-                .padding(.horizontal, OCSpacing.xl)
-                .padding(.vertical, OCSpacing.base)
-                .background(OCColor.agentBuild)
-                .foregroundColor(OCColor.bgDeep)
-                .clipShape(RoundedRectangle(cornerRadius: OCRadius.r24))
+            
+            if store.backendMode == .unconfigured {
+                Button("Configure") { }
+                    .font(OCTypography.control)
+                    .padding(.horizontal, OCSpacing.xl)
+                    .padding(.vertical, OCSpacing.base)
+                    .background(OCColor.agentBuild)
+                    .foregroundColor(OCColor.bgDeep)
+                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r24))
+                    .disabled(true)
+                    .opacity(0.3)
+            }
         }
         .padding(OCSpacing.huge)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -181,19 +185,21 @@ public struct ProjectListView: View {
     }
 }
 
-// MARK: - Session Row
-
 public struct SessionRow: View {
     let session: Session
     let isSelected: Bool
     let onTap: () -> Void
-
-    public init(session: Session, isSelected: Bool = false, onTap: @escaping () -> Void) {
+    let onRename: () -> Void
+    let onDelete: () -> Void
+    
+    public init(session: Session, isSelected: Bool = false, onTap: @escaping () -> Void, onRename: @escaping () -> Void, onDelete: @escaping () -> Void) {
         self.session = session
         self.isSelected = isSelected
         self.onTap = onTap
+        self.onRename = onRename
+        self.onDelete = onDelete
     }
-
+    
     public var body: some View {
         Button(action: onTap) {
             HStack(spacing: OCSpacing.base) {
@@ -203,19 +209,18 @@ public struct SessionRow: View {
                             .font(OCTypography.rowPrimary)
                             .foregroundColor(OCColor.textPrimary)
                             .lineLimit(1)
-
-                        // Agent mode dot
+                        
                         Circle()
                             .fill(session.agentMode.color)
                             .frame(width: 6, height: 6)
-
+                        
                         if session.isRunning {
                             Circle()
                                 .fill(session.agentMode.color)
                                 .frame(width: 6, height: 6)
                         }
                     }
-
+                    
                     if let summary = session.lastEventSummary {
                         Text(summary)
                             .font(.system(size: 12.5, weight: .regular, design: .default))
@@ -223,14 +228,14 @@ public struct SessionRow: View {
                             .lineLimit(1)
                     }
                 }
-
+                
                 Spacer()
-
+                
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(session.timestamp, style: .relative)
                         .font(OCTypography.metaMono)
                         .foregroundColor(OCColor.textFaint)
-
+                    
                     if session.isDirty {
                         Circle()
                             .fill(OCColor.warning)
@@ -247,6 +252,10 @@ public struct SessionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Rename", action: onRename)
+            Button("Delete", role: .destructive, action: onDelete)
+        }
         .overlay(
             Rectangle()
                 .frame(height: 0.5)
@@ -256,31 +265,43 @@ public struct SessionRow: View {
     }
 }
 
-// MARK: - Session List View
-
 public struct SessionListView: View {
+    @EnvironmentObject private var store: WorkbenchStore
     @EnvironmentObject private var sessionState: ActiveSessionState
     let project: Project
-    @State private var sessions: [Session] = []
     @State private var selectedSession: Session?
     @State private var showNewSessionSheet = false
-
+    @State private var sessionToRename: Session?
+    @State private var renameTitle = ""
+    @State private var showDeleteConfirm = false
+    @State private var sessionToDelete: Session?
+    
     public init(project: Project) {
         self.project = project
     }
-
+    
     public var body: some View {
         List {
             Section {
-                ForEach(sessions) { session in
+                ForEach(store.sessions) { session in
                     SessionRow(
                         session: session,
                         isSelected: selectedSession?.id == session.id,
-                        onTap: { selectedSession = session }
+                        onTap: { selectedSession = session },
+                        onRename: { sessionToRename = session; renameTitle = session.title },
+                        onDelete: { sessionToDelete = session; showDeleteConfirm = true }
                     )
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            sessionToDelete = session
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             } header: {
                 Text("SESSIONS")
@@ -291,8 +312,8 @@ public struct SessionListView: View {
                     .padding(.bottom, OCSpacing.xs)
                     .textCase(nil)
             }
-
-            if sessions.isEmpty {
+            
+            if store.sessions.isEmpty {
                 emptyState
             }
         }
@@ -312,36 +333,51 @@ public struct SessionListView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .onAppear {
-            sessions = Session.demoSessions(for: project)
-        }
         .onChange(of: selectedSession) { newSession in
             if let session = newSession {
                 sessionState.currentSession = session
+                Task { await store.selectSession(session) }
             }
         }
         .sheet(isPresented: $showNewSessionSheet) {
-            NewSessionSheet(project: project)
+            NewSessionSheet(project: project) { title in
+                Task {
+                    _ = await store.createNewSession(in: project, title: title)
+                }
+            }
+        }
+        .sheet(item: $sessionToRename) { session in
+            RenameSessionSheet(session: session, initialTitle: session.title) { newTitle in
+                Task { await store.renameSession(session, title: newTitle) }
+            }
+        }
+        .alert("Delete Session", isPresented: $showDeleteConfirm, presenting: sessionToDelete) { session in
+            Button("Delete", role: .destructive) {
+                Task { await store.deleteSession(session) }
+            }
+            Button("Cancel", role: .cancel) { sessionToDelete = nil }
+        } message: { session in
+            Text("Delete \"\(session.title)\"? This action cannot be undone.")
         }
     }
-
+    
     private var emptyState: some View {
         VStack(spacing: OCSpacing.xl) {
             Image(systemName: "doc.badge.plus")
                 .font(.system(size: 48, weight: .light))
                 .foregroundColor(OCColor.iconMuted)
-
+            
             VStack(spacing: OCSpacing.xs) {
                 Text("No Sessions")
                     .font(OCTypography.bodyStrong)
                     .foregroundColor(OCColor.textPrimary)
-
+                
                 Text("Create a session to start working")
                     .font(OCTypography.meta)
                     .foregroundColor(OCColor.textFaint)
                     .multilineTextAlignment(.center)
             }
-
+            
             Button("New Session") { showNewSessionSheet = true }
                 .font(OCTypography.control)
                 .padding(.horizontal, OCSpacing.xl)
@@ -357,44 +393,12 @@ public struct SessionListView: View {
     }
 }
 
-// MARK: - New Project Sheet
-
-private struct NewProjectSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var path = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Project Details") {
-                    TextField("Name", text: $name)
-                    TextField("Path", text: $path)
-                }
-            }
-            .navigationTitle("New Project")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") { dismiss() }
-                        .disabled(name.isEmpty || path.isEmpty)
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-}
-
-// MARK: - New Session Sheet
-
 private struct NewSessionSheet: View {
     @Environment(\.dismiss) private var dismiss
     let project: Project
+    let onCreate: (String) -> Void
     @State private var title = ""
-
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -409,10 +413,154 @@ private struct NewSessionSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") { dismiss() }
+                    Button("Create") {
+                        onCreate(title)
+                        dismiss()
+                    }
                 }
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+private struct RenameSessionSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let session: Session
+    let initialTitle: String
+    let onRename: (String) -> Void
+    @State private var title = ""
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Rename Session") {
+                    TextField("Title", text: $title)
+                }
+            }
+            .navigationTitle("Rename Session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onRename(title)
+                        dismiss()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || title == initialTitle)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .onAppear { title = initialTitle }
+    }
+}
+
+struct SettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: WorkbenchStore
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Connection") {
+                    if store.backendMode == .remote {
+                        HStack {
+                            Text("Status")
+                            Spacer()
+                            Text(store.connectionStatus)
+                                .font(OCTypography.metaMono)
+                                .foregroundColor(OCColor.textFaint)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Button("Forget Connection") {
+                            Task {
+                                await store.forgetPairing()
+                                await store.disconnect()
+                            }
+                        }
+                        .foregroundColor(OCColor.danger)
+                    } else {
+                        Text("Not connected")
+                            .foregroundColor(OCColor.textFaint)
+                    }
+                }
+                
+                Section("Runtime") {
+                    Picker("Mode", selection: .constant(store.backendMode.rawValue)) {
+                        Text("Remote (OpenCode Server)").tag(BackendMode.remote.rawValue)
+                        Text("Native (Swift Sandbox)").tag(BackendMode.native.rawValue)
+                    }
+                    .disabled(true)
+                    
+                    if store.backendMode == .native {
+                        NavigationLink("API Keys") {
+                            APIKeysView()
+                        }
+                    }
+                }
+                
+                Section("Attribution") {
+                    HStack {
+                        Text("OpenCode")
+                        Spacer()
+                        Text("MIT License")
+                            .foregroundColor(OCColor.textFaint)
+                    }
+                    HStack {
+                        Text("OpencodeNative")
+                        Spacer()
+                        Text("Not affiliated with OpenCode")
+                            .foregroundColor(OCColor.textFaint)
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+struct APIKeysView: View {
+    @EnvironmentObject private var store: WorkbenchStore
+    @State private var openAIKey = ""
+    @State private var anthropicKey = ""
+    @State private var googleKey = ""
+    
+    var body: some View {
+        Form {
+            Section("OpenAI") {
+                SecureField("API Key", text: $openAIKey)
+                    .autocorrectionDisabled()
+            }
+            Section("Anthropic") {
+                SecureField("API Key", text: $anthropicKey)
+                    .autocorrectionDisabled()
+            }
+            Section("Google") {
+                SecureField("API Key", text: $googleKey)
+                    .autocorrectionDisabled()
+            }
+        }
+        .navigationTitle("API Keys")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    Task {
+                        await store.saveAPIKeys(openAI: openAIKey, anthropic: anthropicKey, google: googleKey)
+                    }
+                }
+            }
+        }
     }
 }

@@ -1,18 +1,19 @@
 import SwiftUI
 
 public struct ConnectionView: View {
-    @EnvironmentObject private var adapter: SessionAdapter
+    @EnvironmentObject private var store: WorkbenchStore
     @State private var pairingLink = ""
+    @State private var showReconnectSheet = false
     @FocusState private var fieldFocused: Bool
-
+    
     public init() {}
-
+    
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 36)
-
+                
                 Text("opencode")
                     .font(.system(size: 30, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
@@ -20,9 +21,15 @@ public struct ConnectionView: View {
                     .font(.system(size: 13, weight: .regular, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.45))
                     .padding(.top, 4)
-
+                
                 Spacer().frame(height: 42)
-
+                
+                // Stored pairing section
+                if store.backendMode == .unconfigured {
+                    StoredPairingSection(store: store, showReconnectSheet: $showReconnectSheet)
+                        .padding(.bottom, 24)
+                }
+                
                 HStack {
                     label("LINK DESKTOP")
                     Spacer()
@@ -40,15 +47,15 @@ public struct ConnectionView: View {
                     .padding(.bottom, 8)
                 }
                 commandBox("npx --yes github:DannyBaanks/OpencodeNative link")
-
+                
                 Text("Run it in the project directory on the computer that already has OpenCode installed. Paste the pairing link printed by the command.")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.42))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
-
+                
                 Spacer().frame(height: 24)
-
+                
                 HStack {
                     label("PAIRING LINK")
                     Spacer()
@@ -79,10 +86,10 @@ public struct ConnectionView: View {
                     .padding(12)
                     .background(Color(red: 0.035, green: 0.035, blue: 0.035))
                     .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 1))
-
+                
                 Button { connect() } label: {
                     HStack {
-                        Text(adapter.isConnecting ? "connecting..." : "connect")
+                        Text(store.isConnecting ? "connecting..." : "connect")
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
                         Spacer()
                         Text("↵")
@@ -94,17 +101,17 @@ public struct ConnectionView: View {
                     .background(Color.white)
                 }
                 .buttonStyle(.plain)
-                .disabled(adapter.isConnecting || pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity(adapter.isConnecting || pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+                .disabled(store.isConnecting || pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(store.isConnecting || pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
                 .padding(.top, 10)
-
-                if !adapter.connectionStatus.isEmpty {
-                    Text(adapter.connectionStatus)
+                
+                if !store.connectionStatus.isEmpty {
+                    Text(store.connectionStatus)
                         .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(adapter.connectionStatus.lowercased().hasPrefix("error") ? .red : Color.white.opacity(0.5))
+                        .foregroundColor(store.connectionStatus.lowercased().hasPrefix("error") ? .red : Color.white.opacity(0.5))
                         .padding(.top, 10)
                 }
-
+                
                 HStack(spacing: 12) {
                     Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1)
                     Text("OR")
@@ -113,9 +120,9 @@ public struct ConnectionView: View {
                     Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1)
                 }
                 .padding(.vertical, 26)
-
+                
                 Button {
-                    adapter.useNativeRuntime()
+                    Task { await store.useNativeRuntime() }
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
@@ -136,9 +143,9 @@ public struct ConnectionView: View {
                     .overlay(Rectangle().stroke(Color.white.opacity(0.16), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-
+                
                 Spacer()
-
+                
                 Text("remote mode = real OpenCode server / native mode = Swift runtime")
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.28))
@@ -155,15 +162,18 @@ public struct ConnectionView: View {
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
             }
         }
+        .sheet(isPresented: $showReconnectSheet) {
+            ReconnectSheet(store: store, isPresented: $showReconnectSheet)
+        }
     }
-
+    
     private func connect() {
         let link = pairingLink.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !link.isEmpty, !adapter.isConnecting else { return }
+        guard !link.isEmpty, !store.isConnecting else { return }
         fieldFocused = false
-        adapter.connectRemote(link)
+        Task { await store.connectRemote(link) }
     }
-
+    
     private func label(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
@@ -171,7 +181,210 @@ public struct ConnectionView: View {
             .foregroundColor(Color.white.opacity(0.42))
             .padding(.bottom, 8)
     }
+    
+    private func commandBox(_ command: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("$")
+                .foregroundColor(Color.white.opacity(0.38))
+            Text(command)
+                .foregroundColor(.white)
+                .textSelection(.enabled)
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: 12.5, design: .monospaced))
+        .padding(12)
+        .background(Color(red: 0.025, green: 0.025, blue: 0.025))
+        .overlay(Rectangle().stroke(Color.white.opacity(0.14), lineWidth: 1))
+    }
+}
 
+struct StoredPairingSection: View {
+    @EnvironmentObject private var store: WorkbenchStore
+    @Binding var showReconnectSheet: Bool
+    @State private var hasStored = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if hasStored {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("reconnect to desktop")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.5))
+                        Text("paired workspace")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.7))
+                    }
+                    Spacer()
+                    Button("reconnect") {
+                        Task { await store.reconnectStoredPairing() }
+                    }
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .background(Color.white)
+                    .cornerRadius(OCRadius.r8)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color(red: 0.025, green: 0.025, blue: 0.025))
+                .overlay(Rectangle().stroke(Color.white.opacity(0.14), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: OCRadius.r8))
+                
+                HStack {
+                    Button("forget connection") {
+                        Task {
+                            await store.forgetPairing()
+                            hasStored = false
+                        }
+                    }
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color.white.opacity(0.4))
+                    Spacer()
+                    Button("link another desktop") {
+                        showReconnectSheet = true
+                    }
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(OCColor.agentBuild)
+                }
+                .padding(.horizontal, 12)
+            }
+        }
+        .onAppear {
+            Task { hasStored = await store.hasStoredPairing() }
+        }
+    }
+}
+
+struct ReconnectSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: WorkbenchStore
+    @Binding var isPresented: Bool
+    @State private var pairingLink = ""
+    @FocusState private var fieldFocused: Bool
+    
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 36)
+                
+                Text("link another desktop")
+                    .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white)
+                
+                Spacer().frame(height: 24)
+                
+                HStack {
+                    label("LINK DESKTOP")
+                    Spacer()
+                    Button {
+                        UIPasteboard.general.string = "npx --yes github:DannyBaanks/OpencodeNative link"
+                    } label: {
+                        Text("copy")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.55))
+                            .padding(.horizontal, 10)
+                            .frame(height: 28)
+                            .overlay(Rectangle().stroke(Color.white.opacity(0.16), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 8)
+                }
+                commandBox("npx --yes github:DannyBaanks/OpencodeNative link")
+                
+                Text("Run it in the project directory on the computer that already has OpenCode installed. Paste the pairing link printed by the command.")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(Color.white.opacity(0.42))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 12)
+                
+                Spacer().frame(height: 24)
+                
+                HStack {
+                    label("PAIRING LINK")
+                    Spacer()
+                    Button {
+                        if let pasted = UIPasteboard.general.string, !pasted.isEmpty {
+                            pairingLink = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                    } label: {
+                        Text("paste")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.55))
+                            .padding(.horizontal, 10)
+                            .frame(height: 28)
+                            .overlay(Rectangle().stroke(Color.white.opacity(0.16), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 8)
+                }
+                TextField("opencodenative://pair?...", text: $pairingLink, axis: .vertical)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.white)
+                    .focused($fieldFocused)
+                    .submitLabel(.go)
+                    .onSubmit { connect() }
+                    .scrollDismissesKeyboard(.interactively)
+                    .padding(12)
+                    .background(Color(red: 0.035, green: 0.035, blue: 0.035))
+                    .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                
+                Button { connect() } label: {
+                    HStack {
+                        Text(store.isConnecting ? "connecting..." : "connect")
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        Spacer()
+                        Text("↵")
+                            .font(.system(size: 14, design: .monospaced))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 12)
+                    .frame(height: 44)
+                    .background(Color.white)
+                }
+                .buttonStyle(.plain)
+                .disabled(store.isConnecting || pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(store.isConnecting || pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1)
+                .padding(.top, 10)
+                
+                if !store.connectionStatus.isEmpty {
+                    Text(store.connectionStatus)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(store.connectionStatus.lowercased().hasPrefix("error") ? .red : Color.white.opacity(0.5))
+                        .padding(.top, 10)
+                }
+                
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("cancel") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+    
+    private func connect() {
+        let link = pairingLink.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !link.isEmpty, !store.isConnecting else { return }
+        fieldFocused = false
+        Task { await store.connectRemote(link) }
+    }
+    
+    private func label(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .tracking(1.2)
+            .foregroundColor(Color.white.opacity(0.42))
+            .padding(.bottom, 8)
+    }
+    
     private func commandBox(_ command: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text("$")
