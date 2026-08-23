@@ -721,7 +721,7 @@ public final class SessionAdapter: ObservableObject {
 // MARK: - Preview Helper
 
 extension SessionAdapter {
-    static func preview() -> SessionAdapter {
+    public static func preview() -> SessionAdapter {
         let adapter = SessionAdapter()
         adapter.backendMode = .native
         adapter.setupDemoProject()
