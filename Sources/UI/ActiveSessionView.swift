@@ -1,4 +1,4 @@
-﻿import SwiftUI
+import SwiftUI
 
 // MARK: - Active Session View
 
@@ -553,7 +553,7 @@ struct FileViewerView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                Text(content.isEmpty ? "Loadingâ€¦" : content)
+                Text(content.isEmpty ? "Loading…" : content)
                     .font(OCTypography.code)
                     .foregroundColor(OCColor.textPrimary)
                     .textSelection(.enabled)

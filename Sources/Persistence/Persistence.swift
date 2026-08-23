@@ -293,7 +293,7 @@ public actor IOSPersistence: Persistence {
         // Por ahora, intentamos cargar keys conocidas
         let knownKeys = ["remote", "openai", "anthropic", "google", "local"]
         do {
-            let apiKeys = try keychain.loadAll(keys: knownKeys.map { keychainPrefix + $0 })
+            let apiKeys = try await keychain.loadAll(keys: knownKeys.map { keychainPrefix + $0 })
             // Convertir de keychainPrefix + key a solo key
             var cleanedKeys: [String: String] = [:]
             for (key, value) in apiKeys {
@@ -313,17 +313,17 @@ public actor IOSPersistence: Persistence {
     
     /// Guarda una API key en Keychain
     public func saveAPIKey(provider: String, key: String) async throws {
-        try keychain.save(key: keychainPrefix + provider, value: key)
+        try await keychain.save(key: keychainPrefix + provider, value: key)
     }
     
     /// Carga una API key desde Keychain
     public func loadAPIKey(provider: String) async throws -> String? {
-        return try keychain.load(key: keychainPrefix + provider)
+        return try await keychain.load(key: keychainPrefix + provider)
     }
     
     /// Elimina una API key de Keychain
     public func deleteAPIKey(provider: String) async throws {
-        try keychain.delete(key: keychainPrefix + provider)
+        try await keychain.delete(key: keychainPrefix + provider)
     }
     
     // MARK: - Events (JSONL append-only)

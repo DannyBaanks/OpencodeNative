@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import SwiftUI
 
 // MARK: - Session View Model Adapter
@@ -232,7 +232,7 @@ public final class SessionAdapter: ObservableObject {
             sessionState.selectedModel = initialModel
 
             // Add welcome message
-            addSystemEvent("OpenCodeNative â€” iOS 27 Workbench ready")
+            addSystemEvent("OpenCodeNative — iOS 27 Workbench ready")
             addSystemEvent("Agent mode: \(sessionState.agentMode.rawValue) | Model: \(sessionState.selectedModel?.name ?? "none")")
         } catch {
             addErrorEvent("Runtime init failed: \(error.localizedDescription)")
@@ -252,7 +252,7 @@ public final class SessionAdapter: ObservableObject {
     private func handleAgentEvent(_ event: AgentLoopEvent) {
         switch event {
         case .turnStarted(let turn):
-            addSystemEvent("â€” turn \(turn) â€”")
+            addSystemEvent("— turn \(turn) —")
 
         case .modelResponse(let response):
             if !response.content.isEmpty {
