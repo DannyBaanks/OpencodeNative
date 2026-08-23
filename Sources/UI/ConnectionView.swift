@@ -23,7 +23,22 @@ public struct ConnectionView: View {
 
                 Spacer().frame(height: 42)
 
-                label("LINK DESKTOP")
+                HStack {
+                    label("LINK DESKTOP")
+                    Spacer()
+                    Button {
+                        UIPasteboard.general.string = "npx --yes github:DannyBaanks/OpencodeNative link"
+                    } label: {
+                        Text("copy")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.55))
+                            .padding(.horizontal, 10)
+                            .frame(height: 28)
+                            .overlay(Rectangle().stroke(Color.white.opacity(0.16), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 8)
+                }
                 commandBox("npx --yes github:DannyBaanks/OpencodeNative link")
 
                 Text("Run it in the project directory on the computer that already has OpenCode installed. Paste the pairing link printed by the command.")
@@ -34,20 +49,38 @@ public struct ConnectionView: View {
 
                 Spacer().frame(height: 24)
 
-                label("PAIRING LINK")
+                HStack {
+                    label("PAIRING LINK")
+                    Spacer()
+                    Button {
+                        if let pasted = UIPasteboard.general.string, !pasted.isEmpty {
+                            pairingLink = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                    } label: {
+                        Text("paste")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.55))
+                            .padding(.horizontal, 10)
+                            .frame(height: 28)
+                            .overlay(Rectangle().stroke(Color.white.opacity(0.16), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 8)
+                }
                 TextField("opencodenative://pair?...", text: $pairingLink, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(.white)
                     .focused($fieldFocused)
+                    .submitLabel(.go)
+                    .onSubmit { connect() }
+                    .scrollDismissesKeyboard(.interactively)
                     .padding(12)
                     .background(Color(red: 0.035, green: 0.035, blue: 0.035))
                     .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 1))
 
-                Button {
-                    adapter.connectRemote(pairingLink)
-                } label: {
+                Button { connect() } label: {
                     HStack {
                         Text(adapter.isConnecting ? "connecting..." : "connect")
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
@@ -113,7 +146,22 @@ public struct ConnectionView: View {
             }
             .padding(.horizontal, 18)
         }
-        .onAppear { fieldFocused = true }
+        .contentShape(Rectangle())
+        .onTapGesture { fieldFocused = false }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { fieldFocused = false }
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+            }
+        }
+    }
+
+    private func connect() {
+        let link = pairingLink.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !link.isEmpty, !adapter.isConnecting else { return }
+        fieldFocused = false
+        adapter.connectRemote(link)
     }
 
     private func label(_ text: String) -> some View {
