@@ -45,7 +45,7 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
         
         if let first = sessions.first {
             currentSessionIDStorage = first.id
-            await loadHistory(sessionID: first.id)
+            try await loadHistory(sessionID: first.id)
         }
         
         connectionStatusStorage = "connected · OpenCode \(health.version) · \(pairing.host):\(pairing.port)"
@@ -105,7 +105,7 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
             isRunning: false
         )
         currentSessionIDStorage = remote.id
-        await loadHistory(sessionID: remote.id)
+        try await loadHistory(sessionID: remote.id)
         eventContinuation?.yield(.sessionsChanged)
         return session
     }
@@ -125,7 +125,7 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
     
     public func selectSession(_ sessionID: String) async throws {
         currentSessionIDStorage = sessionID
-        await loadHistory(sessionID: sessionID)
+        try await loadHistory(sessionID: sessionID)
     }
     
     public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws {
@@ -166,7 +166,7 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
     }
     
     public func loadHistory(sessionID: String) async throws {
-        let messages = try await client.messages(sessionID: sessionID)
+        _ = try await client.messages(sessionID: sessionID)
         // Events will be yielded via event stream when connected
     }
     
@@ -258,7 +258,7 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
     }
     
     public func config() async throws -> ConfigInfo {
-        try await client.config()
+        return try await client.config()
     }
     
     public func availableCommands() async throws -> [CommandInfo] {
@@ -295,7 +295,7 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
                 explanation: perm.title
             ))
         case .sessionIdle(let sessionID):
-            eventContinuation?.yield(.sessionIdle(sessionID))
+            eventContinuation?.yield(.sessionIdle(sessionID: sessionID))
         case .sessionError(let msg):
             eventContinuation?.yield(.sessionError(msg))
         case .other:
