@@ -704,7 +704,6 @@ public struct TodoItemRow: View {
                 Text(item.text)
                     .font(OCTypography.todoText)
                     .foregroundColor(item.isCompleted ? OCColor.textFaint : OCColor.textPrimary)
-                    .strikethrough(item.isCompleted)
 
                 if let meta = item.metadata {
                     Text(meta)
@@ -717,7 +716,6 @@ public struct TodoItemRow: View {
         }
         .padding(.leading, CGFloat(indent) * 16)
         .frame(minHeight: 36)
-        .opacity(item.isCompleted ? 0.65 : 1.0)
     }
 }
 
@@ -782,46 +780,46 @@ public struct PermissionView: View {
             }
 
             // Actions
-            HStack(spacing: OCSpacing.base) {
-                Button(action: onDeny) {
-                    Text("Deny")
-                        .font(OCTypography.control)
-                        .foregroundColor(OCColor.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(OCColor.bgLayer1)
-                        .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: OCRadius.r10)
-                                .stroke(OCColor.borderBase, lineWidth: 1)
-                        )
-                }
-                .buttonStyle(.plain)
+            VStack(spacing: OCSpacing.base) {
+                HStack(spacing: OCSpacing.base) {
+                    Button(action: onDeny) {
+                        Text("Deny")
+                            .font(OCTypography.control)
+                            .foregroundColor(OCColor.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(OCColor.bgLayer1)
+                            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: OCRadius.r10)
+                                    .stroke(OCColor.borderBase, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
 
-                Button(action: onAllow) {
-                    Text("Allow Once")
-                        .font(OCTypography.control)
-                        .foregroundColor(OCColor.bgDeep)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(OCColor.agentBuild)
-                        .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
+                    Button(action: onAllow) {
+                        Text("Allow Once")
+                            .font(OCTypography.control)
+                            .foregroundColor(OCColor.bgDeep)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(OCColor.agentBuild)
+                            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
 
-                Button(action: onPersistent) {
-                    Text("Always Allow")
+                Menu {
+                    Button("Always Allow", action: onPersistent)
+                } label: {
+                    Label("Persist Permission…", systemImage: "ellipsis.circle")
                         .font(OCTypography.control)
                         .foregroundColor(OCColor.textSecondary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 40)
-                        .background(OCColor.bgLayer1)
-                        .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: OCRadius.r10)
-                                .stroke(OCColor.borderBase, lineWidth: 1)
-                        )
+                        .frame(height: 44)
+                        .contentShape(Rectangle())
                 }
+                .menuStyle(.borderlessButton)
                 .buttonStyle(.plain)
             }
         }

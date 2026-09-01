@@ -46,7 +46,11 @@ public struct ComposerView: View {
                 .frame(minHeight: 42)
 
                 // Send/Stop button
-                SendStopButton(isProcessing: sessionState.isProcessing, agentColor: sessionState.agentMode.color) {
+                SendStopButton(
+                    isProcessing: sessionState.isProcessing,
+                    canSend: canSend,
+                    agentColor: sessionState.agentMode.color
+                ) {
                     if sessionState.isProcessing {
                         NotificationCenter.default.post(name: .composerStop, object: nil)
                     } else {
@@ -90,17 +94,23 @@ public struct ComposerView: View {
         NotificationCenter.default.post(name: .composerSend, object: sessionState.composerText)
         sessionState.composerText = ""
     }
+
+    private var canSend: Bool {
+        !sessionState.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 // MARK: - Send/Stop Button
 
 public struct SendStopButton: View {
     let isProcessing: Bool
+    let canSend: Bool
     let agentColor: Color
     let action: () -> Void
 
-    public init(isProcessing: Bool, agentColor: Color, action: @escaping () -> Void) {
+    public init(isProcessing: Bool, canSend: Bool, agentColor: Color, action: @escaping () -> Void) {
         self.isProcessing = isProcessing
+        self.canSend = canSend
         self.agentColor = agentColor
         self.action = action
     }
@@ -117,10 +127,12 @@ public struct SendStopButton: View {
                     .foregroundColor(iconColor)
             }
         }
-        .disabled(isProcessing ? false : false) // Always enabled for stop
+        .disabled(isProcessing ? false : !canSend)
+        .opacity(isProcessing || canSend ? 1 : 0.4)
         .frame(width: 44, height: 44)
         .contentShape(Rectangle())
         .animation(.easeInOut(duration: 0.15), value: isProcessing)
+        .animation(.easeInOut(duration: 0.15), value: canSend)
     }
 
     private var backgroundColor: Color {
@@ -187,7 +199,7 @@ public struct ComposerControlRow: View {
 
             Spacer()
         }
-        .frame(height: 32) // visible height
+        .frame(minHeight: 44, alignment: .leading)
     }
 }
 
@@ -262,7 +274,7 @@ public struct ModelPill: View {
                         .foregroundColor(OCColor.iconPrimary)
                 }
 
-                Text(truncatedModelName)
+                Text(providerModelLabel)
                     .font(OCTypography.modelPillLabel)
                     .foregroundColor(OCColor.textPrimary)
                     .lineLimit(1)
@@ -289,12 +301,17 @@ public struct ModelPill: View {
         .contentShape(Rectangle())
     }
 
-    private var truncatedModelName: String {
-        let name = model.name
-        if name.count <= 18 { return name }
-        let prefix = name.prefix(10)
-        let suffix = name.suffix(6)
-        return "\(prefix)…\(suffix)"
+    private var providerModelLabel: String {
+        let combined = "\(model.provider) · \(model.name)"
+        if combined.count <= 22 { return combined }
+        // Keep provider identity; middle-truncate the model name.
+        let nameLimit = 22 - model.provider.count - 3
+        if nameLimit >= 2 {
+            let prefix = model.name.prefix(max(1, nameLimit / 2))
+            let suffix = model.name.suffix(max(2, nameLimit / 2))
+            return "\(model.provider) · \(prefix)…\(suffix)"
+        }
+        return model.provider
     }
 }
 
@@ -471,23 +488,6 @@ public struct ModelPickerSheet: View {
     public var body: some View {
         NavigationStack {
             List {
-                // Search
-                Section {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(OCColor.iconMuted)
-                        TextField("Search models", text: $searchText)
-                            .font(OCTypography.body)
-                            .foregroundColor(OCColor.textPrimary)
-                    }
-                    .padding(OCSpacing.base)
-                    .background(OCColor.bgLayer1)
-                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                }
-
-                // Provider sections
                 ForEach(groupedModels.keys.sorted(), id: \.self) { provider in
                     Section(header: ProviderHeader(provider: provider)) {
                         ForEach(groupedModels[provider] ?? []) { model in
@@ -507,6 +507,7 @@ public struct ModelPickerSheet: View {
             .background(OCColor.bgDeep)
             .navigationTitle("Model")
             .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search models")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -573,25 +574,10 @@ public struct ModelPickerRow: View {
                         .foregroundColor(OCColor.textPrimary)
 
                     HStack(spacing: OCSpacing.xs) {
-                        if model.isLocal {
-                            Label("Local", systemImage: "iphone")
+                        ForEach(Array(metadataItems.enumerated()), id: \.offset) { _, item in
+                            Label(item.0, systemImage: item.1)
                                 .font(OCTypography.metaMono)
-                                .foregroundColor(OCColor.agentExplore)
-                        }
-                        if model.supportsReasoning {
-                            Label("Reasoning", systemImage: "brain")
-                                .font(OCTypography.metaMono)
-                                .foregroundColor(OCColor.agentBuild)
-                        }
-                        if model.supportsImages {
-                            Label("Images", systemImage: "photo")
-                                .font(OCTypography.metaMono)
-                                .foregroundColor(OCColor.agentPlan)
-                        }
-                        if let ctx = model.contextWindow {
-                            Text("\(ctx / 1000)k ctx")
-                                .font(OCTypography.metaMono)
-                                .foregroundColor(OCColor.textFaint)
+                                .foregroundColor(item.2)
                         }
                     }
                 }
@@ -610,6 +596,21 @@ public struct ModelPickerRow: View {
         .buttonStyle(.plain)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+    }
+
+    /// At most two metadata badges per row, in priority order: Local → Reasoning → context.
+    private var metadataItems: [(String, String, Color)] {
+        var items: [(String, String, Color)] = []
+        if model.isLocal {
+            items.append(("Local", "iphone", OCColor.agentExplore))
+        }
+        if model.supportsReasoning {
+            items.append(("Reasoning", "brain", OCColor.agentBuild))
+        }
+        if items.count < 2, let ctx = model.contextWindow {
+            items.append(("\(ctx / 1000)k ctx", "text.line", OCColor.textFaint))
+        }
+        return Array(items.prefix(2))
     }
 }
 
