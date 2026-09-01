@@ -192,7 +192,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             do {
                 _ = try await loop.run(userInput: text)
                 guard !Task.isCancelled else { throw CancellationError() }
-                self.eventContinuation?.yield(.sessionIdle(self.conversationId))
+                self.eventContinuation?.yield(.sessionIdle(sessionID: self.conversationId))
             } catch is CancellationError {
                 self.eventContinuation?.yield(.sessionError("Stopped"))
             } catch {
@@ -253,7 +253,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     }
     
     public func availableProviders() async throws -> ProviderListResult {
-        let scripted = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
+        _ = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
         return ProviderListResult(
             all: [ProviderInfo(id: "scripted", name: "Scripted Demo", models: ["scripted-1": [:]])],
             connected: ["scripted"],
@@ -310,7 +310,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             eventContinuation?.yield(.sessionError(error.localizedDescription))
             
         case .finished:
-            eventContinuation?.yield(.sessionIdle(conversationId))
+            eventContinuation?.yield(.sessionIdle(sessionID: conversationId))
             
         default:
             break
