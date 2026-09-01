@@ -194,6 +194,7 @@ struct FilesSurfaceView: View {
 }
 
 struct FileTreeRowView: View {
+    @EnvironmentObject private var store: WorkbenchStore
     let item: WorkbenchFileNode
     @Binding var expandedFolders: Set<String>
     @Binding var selectedFile: WorkbenchFileNode?

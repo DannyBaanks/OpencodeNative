@@ -1,5 +1,57 @@
 import SwiftUI
 
+// MARK: - Timeline Event Container
+
+public struct TimelineEventContainer: View {
+    let event: TimelineEvent
+    @EnvironmentObject private var store: WorkbenchStore
+
+    public init(event: TimelineEvent) {
+        self.event = event
+    }
+
+    private var agentColor: Color {
+        event.agentMode?.color ?? OCColor.agentBuild
+    }
+
+    public var body: some View {
+        Group {
+            switch event.kind {
+            case .userPrompt:
+                UserPromptView(event: event, agentColor: agentColor)
+            case .assistantText:
+                AssistantTextView(event: event)
+            case .toolCall, .toolResult:
+                ToolCallView(event: event, agentColor: agentColor)
+            case .diff:
+                DiffView(event: event)
+            case .codeBlock:
+                CodeBlockView(event: event)
+            case .thinking:
+                ThinkingView(event: event, agentColor: agentColor)
+            case .todo:
+                TodoView(event: event, agentColor: agentColor)
+            case .permission:
+                PermissionView(
+                    event: event,
+                    onAllow: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowOnce) },
+                    onDeny: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .deny) },
+                    onPersistent: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways) }
+                )
+            case .question:
+                QuestionView(
+                    event: event,
+                    onSelect: { choice in store.respondToPermission(requestId: event.id, decision: .allowOnce) },
+                    onFreeform: { text in Task { try? await store.sendPrompt(text, agent: nil, model: nil) } }
+                )
+            case .system:
+                SystemMessageView(event: event)
+            }
+        }
+        .padding(.vertical, OCSpacing.xs)
+    }
+}
+
 // MARK: - User Prompt View
 
 public struct UserPromptView: View {

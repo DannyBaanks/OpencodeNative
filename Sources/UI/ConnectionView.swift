@@ -26,7 +26,7 @@ public struct ConnectionView: View {
                 
                 // Stored pairing section
                 if store.backendMode == .unconfigured {
-                    StoredPairingSection(store: store, showReconnectSheet: $showReconnectSheet)
+                    StoredPairingSection(showReconnectSheet: $showReconnectSheet)
                         .padding(.bottom, 24)
                 }
                 
@@ -163,7 +163,7 @@ public struct ConnectionView: View {
             }
         }
         .sheet(isPresented: $showReconnectSheet) {
-            ReconnectSheet(store: store, isPresented: $showReconnectSheet)
+            ReconnectSheet(isPresented: $showReconnectSheet)
         }
     }
     
