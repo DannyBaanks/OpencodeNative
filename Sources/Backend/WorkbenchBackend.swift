@@ -60,7 +60,7 @@ public struct ShellResult: Sendable {
     public let error: String?
 }
 
-public struct ProviderInfo: Sendable, Identifiable, Hashable {
+public struct ProviderInfo: Sendable, Identifiable {
     public let id: String
     public let name: String
     public let models: [String: [String: Any]]?
@@ -108,7 +108,7 @@ public enum WorkbenchEvent: Sendable {
     case modelChanged(ModelInfo?)
 }
 
-public protocol WorkbenchBackend: Actor {
+public protocol WorkbenchBackend: Sendable {
     var mode: BackendMode { get }
     var connectionStatus: String { get async }
     var currentSessionID: String? { get async }
