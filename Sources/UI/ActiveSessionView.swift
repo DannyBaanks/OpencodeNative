@@ -10,9 +10,7 @@ public struct ActiveSessionView: View {
     public init() {}
     
     public var body: some View {
-        ZStack(alignment: .bottom) {
-            OCColor.bgDeep.ignoresSafeArea()
-            
+        VStack(spacing: 0) {
             Group {
                 switch sessionState.activeSurface {
                 case .chat:
@@ -25,15 +23,15 @@ public struct ActiveSessionView: View {
                     TerminalSurfaceView()
                 }
             }
-            
-            VStack(spacing: 0) {
-                WorkSurfaceSwitcher(selectedSurface: $sessionState.activeSurface)
-                    .padding(.horizontal, OCSpacing.contentMargin)
-                    .padding(.top, OCSpacing.xs)
-                
-                ComposerView()
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            WorkSurfaceSwitcher(selectedSurface: $sessionState.activeSurface)
+                .padding(.horizontal, OCSpacing.contentMargin)
+                .padding(.vertical, OCSpacing.xs)
+
+            ComposerView()
         }
+        .background(OCColor.bgDeep.ignoresSafeArea())
         .navigationTitle(sessionState.currentSession?.title ?? "Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -116,10 +114,6 @@ public struct ActiveSessionView: View {
         }
         return AgentMode.allCases
     }
-    
-    private var composerHeight: CGFloat {
-        140 + (sessionState.composerAttachments.isEmpty ? 0 : 44)
-    }
 }
 
 struct ChatSurfaceView: View {
@@ -138,7 +132,7 @@ struct ChatSurfaceView: View {
                 }
                 .padding(.horizontal, OCSpacing.contentMargin)
                 .padding(.top, OCSpacing.lg)
-                .padding(.bottom, 140 + (sessionState.composerAttachments.isEmpty ? 0 : 44) + OCSpacing.lg)
+                .padding(.bottom, OCSpacing.lg)
             }
             .onAppear { scrollProxy = proxy }
             .onChange(of: sessionState.timelineEvents.count) { _ in
@@ -442,49 +436,34 @@ struct DiffFileRowView: View {
 struct DiffViewerView: View {
     @Environment(\.dismiss) private var dismiss
     let diff: SessionDiffFile
-    
+
+    private var lines: [DiffLine] {
+        UnifiedDiffBuilder.lines(before: diff.before ?? "", after: diff.after ?? "")
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: OCSpacing.lg) {
-                    Text(diff.path)
-                        .font(OCTypography.code)
-                        .foregroundColor(OCColor.textFaint)
-                        .padding(.horizontal, OCSpacing.lg)
-                    
-                    if let before = diff.before {
-                        VStack(alignment: .leading, spacing: OCSpacing.xs) {
-                            Text("Before")
-                                .font(OCTypography.sectionLabel)
-                                .foregroundColor(OCColor.textFaint)
-                            Text(before)
-                                .font(OCTypography.code)
-                                .foregroundColor(OCColor.textSecondary)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(OCSpacing.lg)
-                                .background(OCColor.diffContextBg)
-                                .cornerRadius(OCRadius.r8)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(diff.path)
+                    .font(OCTypography.diffHeader)
+                    .foregroundColor(OCColor.textFaint)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, OCSpacing.contentMargin)
+                    .padding(.vertical, OCSpacing.base)
+
+                Divider().overlay(OCColor.borderBase)
+
+                ScrollView(.horizontal, showsIndicators: true) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(lines) { line in
+                            DiffLineView(line: line)
                         }
                     }
-                    
-                    if let after = diff.after {
-                        VStack(alignment: .leading, spacing: OCSpacing.xs) {
-                            Text("After")
-                                .font(OCTypography.sectionLabel)
-                                .foregroundColor(OCColor.textFaint)
-                            Text(after)
-                                .font(OCTypography.code)
-                                .foregroundColor(OCColor.textPrimary)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(OCSpacing.lg)
-                                .background(OCColor.diffAddBg)
-                                .cornerRadius(OCRadius.r8)
-                        }
-                    }
+                    .padding(.horizontal, OCSpacing.contentMargin)
+                    .padding(.vertical, OCSpacing.base)
                 }
-                .padding(OCSpacing.lg)
+                .textSelection(.enabled)
             }
             .background(OCColor.bgDeep)
             .navigationTitle("Diff")
@@ -498,6 +477,51 @@ struct DiffViewerView: View {
             .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
         }
+    }
+}
+
+/// Builds a unified, line-level diff (add/delete/context) from full before/after
+/// file snapshots. Uses LCS to align lines so the Review surface reads as a
+/// real developer diff, not two decorative before/after blocks.
+struct UnifiedDiffBuilder {
+    static func lines(before: String, after: String) -> [DiffLine] {
+        let a = before.isEmpty ? [] : before.components(separatedBy: "\n")
+        let b = after.isEmpty ? [] : after.components(separatedBy: "\n")
+        let n = a.count
+        let m = b.count
+
+        var dp = Array(repeating: Array(repeating: 0, count: m + 1), count: n + 1)
+        for i in stride(from: n - 1, through: 0, by: -1) {
+            for j in stride(from: m - 1, through: 0, by: -1) {
+                dp[i][j] = a[i] == b[j] ? dp[i + 1][j + 1] + 1 : max(dp[i + 1][j], dp[i][j + 1])
+            }
+        }
+
+        var result: [DiffLine] = []
+        var i = 0
+        var j = 0
+        while i < n && j < m {
+            if a[i] == b[j] {
+                result.append(DiffLine(kind: .context, content: a[i]))
+                i += 1
+                j += 1
+            } else if dp[i + 1][j] >= dp[i][j + 1] {
+                result.append(DiffLine(kind: .delete, content: a[i]))
+                i += 1
+            } else {
+                result.append(DiffLine(kind: .add, content: b[j]))
+                j += 1
+            }
+        }
+        while i < n {
+            result.append(DiffLine(kind: .delete, content: a[i]))
+            i += 1
+        }
+        while j < m {
+            result.append(DiffLine(kind: .add, content: b[j]))
+            j += 1
+        }
+        return result
     }
 }
 
@@ -600,4 +624,57 @@ struct TerminalOutput: Identifiable {
     let id = UUID().uuidString
     let text: String
     let color: Color
+}
+
+// MARK: - Session Nav Title
+
+struct SessionNavTitle: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(OCTypography.navTitle)
+                .foregroundColor(OCColor.textPrimary)
+                .lineLimit(1)
+            Text(subtitle)
+                .font(OCTypography.navSubtitle)
+                .foregroundColor(OCColor.textFaint)
+                .lineLimit(1)
+        }
+    }
+}
+
+// MARK: - Work Surface Switcher
+
+struct WorkSurfaceSwitcher: View {
+    @Binding var selectedSurface: WorkSurface
+
+    var body: some View {
+        HStack(spacing: OCSpacing.sm) {
+            ForEach(WorkSurface.allCases) { surface in
+                Button {
+                    selectedSurface = surface
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: surface.icon)
+                            .font(.system(size: 13, weight: .medium))
+                        Text(surface.rawValue)
+                            .font(OCTypography.control)
+                    }
+                    .foregroundColor(selectedSurface == surface ? OCColor.textPrimary : OCColor.textFaint)
+                    .padding(.horizontal, OCSpacing.lg)
+                    .frame(height: 32)
+                    .background(
+                        selectedSurface == surface ? OCColor.bgLayer1 : Color.clear
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
+                }
+                .buttonStyle(.plain)
+                .frame(height: 44)
+                .contentShape(Rectangle())
+            }
+        }
+    }
 }
