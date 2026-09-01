@@ -417,7 +417,7 @@ public actor OpenCodeRemoteClient {
     }
 
     public func renameSession(sessionID: String, title: String) async throws {
-        var body: [String: Any] = ["title": title]
+        let body: [String: Any] = ["title": title]
         _ = try await request(path: "/session/\(sessionID)", method: "PATCH", jsonBody: body)
     }
 
@@ -508,7 +508,7 @@ public actor OpenCodeRemoteClient {
     public func providers() async throws -> ProviderListResult {
         let data = try await request(path: "/provider")
         let json = try jsonObject(data)
-        let all = (json["all"] as? [[String: Any]] ?? []).compactMap { dict in
+        let all = (json["all"] as? [[String: Any]] ?? []).compactMap { dict -> ProviderInfo? in
             guard let id = dict["id"] as? String else { return nil }
             return ProviderInfo(id: id, name: dict["name"] as? String ?? id, models: dict["models"] as? [String: [String: Any]])
         }
