@@ -253,7 +253,7 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
         return ProviderListResult(
             all: result.all.map { ProviderInfo(id: $0.id, name: $0.name, models: $0.models) },
             connected: result.connected,
-            defaultProvider: result.default
+            defaultProvider: result.`default`
         )
     }
     

@@ -403,7 +403,7 @@ public actor OpenCodeRemoteClient {
     public struct ProviderListResult: Sendable {
         public let all: [ProviderInfo]
         public let connected: [String]
-        public let default: String?
+        public let `default`: String?
     }
 
     public struct ConfigInfo: Sendable {
