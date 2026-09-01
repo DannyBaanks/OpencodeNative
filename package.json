@@ -4,6 +4,11 @@
   "private": true,
   "description": "Pair OpencodeNative for iOS with the official OpenCode headless server.",
   "type": "module",
+  "scripts": {
+    "test:bridge": "node --test Bridge/test/opencodenative.test.mjs",
+    "probe:openisy-transport": "node Bridge/test/openisy-transport-probe.mjs",
+    "probe:official-opencode": "node Bridge/test/official-opencode-probe.mjs"
+  },
   "bin": {
     "opencodenative": "Bridge/bin/opencodenative.mjs"
   },

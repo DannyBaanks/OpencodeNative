@@ -2,7 +2,7 @@
 
 OpencodeNative can use the real OpenCode runtime running on another machine. It does **not** embed Bun, PTY, or the OpenTUI renderer in iOS. Instead, the iOS app is a native client of OpenCode's official headless HTTP server.
 
-## Link a computer
+## Link a computer with official OpenCode
 
 Requirements on the computer:
 
@@ -24,6 +24,30 @@ The command:
 4. prints an `opencodenative://pair?...` link containing the LAN address, password, and current project directory.
 
 Paste the pairing link into the iOS app and tap **connect**.
+
+## Link a computer with OpenISy
+
+OpenISy keeps the OpenCode headless HTTP/SSE contract consumed by the iOS app.
+Point the bridge at the private OpenISy checkout explicitly:
+
+```bash
+npx --yes github:DannyBaanks/OpencodeNative link --runtime openisy --openisy-root "/path/to/OpenISy"
+```
+
+On Windows:
+
+```powershell
+npx --yes github:DannyBaanks/OpencodeNative link --runtime openisy --openisy-root "C:\path with spaces\OpenISy"
+```
+
+You can set `OPENISY_ROOT` instead of passing `--openisy-root`:
+
+```powershell
+$env:OPENISY_ROOT="C:\path\to\OpenISy"
+npx --yes github:DannyBaanks/OpencodeNative link --runtime openisy
+```
+
+The bridge validates `packages/opencode/src/index.ts` and launches OpenISy with Bun. The pairing URL and iOS behavior remain unchanged: the selected project travels in the `x-opencode-directory` header, and session IDs come directly from OpenISy's `/session` API.
 
 ## Security model
 
