@@ -163,9 +163,15 @@ public struct ToolDefinition: Codable, Sendable {
     public let parameters: ToolParameters
     
     public struct ToolParameters: Codable, Sendable {
-        public let type: String = "object"
+        public let type: String
         public let properties: [String: PropertySchema]
         public let required: [String]
+
+        public init(type: String = "object", properties: [String: PropertySchema], required: [String]) {
+            self.type = type
+            self.properties = properties
+            self.required = required
+        }
     }
     
     public struct PropertySchema: Codable, Sendable {
@@ -291,7 +297,7 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         tools: [ToolDefinition]?,
         options: GenerationOptions
     ) async throws -> ModelResponse {
-        guard let config = config else {
+        guard config != nil else {
             throw ModelProviderError.notConfigured("Call configure() first")
         }
         

@@ -1,6 +1,6 @@
-﻿# OpencodeNative
+# OpencodeNative
 
-> OpenCode TUI compatibility harness for iOS â€” documents exactly why the real
+> OpenCode TUI compatibility harness for iOS — documents exactly why the real
 > OpenCode TUI cannot run on iOS, and provides a native Swift agent runtime as
 > an alternative.
 
@@ -23,7 +23,7 @@ demonstrates the subset of capabilities iOS *does* support.
 
 OpenCode is &copy; anomalyco and contributors, licensed MIT.
 This project is **not affiliated** with OpenCode. The name is used solely to
-describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md#10-atribuciÃ³n) for full attribution.
+describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md#10-attribution) for full attribution.
 
 ---
 
@@ -31,11 +31,11 @@ describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE
 
 | | |
 |---|---|
-| **OpenCode TUI compat** | `BLOCKED` â€” PTY/TTY, spawn/exec, Bun runtime absent on iOS |
-| **Native Swift runtime** | Working â€” agent loop, 8 filesystem tools, persistence, LLM provider |
+| **OpenCode TUI compat** | `BLOCKED` — PTY/TTY, spawn/exec, Bun runtime absent on iOS |
+| **Native Swift runtime** | Working — agent loop, 8 filesystem tools, persistence, LLM provider |
 | **Test suite** | 29 tests defined; GitHub Actions runs them on iOS Simulator |
 
-**The first hard blocker is PTY/TTY** â€” OpenCode's TUI renderer (`@opentui`)
+**The first hard blocker is PTY/TTY** — OpenCode's TUI renderer (`@opentui`)
 requires raw terminal access that iOS simply does not expose. This is not a
 bug in this project; it is the platform boundary.
 
@@ -55,15 +55,19 @@ OpencodeNative (iOS app)
   |     OpenCodeBootAttempt       documents boot failure
   |
   +-- Native Swift Runtime (not OpenCode)
-        AgentLoop                 async multi-turn agent
-        FileSystemTools           8 sandbox filesystem tools
-        ScriptedModelProvider     offline deterministic demo provider
-        RemoteModelProvider       OpenAI-compatible LLM API
-        IOSWorkspace              sandbox filesystem
-        IOSPersistence            JSON + JSONL audit trail
-        SessionAdapter            bridges runtime events into the native workbench
+  |     AgentLoop                 async multi-turn agent
+  |     FileSystemTools           8 sandbox filesystem tools
+  |     ScriptedModelProvider     offline deterministic demo provider
+  |     RemoteModelProvider       OpenAI-compatible LLM API
+  |     IOSWorkspace              sandbox filesystem
+  |     IOSPersistence            JSON + JSONL audit trail
+  |     ConsoleView               compatibility/debug console
+  |
+  +-- Workbench (Sources/Backend + Sources/UI)
+        WorkbenchStore            backend-agnostic workbench state
+        NativeSwiftBackend        drives the on-device AgentLoop
+        OpenCodeServerBackend     drives the remote OpenCode/OpenISy server
         ActiveSessionView         iOS workbench timeline + permissions + composer
-        ConsoleView               compatibility/debug console
 ```
 
 ---
@@ -81,7 +85,7 @@ OpencodeNative (iOS app)
 brew install xcodegen
 xcodegen generate
 open OpencodeNative.xcodeproj
-# Product â†’ Build (âŒ˜R) â†’ Run on iOS Simulator
+# Product → Build (⌒R) → Run on iOS Simulator
 ```
 
 ### Run Tests
@@ -98,8 +102,8 @@ xcodebuild test \
 
 OpencodeNative now has two runtime modes behind the same SwiftUI workbench:
 
-- **Link Desktop** â€” connects to the official OpenCode headless server running on your computer. OpenCode itself owns models, sessions, tools, permissions and file edits.
-- **Native Swift** â€” runs the project's sandboxed Swift `AgentLoop` directly on iOS with the configured model provider.
+- **Link Desktop** — connects to the official OpenCode headless server running on your computer. OpenCode itself owns models, sessions, tools, permissions and file edits.
+- **Native Swift** — runs the project's sandboxed Swift `AgentLoop` directly on iOS with the configured model provider.
 
 ### Link the real OpenCode runtime
 
@@ -152,26 +156,38 @@ Sources/
     Workspace.swift                    iOS sandbox filesystem
   Persistence/
     Persistence.swift                  JSON + JSONL audit trail
+    KeychainHelper.swift               Keychain (Security) o honesto en otros hosts
   Tools/
     FileSystemTools.swift              8 filesystem tools
     GlobMatcher.swift                  Pure Swift glob matcher
   Remote/
-    OpenCodeRemoteClient.swift       Official OpenCode HTTP/SSE client
+    OpenCodeRemoteClient.swift         Official OpenCode HTTP/SSE client
+    PairingStore.swift                 Persistencia del pairing en Keychain
+  Backend/
+    WorkbenchBackend.swift             Protocolo/backend abstraction
+    WorkbenchStore.swift               Estado del workbench + orquestación
+    NativeSwiftBackend.swift           Backend del runtime Swift nativo
+    OpenCodeServerBackend.swift        Backend del servidor remoto (Link Desktop)
   UI/
-    ConnectionView.swift             Desktop pairing / native runtime chooser
-    SessionAdapter.swift               Runtime â†” workbench bridge
+    ConnectionView.swift               Desktop pairing / native runtime chooser
     ActiveSessionView.swift            Session timeline + work surfaces
     ComposerView.swift                 Send/stop + agent/model controls
     TimelineViews.swift                Tool/diff/permission/todo rendering
+    ProjectSessionViews.swift          Proyecto + selector de sesiones
+    DesignSystem.swift                 Tokens colores/sombras (workbench pass)
     Models.swift                       Workbench state + UI models
     SessionViewModel.swift             Legacy console adapter
     ConsoleView.swift                  Compatibility/debug console
 
 Tests/
-  GlobMatcherTests.swift               Glob pattern matching
-  HostTests.swift                      Capability matrix + compatibility report
-  CoreEndToEndTests.swift              Workspace + persistence + tools + agent E2E
-  RemotePairingTests.swift             Pairing URL parser and defaults
+  GlobMatcherTests.swift               Glob pattern matching (7 tests)
+  HostTests.swift                      Capability matrix + compatibility report (5)
+  CoreEndToEndTests.swift              Workspace + persistence + tools + agent E2E (14)
+  RemotePairingTests.swift             Pairing URL parser and defaults (3)
+
+Bridge/                                Node CLI: `opencodenative link`
+  bin/opencodenative.mjs               Lanza `opencode serve` + imprime pairing URL
+  test/                                Tests node --test + probes de transporte
 
 docs/
   OPENCODE_COMPAT.md                   Full compatibility report with evidence
@@ -191,7 +207,7 @@ The GitHub Actions workflow (`.github/workflows/ios-build.yml`) runs on every pu
 | **build** | Builds unsigned IPA for iOS device |
 | **test** | Runs all unit tests on iOS Simulator |
 | **capability-report** | Generates capability matrix artifact |
-| **sign** | *(optional)* Signs IPA with iloader â€” requires `ENABLE_ILOADER_SIGN=true` var + `APPLE_ID`/`TEAM_ID` secrets |
+| **sign** | *(optional)* Signs IPA with iloader — requires `ENABLE_ILOADER_SIGN=true` var + `APPLE_ID`/`TEAM_ID` secrets |
 
 ---
 
@@ -208,7 +224,7 @@ The GitHub Actions workflow (`.github/workflows/ios-build.yml`) runs on every pu
 
 ## License
 
-This project is licensed under the MIT License â€” see [`LICENSE`](LICENSE) for details.
+This project is licensed under the MIT License — see [`LICENSE`](LICENSE) for details.
 
 OpenCode (`anomalyco/opencode`) is referenced under its MIT license.
 This project is not affiliated with or endorsed by the OpenCode team.

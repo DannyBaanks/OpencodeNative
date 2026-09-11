@@ -1,5 +1,31 @@
 import Foundation
+#if canImport(Security)
 import Security
+#else
+/// OSStatus no existe sin el framework Security (hosts Windows/Linux de
+/// desarrollo). El alias mantiene la firma publica de KeychainError identica
+/// en todos los hosts donde el core compila.
+public typealias OSStatus = Int32
+#endif
+
+public enum KeychainError: Error, LocalizedError, Sendable {
+    case saveFailed(OSStatus)
+    case loadFailed(OSStatus)
+    case deleteFailed(OSStatus)
+    /// El framework Security no existe en este host; no hay Keychain real.
+    case unavailable
+
+    public var errorDescription: String? {
+        switch self {
+        case .saveFailed(let status): return "Keychain save failed: \(status)"
+        case .loadFailed(let status): return "Keychain load failed: \(status)"
+        case .deleteFailed(let status): return "Keychain delete failed: \(status)"
+        case .unavailable: return "Keychain (Security framework) no existe en este host; los secretos no pueden persistirse aqui."
+        }
+    }
+}
+
+#if canImport(Security)
 
 /// Keychain helper para almacenar secretos de forma segura
 public actor KeychainHelper {
@@ -96,16 +122,40 @@ public actor KeychainHelper {
     }
 }
 
-public enum KeychainError: Error, LocalizedError, Sendable {
-    case saveFailed(OSStatus)
-    case loadFailed(OSStatus)
-    case deleteFailed(OSStatus)
-    
-    public var errorDescription: String? {
-        switch self {
-        case .saveFailed(let status): return "Keychain save failed: \(status)"
-        case .loadFailed(let status): return "Keychain load failed: \(status)"
-        case .deleteFailed(let status): return "Keychain delete failed: \(status)"
-        }
+#else
+
+/// Sustituto honesto para hosts sin framework Security (p.ej. verificacion
+/// `swiftc` en Windows/Linux). NO finge almacenamiento seguro: toda
+/// operacion falla con `KeychainError.unavailable` en lugar de guardar
+/// secretos en memoria o en disco. En iOS/macOS siempre compila la rama real.
+public actor KeychainHelper {
+    public static let shared = KeychainHelper()
+
+    private init() {}
+
+    public func save(key: String, value: String) throws {
+        throw KeychainError.unavailable
+    }
+
+    public func load(key: String) throws -> String? {
+        throw KeychainError.unavailable
+    }
+
+    public func delete(key: String) throws {
+        throw KeychainError.unavailable
+    }
+
+    public func saveAll(_ dict: [String: String]) throws {
+        throw KeychainError.unavailable
+    }
+
+    public func loadAll(keys: [String]) throws -> [String: String] {
+        throw KeychainError.unavailable
+    }
+
+    public func deleteAll(keys: [String]) throws {
+        throw KeychainError.unavailable
     }
 }
+
+#endif

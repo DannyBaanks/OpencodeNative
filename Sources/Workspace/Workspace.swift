@@ -3,21 +3,45 @@ import Foundation
 /// Capabilities que el workspace declara explícitamente.
 /// Cada capability documenta si es posible, restringida, o imposible en iOS.
 public struct WorkspaceCapabilities: Codable, Sendable {
-    public let listDirectory: Bool = true
-    public let readFile: Bool = true
-    public let writeFile: Bool = true
-    public let createDirectory: Bool = true
-    public let moveFile: Bool = true
-    public let deleteFile: Bool = true
-    public let watchChanges: Bool = false // Requires DispatchSource, limited
-    public let securityScopedBookmarks: Bool = false // Requires user interaction + entitlement
-    public let arbitraryPaths: Bool = false // Sandbox restricts to app containers
-    
-    public let restrictions: [String] = [
-        "Sandbox: only App Support, Documents, tmp, and bundle (read-only)",
-        "No access to system directories, other apps' data, or user home outside picker",
-        "File watching limited to directories app owns"
-    ]
+    public let listDirectory: Bool
+    public let readFile: Bool
+    public let writeFile: Bool
+    public let createDirectory: Bool
+    public let moveFile: Bool
+    public let deleteFile: Bool
+    public let watchChanges: Bool      // Requires DispatchSource, limited
+    public let securityScopedBookmarks: Bool // Requires user interaction + entitlement
+    public let arbitraryPaths: Bool    // Sandbox restricts to app containers
+
+    public let restrictions: [String]
+
+    public init(
+        listDirectory: Bool = true,
+        readFile: Bool = true,
+        writeFile: Bool = true,
+        createDirectory: Bool = true,
+        moveFile: Bool = true,
+        deleteFile: Bool = true,
+        watchChanges: Bool = false,
+        securityScopedBookmarks: Bool = false,
+        arbitraryPaths: Bool = false,
+        restrictions: [String] = [
+            "Sandbox: only App Support, Documents, tmp, and bundle (read-only)",
+            "No access to system directories, other apps' data, or user home outside picker",
+            "File watching limited to directories app owns"
+        ]
+    ) {
+        self.listDirectory = listDirectory
+        self.readFile = readFile
+        self.writeFile = writeFile
+        self.createDirectory = createDirectory
+        self.moveFile = moveFile
+        self.deleteFile = deleteFile
+        self.watchChanges = watchChanges
+        self.securityScopedBookmarks = securityScopedBookmarks
+        self.arbitraryPaths = arbitraryPaths
+        self.restrictions = restrictions
+    }
 }
 
 /// Errores específicos del workspace

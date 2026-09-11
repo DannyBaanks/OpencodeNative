@@ -1,10 +1,14 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public enum OpenCodeRemoteError: Error, LocalizedError, Sendable {
     case invalidPairingLink
     case invalidResponse
     case http(Int, String)
     case missingSession
+    case unsupportedOnThisHost(String)
 
     public var errorDescription: String? {
         switch self {
@@ -12,6 +16,7 @@ public enum OpenCodeRemoteError: Error, LocalizedError, Sendable {
         case .invalidResponse: return "Invalid response from OpenCode server"
         case .http(let status, let body): return "OpenCode server HTTP \(status): \(body)"
         case .missingSession: return "No OpenCode session is selected"
+        case .unsupportedOnThisHost(let detail): return "Not supported on this host: \(detail)"
         }
     }
 }
@@ -190,6 +195,13 @@ public actor OpenCodeRemoteClient {
 
     public func events() -> AsyncThrowingStream<OpenCodeRemoteEvent, Error> {
         AsyncThrowingStream { continuation in
+#if os(Windows)
+            // FoundationNetworking en Windows (Swift 6.3.x) no expone
+            // URLSession.bytes(for:) async. El streaming SSE del servidor
+            // OpenCode no existe en este host: se reporta, no se finge.
+            // En iOS/macOS/Linux siempre compila la rama real.
+            continuation.finish(throwing: OpenCodeRemoteError.unsupportedOnThisHost("URLSession.bytes(for:) (SSE event stream)"))
+#else
             let task = Task {
                 do {
                     let request = makeRequest(path: "/event", method: "GET", jsonBody: nil)
@@ -220,6 +232,7 @@ public actor OpenCodeRemoteClient {
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
+#endif
         }
     }
 
@@ -394,7 +407,12 @@ public actor OpenCodeRemoteClient {
         public let parts: [OpenCodeRemotePart]
     }
 
-    public struct ProviderInfo: Sendable {
+    // @unchecked: los payloads [String: Any] vienen exclusivamente de
+    // JSONSerialization sobre la respuesta HTTP del servidor OpenCode, asi que
+    // solo contienen tipos-valor JSON (String, numeros, Bool, array, dict).
+    // No hay mutacion tras la construccion (todo `let`); el cruze entre
+    // actores es seguro en la practica.
+    public struct ProviderInfo: @unchecked Sendable {
         public let id: String
         public let name: String
         public let models: [String: [String: Any]]?
@@ -406,7 +424,7 @@ public actor OpenCodeRemoteClient {
         public let `default`: String?
     }
 
-    public struct ConfigInfo: Sendable {
+    public struct ConfigInfo: @unchecked Sendable {
         public let agents: [String: [String: Any]]?
         public let provider: [String: Any]?
     }
@@ -544,7 +562,7 @@ public actor OpenCodeRemoteClient {
     }
 
     public func sendPromptAsyncWithModel(sessionID: String, text: String, agent: String? = nil, modelProvider: String? = nil, modelID: String? = nil) async throws {
-        var parts: [[String: Any]] = [["type": "text", "text": text]]
+        let parts: [[String: Any]] = [["type": "text", "text": text]]
         var body: [String: Any] = ["parts": parts]
         if let agent { body["agent"] = agent }
         if let modelProvider, let modelID {

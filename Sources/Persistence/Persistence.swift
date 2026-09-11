@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 /// Protocolo de persistencia para el runtime del agente.
 /// Almacena conversaciones, eventos, estado del agente, configuración.
@@ -276,39 +275,16 @@ public actor IOSPersistence: Persistence {
     // MARK: - Configuration
     
     public func saveConfiguration(_ config: Configuration) async throws {
-        // Guardar config sin apiKeys en JSON
-        var configToSave = config
-        // apiKeys se guardan por separado en Keychain
-        let data = try encoder.encode(configToSave)
+        // Configuration no contiene apiKeys: los secretos viven en Keychain
+        // (saveAPIKey/loadAPIKey/deleteAPIKey), nunca en este JSON.
+        let data = try encoder.encode(config)
         try data.write(to: configFile, options: .atomic)
     }
-    
+
     public func loadConfiguration() async throws -> Configuration? {
         guard fileManager.fileExists(atPath: configFile.path) else { return nil }
         let data = try Data(contentsOf: configFile)
-        var config = try decoder.decode(Configuration.self, from: data)
-        
-        // Cargar apiKeys desde Keychain
-        // Nota: en una implementación real, necesitaríamos saber qué keys buscar
-        // Por ahora, intentamos cargar keys conocidas
-        let knownKeys = ["remote", "openai", "anthropic", "google", "local"]
-        do {
-            let apiKeys = try await keychain.loadAll(keys: knownKeys.map { keychainPrefix + $0 })
-            // Convertir de keychainPrefix + key a solo key
-            var cleanedKeys: [String: String] = [:]
-            for (key, value) in apiKeys {
-                if key.hasPrefix(keychainPrefix) {
-                    let cleanKey = String(key.dropFirst(keychainPrefix.count))
-                    cleanedKeys[cleanKey] = value
-                }
-            }
-            // Note: Configuration no tiene apiKeys property ahora
-            // Las claves se acceden via KeychainHelper directamente
-        } catch {
-            // Keychain vacío o error, continuar sin keys
-        }
-        
-        return config
+        return try decoder.decode(Configuration.self, from: data)
     }
     
     /// Guarda una API key en Keychain

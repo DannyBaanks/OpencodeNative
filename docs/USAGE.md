@@ -88,14 +88,16 @@ CI runs this automatically on every push.
 
 ## D. Verify Without Xcode (Windows / Linux)
 
-Syntax and typecheck only (no test execution):
+Syntax and typecheck only (no test execution). Verified with Swift 6.3.3
+on Windows: **0 errors, 0 warnings**.
 
 ```powershell
-# Foundation-only sources (no SwiftUI)
+# Foundation-only sources (todo el core; no SwiftUI) — typecheck completo
 swiftc -swift-version 5 -typecheck `
   Sources/Agent/AgentLoop.swift `
   Sources/Workspace/Workspace.swift `
   Sources/Persistence/Persistence.swift `
+  Sources/Persistence/KeychainHelper.swift `
   Sources/Model/ModelProvider.swift `
   Sources/Model/ScriptedModelProvider.swift `
   Sources/Tools/GlobMatcher.swift `
@@ -103,16 +105,32 @@ swiftc -swift-version 5 -typecheck `
   Sources/Host/OpenCodeRuntimeContract.swift `
   Sources/Host/IOSCapabilityMatrix.swift `
   Sources/Host/CompatibilityReport.swift `
-  Sources/Host/OpenCodeBootAttempt.swift
+  Sources/Host/OpenCodeBootAttempt.swift `
+  Sources/Remote/OpenCodeRemoteClient.swift `
+  Sources/Remote/PairingStore.swift
 
-# UI files (syntax check)
-swiftc -parse Sources/UI/ConsoleView.swift Sources/UI/SessionViewModel.swift
+# UI + Backend (SwiftUI no existe fuera de Apple — solo parse)
+swiftc -parse Sources/UI/*.swift Sources/Backend/*.swift App/OpencodeNativeApp.swift
 
-# Test files
+# Test files (XCTest no existe fuera de Apple — solo parse)
 swiftc -parse Tests/*.swift
 ```
 
-No output = OK. XCTest is not available on Windows; use Xcode / iOS Simulator.
+No output = OK. XCTest no está disponible fuera de macOS; ejecuta la suite con
+Xcode / iOS Simulator (ver §C).
+
+### Notas de plataforma (honestas, nada simulado)
+
+- **Windows:** `FoundationNetworking.URLSession.bytes(for:)` (SSE) no existe en
+  Swift 6.3.3 para Windows → `OpenCodeRemoteClient.events()` termina con
+  `OpenCodeRemoteError.unsupportedOnThisHost` en este host. En iOS/macOS/Linux
+  compila la rama real con streaming SSE.
+- **Windows/Linux:** el framework `Security` (Keychain) no existe →
+  `KeychainHelper` lanza `KeychainError.unavailable`; ningún host no-Apple
+  persiste secretos fingiendo ser Keychain.
+- **Windows/Linux:** `UIKit`/`Network` no existen → `IOSCapabilityMatrix`
+  compila con guards `#if canImport` y reporta lo probado como no aplicable
+  (fatalError solo si se fuerza la sonda fuera de iOS).
 
 ---
 

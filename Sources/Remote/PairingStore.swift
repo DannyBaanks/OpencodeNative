@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 public actor PairingStore {
     private let keychain = KeychainHelper.shared

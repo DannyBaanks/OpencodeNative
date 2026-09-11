@@ -450,7 +450,6 @@ public actor AgentLoop {
                     }
 
                     try Task.checkCancellation()
-                    let startTime = Date()
                     let result = await context.toolExecutor.execute(invocation)
                     
                     await eventHandler?(.toolResult(result))
