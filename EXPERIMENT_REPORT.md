@@ -185,6 +185,29 @@ tests 6/6):
     all restored to `—`/`→`/`⌘`/`ó`. Broken anchor link
     `#10-atribuci�n` → `#10-attribution`.
 
+14. **Protocol drift fixed** — `WorkbenchBackend` lacked the `eventStream`
+    member that both backends and `WorkbenchStore` relied on;
+    `OpenCodeServerBackend.config()` returned the nested
+    `OpenCodeRemoteClient.ConfigInfo` where the protocol-facing top-level
+    `ConfigInfo` was required; a missing `try` at `WorkbenchStore:188`.
+
+15. **iOS 26 SDK `Group` overload** — `Group { switch ... }` no longer
+    compiles (new `Group.init<R, C>(@TableColumnBuilder)` hijacks
+    inference). Switches moved to dedicated `@ViewBuilder` properties
+    in `TimelineViews`/`ActiveSessionView`; a bare switch cannot take
+    trailing modifiers. `ProjectSessionViews` list row extracted past the
+    type-check budget.
+
+16. **Stale call sites** — `QuestionView.onFreeform` used
+    `sendPrompt(text, agent:, model:)` on `WorkbenchStore`, whose signature
+    is `sendPrompt(_:)`; `SettingsSheet(store:)` passed an argument to a
+    view whose store is an `@EnvironmentObject`.
+
+**Verification (2026-09-11, CI run 34648902410):** Build unsigned IPA ✓,
+unit tests on iOS Simulator executed **29/29, 0 failures** ✓,
+capability-report artifact ✓. Evidence: `gh run view 34648902410`
+(artifacts `build-output`, `test-output`, `capability-report`).
+
 ---
 
 ## Conclusion
