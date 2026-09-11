@@ -14,11 +14,10 @@ public struct TimelineEventContainer: View {
         event.agentMode?.color ?? OCColor.agentBuild
     }
 
-    public var body: some View {
-        // NOTA: en iOS 26 SDK `Group { switch ... }` colisiona con el overload
-        // `Group.init<R, C>(@TableColumnBuilder)` y no compila. El switch
-        // directo como body (sin Group) produce _ConditionalContent y se
-        // comporta identico a nivel de layout (Group no impone frame).
+    // NOTA: en iOS 26 SDK `Group { switch ... }` colisiona con el overload
+    // `Group.init<R, C>(@TableColumnBuilder)` y no compila. El switch se
+    // extrae a un @ViewBuilder (buildEither) y el padding se aplica fuera.
+    @ViewBuilder private var eventContent: some View {
         switch event.kind {
         case .userPrompt:
             UserPromptView(event: event, agentColor: agentColor)
@@ -45,12 +44,16 @@ public struct TimelineEventContainer: View {
             QuestionView(
                 event: event,
                 onSelect: { choice in store.respondToPermission(requestId: event.id, decision: .allowOnce) },
-                onFreeform: { text in Task { try? await store.sendPrompt(text, agent: nil, model: nil) } }
+                onFreeform: { text in Task { await store.sendPrompt(text) } }
             )
         case .system:
             SystemMessageView(event: event)
         }
-        .padding(.vertical, OCSpacing.xs)
+    }
+
+    public var body: some View {
+        eventContent
+            .padding(.vertical, OCSpacing.xs)
     }
 }
 

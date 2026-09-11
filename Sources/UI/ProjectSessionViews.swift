@@ -133,7 +133,8 @@ public struct ProjectListView: View {
                 }
             }
             .sheet(isPresented: $showSettings) {
-                SettingsSheet(store: store)
+                SettingsSheet()
+                    .environmentObject(store)
             }
         }
     }

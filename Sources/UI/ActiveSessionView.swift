@@ -9,21 +9,26 @@ public struct ActiveSessionView: View {
     
     public init() {}
     
+    // El switch vive en un @ViewBuilder propio: `Group { switch ... }` choca
+    // con el overload `Group.init<R, C>(@TableColumnBuilder)` del iOS 26 SDK,
+    // y un modificador colgado de un switch suelto no parsea como vista.
+    @ViewBuilder private var surfaceContent: some View {
+        switch sessionState.activeSurface {
+        case .chat:
+            ChatSurfaceView()
+        case .files:
+            FilesSurfaceView()
+        case .review:
+            ReviewSurfaceView()
+        case .terminal:
+            TerminalSurfaceView()
+        }
+    }
+
     public var body: some View {
         VStack(spacing: 0) {
-            // Switch directo: `Group { switch ... }` colisiona con el overload
-            // `Group.init<R, C>(@TableColumnBuilder)` del iOS 26 SDK.
-            switch sessionState.activeSurface {
-            case .chat:
-                ChatSurfaceView()
-            case .files:
-                FilesSurfaceView()
-            case .review:
-                ReviewSurfaceView()
-            case .terminal:
-                TerminalSurfaceView()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            surfaceContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             WorkSurfaceSwitcher(selectedSurface: $sessionState.activeSurface)
                 .padding(.horizontal, OCSpacing.contentMargin)
