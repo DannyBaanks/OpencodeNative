@@ -185,7 +185,7 @@ public final class WorkbenchStore: ObservableObject {
         if let backend = currentBackend {
             do {
                 try await backend.selectSession(session.id)
-                await backend.loadHistory(sessionID: session.id)
+                try await backend.loadHistory(sessionID: session.id)
             } catch {
                 addErrorEvent("Failed to load session: \(error.localizedDescription)")
             }

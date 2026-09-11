@@ -11,17 +11,17 @@ public struct ActiveSessionView: View {
     
     public var body: some View {
         VStack(spacing: 0) {
-            Group {
-                switch sessionState.activeSurface {
-                case .chat:
-                    ChatSurfaceView()
-                case .files:
-                    FilesSurfaceView()
-                case .review:
-                    ReviewSurfaceView()
-                case .terminal:
-                    TerminalSurfaceView()
-                }
+            // Switch directo: `Group { switch ... }` colisiona con el overload
+            // `Group.init<R, C>(@TableColumnBuilder)` del iOS 26 SDK.
+            switch sessionState.activeSurface {
+            case .chat:
+                ChatSurfaceView()
+            case .files:
+                FilesSurfaceView()
+            case .review:
+                ReviewSurfaceView()
+            case .terminal:
+                TerminalSurfaceView()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 

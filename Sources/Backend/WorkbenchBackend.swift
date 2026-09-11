@@ -112,6 +112,7 @@ public protocol WorkbenchBackend: Sendable {
     var mode: BackendMode { get }
     var connectionStatus: String { get async }
     var currentSessionID: String? { get async }
+    var eventStream: AsyncStream<WorkbenchEvent> { get }
     
     func connectRemote(pairing: OpenCodePairing) async throws
     func disconnect() async

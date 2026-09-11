@@ -15,38 +15,40 @@ public struct TimelineEventContainer: View {
     }
 
     public var body: some View {
-        Group {
-            switch event.kind {
-            case .userPrompt:
-                UserPromptView(event: event, agentColor: agentColor)
-            case .assistantText:
-                AssistantTextView(event: event)
-            case .toolCall, .toolResult:
-                ToolCallView(event: event, agentColor: agentColor)
-            case .diff:
-                DiffView(event: event)
-            case .codeBlock:
-                CodeBlockView(event: event)
-            case .thinking:
-                ThinkingView(event: event, agentColor: agentColor)
-            case .todo:
-                TodoView(event: event, agentColor: agentColor)
-            case .permission:
-                PermissionView(
-                    event: event,
-                    onAllow: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowOnce) },
-                    onDeny: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .deny) },
-                    onPersistent: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways) }
-                )
-            case .question:
-                QuestionView(
-                    event: event,
-                    onSelect: { choice in store.respondToPermission(requestId: event.id, decision: .allowOnce) },
-                    onFreeform: { text in Task { try? await store.sendPrompt(text, agent: nil, model: nil) } }
-                )
-            case .system:
-                SystemMessageView(event: event)
-            }
+        // NOTA: en iOS 26 SDK `Group { switch ... }` colisiona con el overload
+        // `Group.init<R, C>(@TableColumnBuilder)` y no compila. El switch
+        // directo como body (sin Group) produce _ConditionalContent y se
+        // comporta identico a nivel de layout (Group no impone frame).
+        switch event.kind {
+        case .userPrompt:
+            UserPromptView(event: event, agentColor: agentColor)
+        case .assistantText:
+            AssistantTextView(event: event)
+        case .toolCall, .toolResult:
+            ToolCallView(event: event, agentColor: agentColor)
+        case .diff:
+            DiffView(event: event)
+        case .codeBlock:
+            CodeBlockView(event: event)
+        case .thinking:
+            ThinkingView(event: event, agentColor: agentColor)
+        case .todo:
+            TodoView(event: event, agentColor: agentColor)
+        case .permission:
+            PermissionView(
+                event: event,
+                onAllow: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowOnce) },
+                onDeny: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .deny) },
+                onPersistent: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways) }
+            )
+        case .question:
+            QuestionView(
+                event: event,
+                onSelect: { choice in store.respondToPermission(requestId: event.id, decision: .allowOnce) },
+                onFreeform: { text in Task { try? await store.sendPrompt(text, agent: nil, model: nil) } }
+            )
+        case .system:
+            SystemMessageView(event: event)
         }
         .padding(.vertical, OCSpacing.xs)
     }

@@ -88,16 +88,7 @@ public struct ProjectListView: View {
                     emptyState
                 } else {
                     Section {
-                        ForEach(store.projects) { project in
-                            ProjectRow(
-                                project: project,
-                                isSelected: selectedProject?.id == project.id,
-                                onTap: { selectedProject = project }
-                            )
-                            .listRowInsets(EdgeInsets())
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        }
+                        ForEach(store.projects, content: projectRow)
                     } header: {
                         Text("PROJECTS")
                             .font(OCTypography.sectionLabel)
@@ -146,7 +137,21 @@ public struct ProjectListView: View {
             }
         }
     }
-    
+
+    // Extraido de la List: la expresion inline superaba el presupuesto de
+    // type-check del compilador ("unable to type-check in reasonable time").
+    @ViewBuilder
+    private func projectRow(project: Project) -> some View {
+        ProjectRow(
+            project: project,
+            isSelected: selectedProject?.id == project.id,
+            onTap: { selectedProject = project }
+        )
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+
     private var emptyState: some View {
         VStack(spacing: OCSpacing.xl) {
             Image(systemName: "folder.badge.plus")

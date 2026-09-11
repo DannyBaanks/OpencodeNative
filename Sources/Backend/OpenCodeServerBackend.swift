@@ -258,7 +258,11 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
     }
     
     public func config() async throws -> ConfigInfo {
-        return try await client.config()
+        let remote = try await client.config()
+        // Mapeo explicito: el cliente remoto define su propio `ConfigInfo`
+        // anidado (OpenCodeRemoteClient.ConfigInfo); el contrato del
+        // workbench usa el top-level ConfigInfo de WorkbenchBackend.swift.
+        return ConfigInfo(agents: remote.agents, provider: remote.provider)
     }
     
     public func availableCommands() async throws -> [CommandInfo] {
