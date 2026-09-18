@@ -269,8 +269,26 @@ struct FilesBreadcrumbView: View {
     let path: String
     let onSelect: (String) -> Void
     
-    private var segments: [String] {
-        path.split(separator: "/").map(String.init)
+    // El server ecoa el separador del SO host ("/" en unix, "\" en Windows):
+    // segmenta por ambos y conserva el prefijo crudo original para que el
+    // drill-down use exactamente el path que devolvio el servidor.
+    private var segments: [(label: String, subpath: String)] {
+        var out: [(String, String)] = []
+        var component = ""
+        for index in path.indices {
+            if path[index] == "/" || path[index] == "\\" {
+                if !component.isEmpty {
+                    out.append((component, String(path[path.startIndex..<index])))
+                }
+                component = ""
+            } else {
+                component.append(path[index])
+            }
+        }
+        if !component.isEmpty {
+            out.append((component, path))
+        }
+        return out
     }
     
     var body: some View {
@@ -285,8 +303,8 @@ struct FilesBreadcrumbView: View {
                         .font(OCTypography.controlMono)
                         .foregroundColor(OCColor.textFaint)
                     
-                    Button(segment) {
-                        onSelect(segments.prefix(index + 1).joined(separator: "/"))
+                    Button(segment.label) {
+                        onSelect(segment.subpath)
                     }
                     .font(OCTypography.controlMono)
                     .foregroundColor(index == segments.count - 1 ? OCColor.textPrimary : OCColor.textSecondary)

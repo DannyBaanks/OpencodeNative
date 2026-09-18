@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { childEnvironment, parseLinkOptions, runtimeCommand } from "../bin/opencodenative.mjs";
+import { bestLanIPv4, childEnvironment, isPrivateRoutableIPv4, parseLinkOptions, runtimeCommand } from "../bin/opencodenative.mjs";
 
 test("default runtime remains official opencode", () => {
   const options = parseLinkOptions(["link"], {});
@@ -63,4 +63,26 @@ test("invalid command, runtime, port, and incomplete OpenISy config fail explici
 test("missing OpenISy entrypoint fails before spawning", () => {
   const options = parseLinkOptions(["link", "--runtime", "openisy", "--openisy-root", os.tmpdir()], {});
   assert.throws(() => runtimeCommand(options), /OpenISy entrypoint not found/);
+});
+
+test("bestLanIPv4 prefers a private routable address over link-local adapters", () => {
+  // Esta maquina: Bluetooth/Wi-Fi extra/Ethernet en 169.254.* antes que el
+  // Wi-Fi real 192.168.* — el pairing apuntaria a una IP inalcanzable.
+  assert.equal(bestLanIPv4(["169.254.85.244", "192.168.1.102"]), "192.168.1.102");
+  assert.equal(bestLanIPv4(["169.254.1.2", "10.0.0.5"]), "10.0.0.5");
+  assert.equal(bestLanIPv4(["172.20.1.9", "192.168.0.7"]), "172.20.1.9");
+  // Solo link-local: ninguna es alcanzable desde el iPhone; localhost es el
+  // fallback honesto y el CLI imprime el WARNING correspondiente.
+  assert.equal(bestLanIPv4(["169.254.1.2"]), "127.0.0.1");
+  assert.equal(bestLanIPv4([]), "127.0.0.1");
+});
+
+test("isPrivateRoutableIPv4 covers RFC1918 and rejects junk", () => {
+  assert.equal(isPrivateRoutableIPv4("192.168.1.102"), true);
+  assert.equal(isPrivateRoutableIPv4("10.1.2.3"), true);
+  assert.equal(isPrivateRoutableIPv4("172.31.255.1"), true);
+  assert.equal(isPrivateRoutableIPv4("172.15.0.1"), false);
+  assert.equal(isPrivateRoutableIPv4("169.254.1.2"), false);
+  assert.equal(isPrivateRoutableIPv4("8.8.8.8"), false);
+  assert.equal(isPrivateRoutableIPv4("nope"), false);
 });

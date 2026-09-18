@@ -7,13 +7,32 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
+// Eleccion de IP LAN: las interfaces link-local (169.254.*) y virtuales
+// (Bluetooth, Hyper-V, WSL) aparecen primeras en networkInterfaces(); el
+// pairing apuntaria a una IP inalcanzable para el iPhone. Se prefiere una
+// IPv4 privada enrutable (RFC1918) y se avisa si no hay ninguna.
+export function isPrivateRoutableIPv4(ip) {
+  const parts = ip.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return false;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  if (parts[0] === 10) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  return false;
+}
+
+export function bestLanIPv4(addresses) {
+  const nonLocal = addresses.filter((ip) => !ip.startsWith("169.254."));
+  return nonLocal.find(isPrivateRoutableIPv4) ?? nonLocal[0] ?? "127.0.0.1";
+}
+
 function lanIPv4() {
+  const addresses = [];
   for (const entries of Object.values(os.networkInterfaces())) {
     for (const entry of entries ?? []) {
-      if (entry.family === "IPv4" && !entry.internal) return entry.address;
+      if (entry.family === "IPv4" && !entry.internal) addresses.push(entry.address);
     }
   }
-  return "127.0.0.1";
+  return bestLanIPv4(addresses);
 }
 
 export function parseLinkOptions(args, env = process.env) {
@@ -83,6 +102,7 @@ export function main(args = process.argv.slice(2), env = process.env) {
   }
 
   const host = lanIPv4();
+  const lanReachable = isPrivateRoutableIPv4(host);
   const username = "opencode";
   const password = randomBytes(24).toString("base64url");
   const query = new URLSearchParams({
@@ -100,6 +120,12 @@ export function main(args = process.argv.slice(2), env = process.env) {
   if (options.runtime === "openisy") console.log("runtime   OpenISy");
   console.log(`project   ${options.directory}`);
   console.log(`server    http://${host}:${options.port}`);
+  if (!lanReachable) {
+    console.log("");
+    console.log("WARNING: no private-routable IPv4 (RFC1918) was found on this");
+    console.log("machine. The printed pairing host is likely UNREACHABLE from the");
+    console.log("iPhone. Connect both devices to the same Wi-Fi/LAN and retry.");
+  }
   console.log("");
   console.log("paste this into the iPhone app:");
   console.log("");

@@ -130,7 +130,7 @@ public protocol WorkbenchBackend: Sendable {
     
     func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws
     
-    func loadHistory(sessionID: String) async throws
+    func loadHistory(sessionID: String) async throws -> [TimelineEvent]
     func startEventStream() async throws
     func stopEventStream() async
     

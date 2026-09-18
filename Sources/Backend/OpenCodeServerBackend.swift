@@ -45,7 +45,7 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
         
         if let first = sessions.first {
             currentSessionIDStorage = first.id
-            try await loadHistory(sessionID: first.id)
+            _ = try await loadHistory(sessionID: first.id)
         }
         
         connectionStatusStorage = "connected · OpenCode \(health.version) · \(pairing.host):\(pairing.port)"
@@ -129,8 +129,14 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
     }
     
     public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws {
-        let provider = model?.provider
-        let modelID = model?.apiModelId
+        // El prompt real espera IDs: providerID es el id del provider (no su
+        // nombre display) y modelID va sin el prefijo `providerID/` con el que
+        // el servidor lista los modelos. `route` carries the provider id.
+        let provider = model?.route ?? model?.provider
+        var modelID = model?.apiModelId
+        if let provider, let raw = modelID, raw.hasPrefix("\(provider)/") {
+            modelID = String(raw.dropFirst(provider.count + 1))
+        }
         
         if let provider, let modelID {
             try await client.sendPromptAsyncWithModel(
@@ -165,9 +171,52 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
         try await client.replyPermission(sessionID: sessionID, permissionID: requestID, response: response)
     }
     
-    public func loadHistory(sessionID: String) async throws {
-        _ = try await client.messages(sessionID: sessionID)
-        // Events will be yielded via event stream when connected
+    /// Historial real: mapea los mensajes persistidos del servidor a eventos de
+    /// timeline. Antes este metodo descartaba el resultado (`_ =`) y reconectar
+    /// a una sesion existente mostraba el chat vacio.
+    public func loadHistory(sessionID: String) async throws -> [TimelineEvent] {
+        let messages = try await client.messages(sessionID: sessionID)
+        var events: [TimelineEvent] = []
+        for message in messages {
+            switch message.role {
+            case "user":
+                let text = message.parts.compactMap { $0.kind == .text ? $0.text : nil }.joined(separator: "\n")
+                if !text.isEmpty {
+                    events.append(TimelineEvent.userPrompt(text, agentMode: .build))
+                }
+            case "assistant":
+                for part in message.parts {
+                    switch part.kind {
+                    case .text:
+                        if let text = part.text, !text.isEmpty {
+                            events.append(TimelineEvent.assistantText(text, agentMode: .build))
+                        }
+                    case .reasoning:
+                        if let text = part.text, !text.isEmpty {
+                            events.append(TimelineEvent.system("thinking · \(text)"))
+                        }
+                    case .tool:
+                        let state: ToolCallState = part.status == "error" ? .failed : .success
+                        var event = TimelineEvent.toolCall(
+                            id: part.callID ?? part.id,
+                            name: part.tool ?? "tool",
+                            arguments: part.input,
+                            state: state,
+                            agentMode: .build
+                        )
+                        if let output = part.output ?? part.error {
+                            event.toolOutput = output
+                        }
+                        events.append(event)
+                    default:
+                        break
+                    }
+                }
+            default:
+                break
+            }
+        }
+        return events
     }
     
     public func startEventStream() async throws {

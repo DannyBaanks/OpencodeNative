@@ -211,8 +211,35 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         // Native permissions handled via AgentLoop continuation; already resolved in handler
     }
     
-    public func loadHistory(sessionID: String) async throws {
-        // Already handled via eventContinuation in selectSession
+    public func loadHistory(sessionID: String) async throws -> [TimelineEvent] {
+        guard let ps = persistence else { return [] }
+        guard let conv = try await ps.loadConversation(id: sessionID) else { return [] }
+        var events: [TimelineEvent] = []
+        for message in conv.messages {
+            switch message.role {
+            case .user:
+                events.append(TimelineEvent.userPrompt(message.content, agentMode: .build))
+            case .assistant:
+                events.append(TimelineEvent.assistantText(message.content, agentMode: .build))
+                for call in message.toolCalls ?? [] {
+                    events.append(TimelineEvent.toolCall(id: call.id, name: call.name, arguments: call.arguments, state: .success, agentMode: .build))
+                }
+                for result in message.toolResults ?? [] {
+                    events.append(TimelineEvent.toolResult(
+                        name: "tool",
+                        output: result.output,
+                        duration: 0,
+                        state: result.error == nil ? .success : .failed,
+                        agentMode: .build
+                    ))
+                }
+            case .system:
+                events.append(TimelineEvent.system(message.content))
+            default:
+                break
+            }
+        }
+        return events
     }
     
     public func startEventStream() async throws {

@@ -59,11 +59,12 @@ public final class WorkbenchStore: ObservableObject {
             currentProjectID = project.id
             sessionState.currentProject = project
             
+            sessionState.clearTimeline()
             let remoteSessions = try await backend.listSessions(projectID: project.id)
             sessions = remoteSessions
             if let first = remoteSessions.first {
-                sessionState.currentSession = first
-                currentSessionID = first.id
+                // selectSession carga el historial real de la sesion al timeline.
+                await selectSession(first)
             }
             
             sessionState.selectedModel = ModelInfo(
@@ -77,7 +78,6 @@ public final class WorkbenchStore: ObservableObject {
             connectionStatus = await backend.connectionStatus
             isConnecting = false
             connectionHealth = .connected
-            sessionState.clearTimeline()
             addSystemEvent("OpenCode connected")
             
             try await pairingStore.save(pairing)
@@ -213,7 +213,8 @@ public final class WorkbenchStore: ObservableObject {
         if let backend = currentBackend {
             do {
                 try await backend.selectSession(session.id)
-                try await backend.loadHistory(sessionID: session.id)
+                let events = try await backend.loadHistory(sessionID: session.id)
+                sessionState.timelineEvents = events
             } catch {
                 addErrorEvent("Failed to load session: \(error.localizedDescription)")
             }
@@ -371,17 +372,10 @@ public final class WorkbenchStore: ObservableObject {
     }
     
     public func setModel(_ model: ModelInfo) {
-        if backendMode == .remote {
-            addSystemEvent("Remote model/provider selection is controlled by the linked OpenCode server")
-            return
-        }
-        
         sessionState.selectedModel = model
-        Task { [weak self] in
-            await MainActor.run { [weak self] in
-                self?.addSystemEvent("Model: \(model.name) (\(model.provider))")
-            }
-        }
+        // La seleccion viaja real: sendPrompt la envia como
+        // model: {providerID, modelID} al servidor con cada prompt.
+        addSystemEvent("Model: \(model.name)")
     }
     
     public func setAgentMode(_ mode: AgentMode) {

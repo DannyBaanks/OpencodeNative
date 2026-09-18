@@ -458,9 +458,15 @@ public actor OpenCodeRemoteClient {
         }
     }
 
+    /// El servidor real (opencode 1.18.x) exige el query `path` incluso para
+    /// la raiz: `GET /file` sin query responde 400 BadRequest. Se normaliza el
+    /// path (sin separadores finales) porque el server ecoa el separador del
+    /// SO host (`\` en Windows).
     public func listFiles(path: String = "") async throws -> [RemoteFileNode] {
-        let query = path.isEmpty ? "" : "?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
-        let data = try await request(path: "/file\(query)")
+        var clean = path
+        while clean.hasSuffix("/") || clean.hasSuffix("\\") { clean.removeLast() }
+        let encoded = clean.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? clean
+        let data = try await request(path: "/file?path=\(encoded)")
         guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             throw OpenCodeRemoteError.invalidResponse
         }
@@ -508,9 +514,13 @@ public actor OpenCodeRemoteClient {
         return array
     }
 
+    /// El servidor real (opencode 1.18.x) exige `agent` en el payload del
+    /// shell: sin el campo responde 400 "Missing key at [agent]".
     public func runShell(sessionID: String, command: String, agent: String? = nil, workdir: String? = nil) async throws -> ShellResult {
-        var body: [String: Any] = ["command": command]
-        if let agent { body["agent"] = agent }
+        var body: [String: Any] = [
+            "command": command,
+            "agent": agent ?? "build",
+        ]
         if let workdir { body["workdir"] = workdir }
         let data = try await request(path: "/session/\(sessionID)/shell", method: "POST", jsonBody: body)
         let json = try jsonObject(data)
@@ -555,10 +565,12 @@ public actor OpenCodeRemoteClient {
         }
     }
 
+    /// El `/path` real expone {home,state,config,worktree,directory}: el
+    /// worktree es el directorio del proyecto enlazado.
     public func getPath() async throws -> String {
         let data = try await request(path: "/path")
         let json = try jsonObject(data)
-        return json["path"] as? String ?? ""
+        return json["worktree"] as? String ?? json["path"] as? String ?? ""
     }
 
     public func sendPromptAsyncWithModel(sessionID: String, text: String, agent: String? = nil, modelProvider: String? = nil, modelID: String? = nil) async throws {
