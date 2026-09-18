@@ -464,16 +464,6 @@ public struct DiffFileView: View {
                 Text("+\(file.additions) −\(file.deletions)")
                     .font(OCTypography.diffHeader)
                     .foregroundColor(OCColor.textSecondary)
-
-                // Actions
-                HStack(spacing: OCSpacing.xs) {
-                    Button("Open") { }
-                        .font(OCTypography.controlMono)
-                        .foregroundColor(OCColor.agentBuild)
-                    Button("Unified") { }
-                        .font(OCTypography.controlMono)
-                        .foregroundColor(OCColor.textSecondary)
-                }
             }
             .padding(.horizontal, OCSpacing.base)
             .padding(.vertical, OCSpacing.sm)
@@ -892,6 +882,7 @@ public struct QuestionView: View {
     let onSelect: (String) -> Void
     let onFreeform: (String) -> Void
     @State private var freeformText = ""
+    @State private var selectedChoiceID: String?
 
     public init(event: TimelineEvent, onSelect: @escaping (String) -> Void, onFreeform: @escaping (String) -> Void) {
         self.event = event
@@ -908,14 +899,15 @@ public struct QuestionView: View {
             if let choices = event.questionChoices {
                 ForEach(choices) { choice in
                     Button {
+                        selectedChoiceID = choice.id
                         onSelect(choice.id)
                     } label: {
                         HStack(spacing: OCSpacing.base) {
                             ZStack {
                                 Circle()
-                                    .stroke(OCColor.borderBase, lineWidth: 1.5)
+                                    .stroke(selectedChoiceID == choice.id ? OCColor.agentBuild : OCColor.borderBase, lineWidth: 1.5)
                                     .frame(width: 20, height: 20)
-                                if false { // selected state would be tracked
+                                if selectedChoiceID == choice.id {
                                     Circle()
                                         .fill(OCColor.agentBuild)
                                         .frame(width: 10, height: 10)

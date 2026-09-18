@@ -620,3 +620,111 @@ extension Notification.Name {
     static let composerSend = Notification.Name("composerSend")
     static let composerStop = Notification.Name("composerStop")
 }
+
+// MARK: - Attachments Sheet
+
+public struct AttachmentsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: WorkbenchStore
+    @EnvironmentObject private var sessionState: ActiveSessionState
+    @State private var manualName = ""
+
+    public init() {}
+
+    public var body: some View {
+        NavigationStack {
+            Form {
+                Section("Current") {
+                    if sessionState.composerAttachments.isEmpty {
+                        Text("No attachments")
+                            .font(OCTypography.meta)
+                            .foregroundColor(OCColor.textFaint)
+                    } else {
+                        ForEach(sessionState.composerAttachments) { attachment in
+                            HStack {
+                                Image(systemName: attachment.icon)
+                                    .foregroundColor(OCColor.iconPrimary)
+                                Text(attachment.name)
+                                    .foregroundColor(OCColor.textPrimary)
+                                Spacer()
+                                Button {
+                                    sessionState.composerAttachments.removeAll { $0.id == attachment.id }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(OCColor.textFaint)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+
+                Section("Workspace files") {
+                    if store.fileTree.isEmpty {
+                        Text("Loading workspace…")
+                            .font(OCTypography.meta)
+                            .foregroundColor(OCColor.textFaint)
+                    } else {
+                        ForEach(workspaceFiles) { file in
+                            Button {
+                                addAttachment(name: file.name, path: file.path)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "doc.text")
+                                        .foregroundColor(OCColor.iconPrimary)
+                                    Text(file.name)
+                                        .foregroundColor(OCColor.textPrimary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(OCColor.agentBuild)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                Section("Add by name") {
+                    TextField("File or context name", text: $manualName)
+                        .autocorrectionDisabled()
+                    Button("Add") {
+                        addAttachment(name: manualName, path: nil)
+                    }
+                    .disabled(manualName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .navigationTitle("Attachments")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .onAppear {
+                if store.fileTree.isEmpty {
+                    Task { await store.loadFiles() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private var workspaceFiles: [WorkbenchFileNode] {
+        store.fileTree.filter { !$0.isDirectory }
+    }
+
+    private func addAttachment(name: String, path: String?) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        let attachment = Attachment(
+            type: path == nil ? .context : .file,
+            name: trimmed,
+            path: path,
+            icon: path == nil ? "text.quote" : "doc"
+        )
+        sessionState.composerAttachments.append(attachment)
+        manualName = ""
+    }
+}

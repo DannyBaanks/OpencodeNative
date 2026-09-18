@@ -13,6 +13,7 @@ public final class WorkbenchStore: ObservableObject {
     @Published public var availableAgents: [String] = []
     @Published public var availableCommands: [CommandInfo] = []
     @Published public var fileTree: [WorkbenchFileNode] = []
+    @Published public private(set) var filesPath: String = ""
     @Published public var diffFiles: [SessionDiffFile] = []
     @Published public var shellHistory: [(command: String, result: ShellResult?)] = []
     
@@ -239,9 +240,10 @@ public final class WorkbenchStore: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !sessionState.isProcessing else { return }
         
+        let attachments = sessionState.composerAttachments
         let userEvent = TimelineEvent.userPrompt(
             trimmed,
-            attachments: sessionState.composerAttachments,
+            attachments: attachments,
             agentMode: sessionState.agentMode
         )
         sessionState.addEvent(userEvent)
@@ -263,7 +265,13 @@ public final class WorkbenchStore: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                try await backend.sendPrompt(trimmed, agent: agent, model: model)
+                // Las @mentions siguen la convencion `@file` de OpenCode para que el
+                // servidor remoto las resuelva como contexto de archivo; el backend
+                // nativo las recibe como texto plano.
+                let promptText = attachments.isEmpty
+                    ? trimmed
+                    : trimmed + "\n" + attachments.map { "@\($0.name)" }.joined(separator: " ")
+                try await backend.sendPrompt(promptText, agent: agent, model: model)
             } catch is CancellationError {
                 await MainActor.run {
                     self.sessionState.isProcessing = false
@@ -354,6 +362,7 @@ public final class WorkbenchStore: ObservableObject {
         guard let backend = currentBackend else { return }
         do {
             fileTree = try await backend.listFiles(path: path)
+            filesPath = path
         } catch {
             addErrorEvent("Failed to load files: \(error.localizedDescription)")
         }

@@ -329,6 +329,17 @@ public struct SessionListView: View {
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                // RootView navega por estado, no por push: volver a la lista de
+                // proyectos significa soltar currentProject.
+                Button {
+                    selectedSession = nil
+                    sessionState.currentProject = nil
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showNewSessionSheet = true } label: {
                     Image(systemName: "plus")

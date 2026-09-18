@@ -3,9 +3,6 @@ import SwiftUI
 public struct ActiveSessionView: View {
     @EnvironmentObject private var sessionState: ActiveSessionState
     @EnvironmentObject private var store: WorkbenchStore
-    @State private var scrollProxy: ScrollViewProxy?
-    @State private var keyboardHeight: CGFloat = 0
-    @FocusState private var isComposerFocused: Bool
     
     public init() {}
     
@@ -41,10 +38,22 @@ public struct ActiveSessionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                SessionNavTitle(
-                    title: sessionState.currentSession?.title ?? "Session",
-                    subtitle: sessionState.currentProject?.name ?? "Project"
-                )
+                HStack(spacing: OCSpacing.xs) {
+                    // RootView intercambia vistas por estado (no hay push), asi que
+                    // la salida de la sesion es explicita: currentSession = nil.
+                    Button {
+                        sessionState.currentSession = nil
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(OCColor.iconPrimary)
+                    }
+                    
+                    SessionNavTitle(
+                        title: sessionState.currentSession?.title ?? "Session",
+                        subtitle: sessionState.currentProject?.name ?? "Project"
+                    )
+                }
             }
             
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -79,6 +88,11 @@ public struct ActiveSessionView: View {
         }
         .sheet(isPresented: $sessionState.showModelPicker) {
             ModelPickerSheet(selectedModel: $sessionState.selectedModel, models: store.availableModels.isEmpty ? ModelInfo.demoModels : store.availableModels)
+        }
+        .sheet(isPresented: $sessionState.showAttachments) {
+            AttachmentsSheet()
+                .environmentObject(store)
+                .environmentObject(sessionState)
         }
         .sheet(item: $sessionState.pendingPermission) { event in
             PermissionView(
@@ -130,6 +144,9 @@ struct ChatSurfaceView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
+                    if sessionState.timelineEvents.isEmpty {
+                        EmptyChatView(sessionTitle: sessionState.currentSession?.title)
+                    }
                     ForEach(sessionState.timelineEvents) { event in
                         TimelineEventContainer(event: event)
                             .id(event.id)
@@ -158,41 +175,111 @@ struct ChatSurfaceView: View {
     }
 }
 
+struct EmptyChatView: View {
+    let sessionTitle: String?
+    
+    var body: some View {
+        VStack(spacing: OCSpacing.base) {
+            Image(systemName: "bubble.left")
+                .font(.system(size: 40, weight: .light))
+                .foregroundColor(OCColor.iconMuted)
+            
+            Text(sessionTitle ?? "Session")
+                .font(OCTypography.bodyStrong)
+                .foregroundColor(OCColor.textPrimary)
+            
+            Text("Send a message below to start")
+                .font(OCTypography.meta)
+                .foregroundColor(OCColor.textFaint)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 96)
+    }
+}
+
+// `loadFiles(path:)` reemplaza el arbol completo al navegar una carpeta, asi
+// que la barra de migas es la via de regreso a la raiz o a niveles superiores.
+struct FilesBreadcrumbView: View {
+    let path: String
+    let onSelect: (String) -> Void
+    
+    private var segments: [String] {
+        path.split(separator: "/").map(String.init)
+    }
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: OCSpacing.xs) {
+                Button("‹ root") { onSelect("") }
+                    .font(OCTypography.controlMono)
+                    .foregroundColor(OCColor.agentBuild)
+                
+                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                    Text("›")
+                        .font(OCTypography.controlMono)
+                        .foregroundColor(OCColor.textFaint)
+                    
+                    Button(segment) {
+                        onSelect(segments.prefix(index + 1).joined(separator: "/"))
+                    }
+                    .font(OCTypography.controlMono)
+                    .foregroundColor(index == segments.count - 1 ? OCColor.textPrimary : OCColor.textSecondary)
+                }
+            }
+            .padding(.horizontal, OCSpacing.contentMargin)
+        }
+        .frame(height: 34)
+        .background(OCColor.bgBase)
+        .overlay(
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(OCColor.borderMuted),
+            alignment: .bottom
+        )
+    }
+}
+
 struct FilesSurfaceView: View {
     @EnvironmentObject private var store: WorkbenchStore
-    @State private var expandedFolders: Set<String> = []
     @State private var selectedFile: WorkbenchFileNode?
     @State private var fileContent: WorkbenchFileContent?
     
     var body: some View {
-        List {
-            ForEach(store.fileTree) { item in
-                FileTreeRowView(
-                    item: item,
-                    expandedFolders: $expandedFolders,
-                    selectedFile: $selectedFile,
-                    onTap: { file in
-                        if !file.isDirectory {
-                            selectedFile = file
-                            Task {
-                                if let content = await store.loadFileContent(path: file.path) {
-                                    fileContent = content
+        VStack(spacing: 0) {
+            if !store.filesPath.isEmpty {
+                FilesBreadcrumbView(path: store.filesPath) { newPath in
+                    Task { await store.loadFiles(path: newPath) }
+                }
+            }
+            
+            List {
+                ForEach(store.fileTree) { item in
+                    FileTreeRowView(
+                        item: item,
+                        selectedFile: $selectedFile,
+                        onTap: { file in
+                            if !file.isDirectory {
+                                selectedFile = file
+                                Task {
+                                    if let content = await store.loadFileContent(path: file.path) {
+                                        fileContent = content
+                                    }
                                 }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(OCColor.bgDeep)
-        .sheet(item: $selectedFile) { file in
-            FileViewerView(file: file, content: fileContent?.content ?? "")
-        }
-        .onAppear {
-            if store.fileTree.isEmpty {
-                Task { await store.loadFiles() }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(OCColor.bgDeep)
+            .sheet(item: $selectedFile) { file in
+                FileViewerView(file: file, content: fileContent?.content ?? "")
+            }
+            .onAppear {
+                if store.fileTree.isEmpty {
+                    Task { await store.loadFiles() }
+                }
             }
         }
     }
@@ -201,42 +288,26 @@ struct FilesSurfaceView: View {
 struct FileTreeRowView: View {
     @EnvironmentObject private var store: WorkbenchStore
     let item: WorkbenchFileNode
-    @Binding var expandedFolders: Set<String>
     @Binding var selectedFile: WorkbenchFileNode?
     let onTap: (WorkbenchFileNode) -> Void
-    let indent: Int
     
-    init(item: WorkbenchFileNode, expandedFolders: Binding<Set<String>>, selectedFile: Binding<WorkbenchFileNode?>, onTap: @escaping (WorkbenchFileNode) -> Void, indent: Int = 0) {
+    init(item: WorkbenchFileNode, selectedFile: Binding<WorkbenchFileNode?>, onTap: @escaping (WorkbenchFileNode) -> Void) {
         self.item = item
-        self._expandedFolders = expandedFolders
         self._selectedFile = selectedFile
         self.onTap = onTap
-        self.indent = indent
     }
     
     var body: some View {
         HStack(spacing: OCSpacing.xs) {
-            if indent > 0 {
-                Spacer().frame(width: CGFloat(indent) * 16)
-            }
-            
+            // Las carpetas navegan (drill-down + breadcrumb); el Set de
+            // expansion y el indent eran estado muerto: el arbol se reemplaza entero.
             if item.isDirectory {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        if expandedFolders.contains(item.path) {
-                            expandedFolders.remove(item.path)
-                        } else {
-                            expandedFolders.insert(item.path)
-                            Task {
-                                await store.loadFiles(path: item.path)
-                            }
-                        }
-                    }
+                    Task { await store.loadFiles(path: item.path) }
                 } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(OCColor.iconMuted)
-                        .rotationEffect(.degrees(expandedFolders.contains(item.path) ? 90 : 0))
                         .frame(width: 32, height: 32)
                         .contentShape(Rectangle())
                 }
@@ -594,6 +665,17 @@ struct TerminalSurfaceView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    output.removeAll()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 15))
+                        .foregroundColor(OCColor.iconMuted)
+                }
+            }
+        }
         .onAppear {
             if output.isEmpty {
                 output.append(TerminalOutput(text: "OpenCodeNative Terminal — commands run via OpenCode server", color: OCColor.textFaint))
