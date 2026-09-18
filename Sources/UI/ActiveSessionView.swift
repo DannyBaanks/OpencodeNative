@@ -3,6 +3,7 @@ import SwiftUI
 public struct ActiveSessionView: View {
     @EnvironmentObject private var sessionState: ActiveSessionState
     @EnvironmentObject private var store: WorkbenchStore
+    @State private var showDisconnectConfirm = false
     
     public init() {}
     
@@ -24,8 +25,18 @@ public struct ActiveSessionView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            // Banner de conexion perdida: antes solo quedaba un evento en el
+            // timeline y no existia forma de reconectar en caliente.
+            if store.backendMode == .remote && store.connectionHealth == .disconnected {
+                ConnectionLostBanner(
+                    isReconnecting: store.isConnecting,
+                    onReconnect: { Task { await store.reconnect() } }
+                )
+            }
+            
             surfaceContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeInOut(duration: 0.18), value: sessionState.activeSurface)
 
             WorkSurfaceSwitcher(selectedSurface: $sessionState.activeSurface)
                 .padding(.horizontal, OCSpacing.contentMargin)
@@ -73,7 +84,7 @@ public struct ActiveSessionView: View {
                         }
                     }
                     
-                    Button { Task { await store.disconnect() } } label: {
+                    Button { showDisconnectConfirm = true } label: {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                             .font(.system(size: 17))
                     }
@@ -125,6 +136,23 @@ public struct ActiveSessionView: View {
                 Task { await store.loadDiff(sessionID: sessionID) }
             }
         }
+        .onChange(of: sessionState.pendingPermission?.id) { _ in
+            // Haptico al llegar una peticion de permiso (interaccion bloqueante).
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        }
+        .confirmationDialog(
+            "Disconnect?",
+            isPresented: $showDisconnectConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Disconnect", role: .destructive) {
+                Task { await store.disconnect() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("End the session and return to the connection screen.")
+        }
+        .animation(.easeInOut(duration: 0.2), value: store.connectionHealth)
     }
     
     private var availableModesForPicker: [AgentMode] {
@@ -172,6 +200,44 @@ struct ChatSurfaceView: View {
         withAnimation(.easeOut(duration: 0.2)) {
             proxy.scrollTo(lastEvent.id, anchor: .bottom)
         }
+    }
+}
+
+struct ConnectionLostBanner: View {
+    let isReconnecting: Bool
+    let onReconnect: () -> Void
+    
+    var body: some View {
+        HStack(spacing: OCSpacing.base) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(OCColor.warning)
+            
+            Text(isReconnecting ? "Reconnecting…" : "Connection lost")
+                .font(OCTypography.control)
+                .foregroundColor(OCColor.textPrimary)
+            
+            Spacer()
+            
+            if isReconnecting {
+                ProgressView()
+                    .scaleEffect(0.7)
+            } else {
+                Button("Reconnect", action: onReconnect)
+                    .font(OCTypography.controlMono)
+                    .foregroundColor(OCColor.warning)
+            }
+        }
+        .padding(.horizontal, OCSpacing.contentMargin)
+        .frame(height: 38)
+        .background(OCColor.warning.opacity(0.10))
+        .overlay(
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(OCColor.warning.opacity(0.30)),
+            alignment: .bottom
+        )
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 
@@ -243,6 +309,7 @@ struct FilesSurfaceView: View {
     @EnvironmentObject private var store: WorkbenchStore
     @State private var selectedFile: WorkbenchFileNode?
     @State private var fileContent: WorkbenchFileContent?
+    @State private var filesLoaded = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -252,36 +319,64 @@ struct FilesSurfaceView: View {
                 }
             }
             
-            List {
-                ForEach(store.fileTree) { item in
-                    FileTreeRowView(
-                        item: item,
-                        selectedFile: $selectedFile,
-                        onTap: { file in
-                            if !file.isDirectory {
-                                selectedFile = file
-                                Task {
-                                    if let content = await store.loadFileContent(path: file.path) {
-                                        fileContent = content
+            if store.fileTree.isEmpty && filesLoaded {
+                EmptyFilesView()
+            } else {
+                List {
+                    ForEach(store.fileTree) { item in
+                        FileTreeRowView(
+                            item: item,
+                            selectedFile: $selectedFile,
+                            onTap: { file in
+                                if !file.isDirectory {
+                                    selectedFile = file
+                                    Task {
+                                        if let content = await store.loadFileContent(path: file.path) {
+                                            fileContent = content
+                                        }
                                     }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(OCColor.bgDeep)
-            .sheet(item: $selectedFile) { file in
-                FileViewerView(file: file, content: fileContent?.content ?? "")
-            }
-            .onAppear {
-                if store.fileTree.isEmpty {
-                    Task { await store.loadFiles() }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(OCColor.bgDeep)
+                .sheet(item: $selectedFile) { file in
+                    FileViewerView(file: file, content: fileContent?.content ?? "")
+                }
+                .onAppear {
+                    if !filesLoaded {
+                        Task {
+                            if store.fileTree.isEmpty {
+                                await store.loadFiles()
+                            }
+                            filesLoaded = true
+                        }
+                    }
                 }
             }
         }
+    }
+}
+
+struct EmptyFilesView: View {
+    var body: some View {
+        VStack(spacing: OCSpacing.base) {
+            Image(systemName: "folder")
+                .font(.system(size: 40, weight: .light))
+                .foregroundColor(OCColor.iconMuted)
+            
+            Text("No files")
+                .font(OCTypography.bodyStrong)
+                .foregroundColor(OCColor.textPrimary)
+            
+            Text("This workspace has no visible files")
+                .font(OCTypography.meta)
+                .foregroundColor(OCColor.textFaint)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -743,6 +838,7 @@ struct WorkSurfaceSwitcher: View {
         HStack(spacing: OCSpacing.sm) {
             ForEach(WorkSurface.allCases) { surface in
                 Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
                     selectedSurface = surface
                 } label: {
                     HStack(spacing: 6) {

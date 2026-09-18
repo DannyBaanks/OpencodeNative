@@ -74,6 +74,18 @@ public struct ProjectRow: View {
 }
 
 public struct ProjectListView: View {
+    public init() {}
+    
+    public var body: some View {
+        NavigationStack {
+            ProjectListContent()
+        }
+    }
+}
+
+// Contenido de la lista de proyectos sin NavigationStack propio: lo usan el
+// flujo iPhone (ProjectListView) y el sidebar del split en iPad (RootView).
+public struct ProjectListContent: View {
     @EnvironmentObject private var store: WorkbenchStore
     @EnvironmentObject private var sessionState: ActiveSessionState
     @State private var selectedProject: Project?
@@ -81,61 +93,53 @@ public struct ProjectListView: View {
     
     public init() {}
     
-    public var body: some View {
-        NavigationStack {
-            List {
-                if store.projects.isEmpty {
-                    emptyState
-                } else {
-                    Section {
-                        ForEach(store.projects, content: projectRow)
-                    } header: {
-                        Text("PROJECTS")
-                            .font(OCTypography.sectionLabel)
-                            .foregroundColor(OCColor.textFaint)
-                            .padding(.horizontal, OCSpacing.contentMargin)
-                            .padding(.top, OCSpacing.xl)
-                            .padding(.bottom, OCSpacing.xs)
-                            .textCase(nil)
+    var body: some View {
+        List {
+            if store.projects.isEmpty {
+                emptyState
+            } else {
+                Section {
+                    ForEach(store.projects, content: projectRow)
+                } header: {
+                    Text("PROJECTS")
+                        .font(OCTypography.sectionLabel)
+                        .foregroundColor(OCColor.textFaint)
+                        .padding(.horizontal, OCSpacing.contentMargin)
+                        .padding(.top, OCSpacing.xl)
+                        .padding(.bottom, OCSpacing.xs)
+                        .textCase(nil)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(OCColor.bgDeep)
+        .navigationTitle("OpenCode")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                if store.backendMode == .native {
+                    Button { } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 17, weight: .semibold))
                     }
+                    .disabled(true)
+                    .opacity(0.3)
                 }
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(OCColor.bgDeep)
-            .navigationTitle("OpenCode")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if store.backendMode == .native {
-                        Button { } label: {
-                            Image(systemName: "plus")
-                                .font(.system(size: 17, weight: .semibold))
-                        }
-                        .disabled(true)
-                        .opacity(0.3)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showSettings = true } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 17))
-                    }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 17))
                 }
             }
-            .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .onChange(of: selectedProject) { newProject in
-                if let project = newProject {
-                    sessionState.currentProject = project
-                    Task { await store.selectProject(project) }
-                }
-            }
-            .sheet(isPresented: $showSettings) {
-                SettingsSheet()
-                    .environmentObject(store)
-            }
+        }
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .sheet(isPresented: $showSettings) {
+            SettingsSheet()
+                .environmentObject(store)
         }
     }
 
@@ -146,11 +150,22 @@ public struct ProjectListView: View {
         ProjectRow(
             project: project,
             isSelected: selectedProject?.id == project.id,
-            onTap: { selectedProject = project }
+            onTap: { selectProject(project) }
         )
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+    }
+
+    // La seleccion vive en el onTap (no en onChange) para que re-tocar el
+    // mismo proyecto en el sidebar del split tambien restaure el detalle.
+    private func selectProject(_ project: Project) {
+        selectedProject = project
+        if let session = sessionState.currentSession, session.projectId != project.id {
+            sessionState.currentSession = nil
+        }
+        sessionState.currentProject = project
+        Task { await store.selectProject(project) }
     }
 
     private var emptyState: some View {
@@ -224,6 +239,7 @@ public struct SessionRow: View {
                             Circle()
                                 .fill(session.agentMode.color)
                                 .frame(width: 6, height: 6)
+                                .modifier(PulsingDot())
                         }
                     }
                     
@@ -281,19 +297,34 @@ public struct SessionListView: View {
     @State private var renameTitle = ""
     @State private var showDeleteConfirm = false
     @State private var sessionToDelete: Session?
+    @State private var searchText = ""
     
     public init(project: Project) {
         self.project = project
     }
     
+    private var filteredSessions: [Session] {
+        guard !searchText.isEmpty else { return store.sessions }
+        return store.sessions.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            ($0.lastEventSummary?.localizedCaseInsensitiveContains(searchText) ?? false)
+        }
+    }
+    
     public var body: some View {
         List {
             Section {
-                ForEach(store.sessions) { session in
+                ForEach(filteredSessions) { session in
                     SessionRow(
                         session: session,
                         isSelected: selectedSession?.id == session.id,
-                        onTap: { selectedSession = session },
+                        onTap: {
+                            // Seleccion directa (no onChange): re-tocar la misma
+                            // sesion tras volver atras tambien debe re-entrar.
+                            selectedSession = session
+                            sessionState.currentSession = session
+                            Task { await store.selectSession(session) }
+                        },
                         onRename: { sessionToRename = session; renameTitle = session.title },
                         onDelete: { sessionToDelete = session; showDeleteConfirm = true }
                     )
@@ -350,12 +381,11 @@ public struct SessionListView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .onChange(of: selectedSession) { newSession in
-            if let session = newSession {
-                sessionState.currentSession = session
-                Task { await store.selectSession(session) }
-            }
-        }
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .automatic),
+            prompt: "Search sessions"
+        )
         .sheet(isPresented: $showNewSessionSheet) {
             NewSessionSheet(project: project) { title in
                 Task {
@@ -478,6 +508,8 @@ private struct RenameSessionSheet: View {
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: WorkbenchStore
+    @State private var hasStoredPairing = false
+    @State private var showRemoteUnavailableNote = false
     
     var body: some View {
         NavigationStack {
@@ -493,6 +525,13 @@ struct SettingsSheet: View {
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
+                        HStack {
+                            Text("Health")
+                            Spacer()
+                            Text(store.connectionHealth.rawValue.capitalized)
+                                .font(OCTypography.metaMono)
+                                .foregroundColor(healthColor)
+                        }
                         Button("Forget Connection") {
                             Task {
                                 await store.forgetPairing()
@@ -507,16 +546,21 @@ struct SettingsSheet: View {
                 }
                 
                 Section("Runtime") {
-                    Picker("Mode", selection: .constant(store.backendMode.rawValue)) {
+                    Picker("Mode", selection: modeBinding) {
                         Text("Remote (OpenCode Server)").tag(BackendMode.remote.rawValue)
                         Text("Native (Swift Sandbox)").tag(BackendMode.native.rawValue)
                     }
-                    .disabled(true)
                     
                     if store.backendMode == .native {
                         NavigationLink("API Keys") {
                             APIKeysView()
                         }
+                    }
+                    
+                    if showRemoteUnavailableNote {
+                        Text("No stored pairing — link a desktop first.")
+                            .font(OCTypography.meta)
+                            .foregroundColor(OCColor.warning)
                     }
                 }
                 
@@ -542,12 +586,41 @@ struct SettingsSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .onAppear {
+                Task { hasStoredPairing = await store.hasStoredPairing() }
+            }
         }
         .presentationDetents([.medium, .large])
+    }
+    
+    // El picker conmuta de verdad: `native` arranca el runtime Swift; `remote`
+    // reconecta el pairing guardado (o avisa si no existe ninguno).
+    private var modeBinding: Binding<String> {
+        Binding(
+            get: { store.backendMode.rawValue },
+            set: { newValue in
+                if newValue == BackendMode.native.rawValue {
+                    Task { await store.useNativeRuntime() }
+                } else if hasStoredPairing {
+                    Task { await store.reconnectStoredPairing() }
+                } else {
+                    showRemoteUnavailableNote = true
+                }
+            }
+        )
+    }
+    
+    private var healthColor: Color {
+        switch store.connectionHealth {
+        case .connected: return OCColor.success
+        case .connecting: return OCColor.warning
+        case .disconnected: return OCColor.danger
+        }
     }
 }
 
 struct APIKeysView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: WorkbenchStore
     @State private var openAIKey = ""
     @State private var anthropicKey = ""
@@ -575,9 +648,31 @@ struct APIKeysView: View {
                 Button("Save") {
                     Task {
                         await store.saveAPIKeys(openAI: openAIKey, anthropic: anthropicKey, google: googleKey)
+                        openAIKey = ""
+                        anthropicKey = ""
+                        googleKey = ""
+                        dismiss()
                     }
                 }
+                .disabled(openAIKey.isEmpty && anthropicKey.isEmpty && googleKey.isEmpty)
             }
         }
+    }
+}
+
+// Indicador "running" de sesion: punto con pulso (antes era un segundo punto
+// estatico identico al de agentMode, indistinguible a la vista).
+struct PulsingDot: ViewModifier {
+    @State private var pulsing = false
+    
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(pulsing ? 1.4 : 1.0)
+            .opacity(pulsing ? 0.55 : 1.0)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+                    pulsing = true
+                }
+            }
     }
 }

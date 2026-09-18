@@ -1,6 +1,13 @@
 import Foundation
 import SwiftUI
 
+/// Estado de salud de la conexion al backend (remoto SSE/HTTP o runtime local).
+public enum ConnectionHealth: String, Sendable {
+    case connected
+    case connecting
+    case disconnected
+}
+
 @MainActor
 public final class WorkbenchStore: ObservableObject {
     @Published public var sessionState = ActiveSessionState()
@@ -9,6 +16,7 @@ public final class WorkbenchStore: ObservableObject {
     @Published public private(set) var backendMode: BackendMode = .unconfigured
     @Published public private(set) var connectionStatus: String = ""
     @Published public private(set) var isConnecting: Bool = false
+    @Published public private(set) var connectionHealth: ConnectionHealth = .disconnected
     @Published public var availableModels: [ModelInfo] = []
     @Published public var availableAgents: [String] = []
     @Published public var availableCommands: [CommandInfo] = []
@@ -29,6 +37,7 @@ public final class WorkbenchStore: ObservableObject {
     public func connectRemote(_ rawPairingLink: String) async {
         guard !isConnecting else { return }
         isConnecting = true
+        connectionHealth = .connecting
         connectionStatus = "connecting..."
         
         do {
@@ -67,6 +76,7 @@ public final class WorkbenchStore: ObservableObject {
             
             connectionStatus = await backend.connectionStatus
             isConnecting = false
+            connectionHealth = .connected
             sessionState.clearTimeline()
             addSystemEvent("OpenCode connected")
             
@@ -77,6 +87,7 @@ public final class WorkbenchStore: ObservableObject {
             
         } catch {
             isConnecting = false
+            connectionHealth = .disconnected
             backendMode = .unconfigured
             connectionStatus = "error: \(error.localizedDescription)"
         }
@@ -88,6 +99,7 @@ public final class WorkbenchStore: ObservableObject {
         backendMode = .unconfigured
         connectionStatus = ""
         isConnecting = false
+        connectionHealth = .disconnected
         projects = []
         sessions = []
         availableModels = []
@@ -123,6 +135,7 @@ public final class WorkbenchStore: ObservableObject {
             }
             
             connectionStatus = await backend.connectionStatus
+            connectionHealth = .connected
             sessionState.clearTimeline()
             addSystemEvent("Native Swift runtime ready")
             
@@ -131,6 +144,7 @@ public final class WorkbenchStore: ObservableObject {
             
         } catch {
             backendMode = .unconfigured
+            connectionHealth = .disconnected
             connectionStatus = "error: \(error.localizedDescription)"
         }
     }
@@ -145,6 +159,19 @@ public final class WorkbenchStore: ObservableObject {
                 directory: stored.directory
             )
             await connectRemote(pairing.rawValue)
+        }
+    }
+    
+    /// Reconexion manual desde la UI: el backend activo decide la via (remoto
+    /// reusa el pairing guardado; nativo re-arranca el runtime local).
+    public func reconnect() async {
+        switch backendMode {
+        case .remote:
+            await reconnectStoredPairing()
+        case .native:
+            await useNativeRuntime()
+        case .unconfigured:
+            break
         }
     }
     
@@ -200,6 +227,10 @@ public final class WorkbenchStore: ObservableObject {
             sessions.append(session)
             sessionState.currentSession = session
             currentSessionID = session.id
+            sessionState.clearTimeline()
+            // Seleccion real en el backend para que la sesion nueva quede activa
+            // tambien del lado del servidor, no solo en el estado local.
+            try? await backend.selectSession(session.id)
             return session
         } catch {
             addErrorEvent("Failed to create session: \(error.localizedDescription)")
@@ -457,11 +488,13 @@ public final class WorkbenchStore: ObservableObject {
         case .connected:
             sessionState.isProcessing = false
             isProcessingRemote = false
+            connectionHealth = .connected
             addSystemEvent("Connected")
             
         case .disconnected(let reason):
             sessionState.isProcessing = false
             isProcessingRemote = false
+            connectionHealth = .disconnected
             if let reason { addSystemEvent("Disconnected: \(reason)") }
             
         case .partUpdated(let partID, let kind, let text, let tool, let callID, let status, let input, let output, let error):

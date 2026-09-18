@@ -52,6 +52,7 @@ public struct ComposerView: View {
                     agentColor: sessionState.agentMode.color
                 ) {
                     if sessionState.isProcessing {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         NotificationCenter.default.post(name: .composerStop, object: nil)
                     } else {
                         handleSend()
@@ -90,6 +91,7 @@ public struct ComposerView: View {
     private func handleSend() {
         guard !sessionState.isProcessing else { return }
         guard !sessionState.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         // This will be handled by the parent view model
         NotificationCenter.default.post(name: .composerSend, object: sessionState.composerText)
         sessionState.composerText = ""
