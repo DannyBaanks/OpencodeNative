@@ -93,7 +93,7 @@ public struct ProjectListContent: View {
     
     public init() {}
     
-    var body: some View {
+    public var body: some View {
         List {
             if store.projects.isEmpty {
                 emptyState
