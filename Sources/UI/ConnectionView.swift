@@ -11,7 +11,8 @@ public struct ConnectionView: View {
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 0) {
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 36)
                 
                 Text("opencode")
@@ -150,8 +151,12 @@ public struct ConnectionView: View {
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.28))
                     .padding(.bottom, 8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 24)
             }
-            .padding(.horizontal, 18)
+            .scrollBounceBehavior(.basedOnSize)
         }
         .contentShape(Rectangle())
         .onTapGesture { fieldFocused = false }
