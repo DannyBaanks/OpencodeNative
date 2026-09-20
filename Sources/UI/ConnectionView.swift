@@ -156,7 +156,6 @@ public struct ConnectionView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 24)
             }
-            .scrollBounceBehavior(.basedOnSize)
         }
         .contentShape(Rectangle())
         .onTapGesture { fieldFocused = false }
