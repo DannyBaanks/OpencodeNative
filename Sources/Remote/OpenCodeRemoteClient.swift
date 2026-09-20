@@ -22,13 +22,15 @@ public enum OpenCodeRemoteError: Error, LocalizedError, Sendable {
 }
 
 public struct OpenCodePairing: Equatable, Sendable {
+    public let scheme: String
     public let host: String
     public let port: Int
     public let username: String
     public let password: String
     public let directory: String
 
-    public init(host: String, port: Int, username: String = "opencode", password: String, directory: String) {
+    public init(scheme: String = "http", host: String, port: Int, username: String = "opencode", password: String, directory: String) {
+        self.scheme = scheme
         self.host = host
         self.port = port
         self.username = username
@@ -47,12 +49,15 @@ public struct OpenCodePairing: Equatable, Sendable {
             guard let value = item.value else { return nil }
             return (item.name, value)
         })
-        guard let host = items["host"], !host.isEmpty,
+        let scheme = items["scheme"] ?? "http"
+        guard scheme == "http" || scheme == "https",
+              let host = items["host"], !host.isEmpty,
               let portText = items["port"], let port = Int(portText),
               let password = items["password"], !password.isEmpty else {
             throw OpenCodeRemoteError.invalidPairingLink
         }
         return OpenCodePairing(
+            scheme: scheme,
             host: host,
             port: port,
             username: items["username"] ?? "opencode",
@@ -62,7 +67,7 @@ public struct OpenCodePairing: Equatable, Sendable {
     }
 
     public var baseURL: URL {
-        URL(string: "http://\(host):\(port)")!
+        URL(string: "\(scheme)://\(host):\(port)")!
     }
     
     public var rawValue: String {
@@ -70,6 +75,7 @@ public struct OpenCodePairing: Equatable, Sendable {
         components.scheme = "opencodenative"
         components.host = "pair"
         components.queryItems = [
+            URLQueryItem(name: "scheme", value: scheme),
             URLQueryItem(name: "host", value: host),
             URLQueryItem(name: "port", value: String(port)),
             URLQueryItem(name: "username", value: username),
