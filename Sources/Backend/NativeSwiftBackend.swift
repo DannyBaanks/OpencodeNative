@@ -10,6 +10,10 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     private var agentLoop: AgentLoop?
     private var modelProvider: (any ModelProvider)?
     private var activeModelName: String?
+    private var providerID = "scripted"
+    private var providerDisplay = "Scripted Demo"
+    private var providerModelIDs = ["scripted-1"]
+    private var liveAnswerID: String?
     private var toolExecutor: FileSystemToolExecutor?
     private var boundSessionID: String?
     private var runningTask: Task<Void, Never>?
@@ -63,19 +67,75 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             self.workspace = ws
             self.persistence = ps
             
-            let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
-            self.modelProvider = provider
-            self.activeModelName = provider.availableModels.first
-            
             let exec = FileSystemToolExecutor(workspace: ws)
             self.toolExecutor = exec
-            
-            connectionStatusStorage = "native runtime · sandbox: \(ws.rootURL.path)"
+            try await reloadSandboxModel()
             eventContinuation?.yield(.connected)
         } catch {
             connectionStatusStorage = "error: \(error.localizedDescription)"
             throw error
         }
+    }
+
+    /// Picks the model the saved key can actually call. SpaceXAI (xAI) is the
+    /// sandbox default. An OpenAI key is the other compatible option. No key
+    /// keeps the offline script so the app still opens.
+    public func reloadSandboxModel() async throws {
+        guard let ps = persistence else { throw WorkbenchError.notConnected }
+        if let key = try await ps.loadAPIKey(provider: "xai"), !key.isEmpty {
+            try await installRemoteProvider(
+                id: "xai",
+                display: "SpaceXAI",
+                key: key,
+                baseURL: "https://api.x.ai/v1",
+                preferred: ["grok-4.7", "grok-4.6", "grok-4.5", "grok-4"],
+                fallback: "grok-4.7"
+            )
+            return
+        }
+        if let key = try await ps.loadAPIKey(provider: "openai"), !key.isEmpty {
+            try await installRemoteProvider(
+                id: "openai",
+                display: "OpenAI",
+                key: key,
+                baseURL: "https://api.openai.com/v1",
+                preferred: ["gpt-4o", "gpt-4o-mini"],
+                fallback: "gpt-4o"
+            )
+            return
+        }
+        let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
+        modelProvider = provider
+        activeModelName = provider.availableModels.first
+        providerID = "scripted"
+        providerDisplay = "Scripted Demo"
+        providerModelIDs = provider.availableModels
+        agentLoop = nil
+        boundSessionID = nil
+        connectionStatusStorage = "sandbox · offline demo. Add a SpaceXAI key in Settings."
+    }
+
+    private func installRemoteProvider(
+        id: String,
+        display: String,
+        key: String,
+        baseURL: String,
+        preferred: [String],
+        fallback: String
+    ) async throws {
+        let remote = RemoteModelProvider(id: id, name: display)
+        try await remote.configure(ModelConfiguration(apiKey: key, baseURL: baseURL))
+        let listed = await remote.availableModels
+        let chosen = preferred.filter { listed.contains($0) }
+        let models = chosen.isEmpty ? (listed.isEmpty ? [fallback] : Array(listed.prefix(6))) : chosen
+        modelProvider = remote
+        activeModelName = models.contains(fallback) ? fallback : models[0]
+        providerID = id
+        providerDisplay = display
+        providerModelIDs = models
+        agentLoop = nil
+        boundSessionID = nil
+        connectionStatusStorage = "sandbox · \(activeModelName ?? fallback)"
     }
 
     /// The loop persists under the session the UI opened. A backend-wide id
@@ -212,6 +272,11 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     
     public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws {
         guard let sessionID = currentSessionIDStorage else { throw WorkbenchError.noSession }
+        if let requested = model?.apiModelId, providerModelIDs.contains(requested), requested != activeModelName {
+            activeModelName = requested
+            agentLoop = nil
+            boundSessionID = nil
+        }
         await installLoop(sessionID: sessionID)
         guard let loop = agentLoop else {
             throw WorkbenchError.unsupportedFeature("Agent runtime not initialized")
@@ -314,11 +379,11 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     }
     
     public func availableProviders() async throws -> ProviderListResult {
-        _ = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
+        let models: [String: [String: Any]] = Dictionary(uniqueKeysWithValues: providerModelIDs.map { ($0, [String: Any]()) })
         return ProviderListResult(
-            all: [ProviderInfo(id: "scripted", name: "Scripted Demo", models: ["scripted-1": [:]])],
-            connected: ["scripted"],
-            defaultProvider: "scripted"
+            all: [ProviderInfo(id: providerID, name: providerDisplay, models: models)],
+            connected: [providerID],
+            defaultProvider: providerID
         )
     }
     
@@ -336,13 +401,22 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     
     private func handleAgentEvent(_ event: AgentLoopEvent) async {
         switch event {
-        case .turnStarted(let turn):
-            eventContinuation?.yield(.partUpdated(partID: UUID().uuidString, kind: "system", text: "— turn \(turn) —", tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil))
-            
-        case .modelResponse(let response):
-            if !response.content.isEmpty {
-                eventContinuation?.yield(.partUpdated(partID: UUID().uuidString, kind: "assistantText", text: response.content, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil))
+        case .turnStarted:
+            liveAnswerID = nil
+
+        case .modelDelta(let delta):
+            if liveAnswerID == nil {
+                liveAnswerID = "sandbox-\(UUID().uuidString)"
             }
+            eventContinuation?.yield(.partDelta(partID: liveAnswerID!, delta: delta))
+
+        case .modelResponse(let response):
+            if liveAnswerID == nil, !response.content.isEmpty {
+                eventContinuation?.yield(.partUpdated(partID: UUID().uuidString, kind: "assistantText", text: response.content, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil))
+            } else if let id = liveAnswerID, !response.content.isEmpty {
+                eventContinuation?.yield(.partUpdated(partID: id, kind: "assistantText", text: response.content, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil))
+            }
+            liveAnswerID = nil
             if let calls = response.toolCalls, !calls.isEmpty {
                 for call in calls {
                     eventContinuation?.yield(.partUpdated(partID: call.id, kind: "tool", text: nil, tool: call.name, callID: call.id, status: "running", input: call.arguments, output: nil, error: nil))

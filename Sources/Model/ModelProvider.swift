@@ -74,6 +74,7 @@ public struct ModelStreamChunk: Codable, Sendable {
     
     public struct ToolCallDelta: Codable, Sendable {
         public let index: Int
+        public let id: String?
         public let name: String?
         public let arguments: String?
     }
@@ -287,8 +288,9 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
                 self.availableModels = dataArray.compactMap { $0["id"] as? String }
             }
         } catch {
-            // Models list is optional, continue with defaults
-            self.availableModels = ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"]
+            // The model list is optional. Leave it empty so a failed /models
+            // call does not pretend the account has a catalog it never returned.
+            self.availableModels = []
         }
     }
     
@@ -334,11 +336,11 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
                                 continuation.yield(ModelStreamChunk(delta: nil, toolCallDelta: nil, done: true, finishReason: "stop"))
                                 break
                             }
-                            if let chunk = try? JSONDecoder().decode(StreamChunkResponse.self, from: Data(jsonStr.utf8)) {
+                            if let chunk = try? Self.openAIDecoder.decode(StreamChunkResponse.self, from: Data(jsonStr.utf8)) {
                                 if let choice = chunk.choices.first {
                                     let delta = choice.delta.content
                                     let toolCallDelta = choice.delta.toolCalls?.first.map { tc in
-                                        ModelStreamChunk.ToolCallDelta(index: tc.index, name: tc.function?.name, arguments: tc.function?.arguments)
+                                        ModelStreamChunk.ToolCallDelta(index: tc.index, id: tc.id, name: tc.function?.name, arguments: tc.function?.arguments)
                                     }
                                     continuation.yield(ModelStreamChunk(
                                         delta: delta,
@@ -444,8 +446,14 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         }
     }
     
+    private static let openAIDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }()
+
     private func parseResponse(_ data: Data) throws -> ModelResponse {
-        let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+        let decoded = try Self.openAIDecoder.decode(ChatCompletionResponse.self, from: data)
         guard let choice = decoded.choices.first else {
             throw ModelProviderError.invalidRequest("No choices in response")
         }
@@ -542,6 +550,7 @@ private struct StreamChunkResponse: Codable {
         
         struct StreamToolCall: Codable {
             let index: Int
+            let id: String?
             let function: StreamFunction?
             
             struct StreamFunction: Codable {

@@ -193,6 +193,7 @@ public struct PermissionResponse: Codable, Sendable {
 public enum AgentLoopEvent: Sendable {
     case turnStarted(turn: Int)
     case modelRequest(messages: [ModelMessage])
+    case modelDelta(String)
     case modelResponse(ModelResponse)
     case toolInvocation(ToolInvocation)
     case toolResult(ToolExecutionResult)
@@ -299,7 +300,7 @@ public actor AgentLoop {
                 maxTokens: 2048
             )
             
-            let response = try await context.modelProvider.generate(
+            let response = try await completeTurn(
                 messages: modelMessages,
                 tools: tools.isEmpty ? nil : tools,
                 options: options
@@ -543,6 +544,66 @@ public actor AgentLoop {
         }
         
         return messages
+    }
+
+    /// Streams tokens when the provider can, and still returns the finished
+    /// turn so tool calls keep working. A non-streaming provider is unchanged.
+    private func completeTurn(
+        messages: [ModelMessage],
+        tools: [ToolDefinition]?,
+        options: GenerationOptions
+    ) async throws -> ModelResponse {
+        guard context.modelProvider.capabilities.streaming else {
+            return try await context.modelProvider.generate(messages: messages, tools: tools, options: options)
+        }
+
+        var content = ""
+        var toolSlots: [Int: (id: String, name: String, args: String)] = [:]
+        let stream = context.modelProvider.generateStream(messages: messages, tools: tools, options: options)
+        do {
+            for try await chunk in stream {
+                if let delta = chunk.delta, !delta.isEmpty {
+                    content += delta
+                    await eventHandler?(.modelDelta(delta))
+                }
+                if let call = chunk.toolCallDelta {
+                    var slot = toolSlots[call.index] ?? (id: "", name: "", args: "")
+                    if let id = call.id, !id.isEmpty { slot.id = id }
+                    if let name = call.name, !name.isEmpty { slot.name = name }
+                    if let args = call.arguments { slot.args += args }
+                    toolSlots[call.index] = slot
+                }
+            }
+        } catch {
+            if content.isEmpty { throw error }
+            throw error
+        }
+
+        let calls: [ToolCall] = toolSlots.keys.sorted().compactMap { index in
+            guard let slot = toolSlots[index], !slot.name.isEmpty else { return nil }
+            return ToolCall(
+                id: slot.id.isEmpty ? "call_\(index)" : slot.id,
+                name: slot.name,
+                arguments: Self.flatArguments(slot.args)
+            )
+        }
+        return ModelResponse(content: content, toolCalls: calls.isEmpty ? nil : calls, finishReason: "stop")
+    }
+
+    private static func flatArguments(_ json: String) -> [String: String] {
+        guard let data = json.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        var out: [String: String] = [:]
+        for (key, value) in obj {
+            switch value {
+            case let text as String: out[key] = text
+            case let number as NSNumber: out[key] = number.stringValue
+            default: out[key] = "\(value)"
+            }
+        }
+        return out
     }
 }
 

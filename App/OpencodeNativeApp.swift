@@ -1,8 +1,10 @@
 import SwiftUI
+import UIKit
 import OpencodeNativeCore
 
 @main
 public struct OpencodeNativeApp: App {
+    @UIApplicationDelegateAdaptor(FullScreenAppDelegate.self) private var appDelegate
     @StateObject private var store = WorkbenchStore()
 
     public init() {}
@@ -13,6 +15,43 @@ public struct OpencodeNativeApp: App {
                 .environmentObject(store)
                 .environmentObject(store.sessionState)
                 .preferredColorScheme(.dark)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OCColor.bgDeep.ignoresSafeArea())
+                .onAppear { FullScreenAppDelegate.expandWindows() }
+        }
+    }
+}
+
+/// iOS letterboxes the process when it does not see a real launch screen.
+/// Sideload hosts can also hand the scene a window smaller than the display.
+/// Stretch every window to the screen the system actually gave us.
+final class FullScreenAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        NotificationCenter.default.addObserver(
+            forName: UIScene.didActivateNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Self.expandWindows()
+        }
+        return true
+    }
+
+    static func expandWindows() {
+        let fill = UIColor(red: 8.0 / 255.0, green: 8.0 / 255.0, blue: 8.0 / 255.0, alpha: 1)
+        for case let windowScene as UIWindowScene in UIApplication.shared.connectedScenes {
+            let bounds = windowScene.screen.bounds
+            windowScene.sizeRestrictions?.minimumSize = bounds.size
+            windowScene.sizeRestrictions?.maximumSize = bounds.size
+            for window in windowScene.windows {
+                if window.frame != bounds {
+                    window.frame = bounds
+                }
+                window.backgroundColor = fill
+            }
         }
     }
 }
@@ -35,6 +74,8 @@ struct RootView: View {
                 stackLayout
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(OCColor.bgDeep.ignoresSafeArea())
         .onOpenURL { url in
             guard url.scheme == "opencodenative" else { return }
             Task { await store.connectRemote(url.absoluteString) }
@@ -52,6 +93,7 @@ struct RootView: View {
                 ActiveSessionView()
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // Ancho regular: el sidebar persiste y el detalle cambia por estado,
@@ -70,6 +112,7 @@ struct RootView: View {
                 SplitPlaceholderView()
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

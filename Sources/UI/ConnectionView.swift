@@ -127,10 +127,10 @@ public struct ConnectionView: View {
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("use native swift runtime")
+                            Text("use sandbox")
                                 .font(.system(size: 13, weight: .medium, design: .monospaced))
                                 .foregroundColor(.white)
-                            Text("sandbox tools + configured model api")
+                            Text("Grok 4.7 on this phone, if a SpaceXAI key is saved")
                                 .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(Color.white.opacity(0.38))
                         }
@@ -147,7 +147,7 @@ public struct ConnectionView: View {
                 
                 Spacer()
                 
-                Text("remote mode = real OpenCode server / native mode = Swift runtime")
+                Text("link desktop = OpenCode on your computer. sandbox = Grok here, with this phone's files.")
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.28))
                     .padding(.bottom, 8)

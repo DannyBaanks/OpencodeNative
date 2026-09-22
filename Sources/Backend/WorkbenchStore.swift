@@ -141,10 +141,13 @@ public final class WorkbenchStore: ObservableObject {
                 await selectSession(first)
             }
             if sessionState.timelineEvents.isEmpty {
-                addSystemEvent("Native Swift runtime ready")
+                addSystemEvent(connectionStatus)
             }
             
             await loadModelsAndAgents()
+            if backendMode == .native, let model = availableModels.first {
+                sessionState.selectedModel = model
+            }
             await subscribeToBackendEvents(backend)
             
         } catch {
@@ -701,16 +704,27 @@ public final class WorkbenchStore: ObservableObject {
         sessionState.composerAttachments.removeAll { $0.id == attachment.id }
     }
     
-    public func saveAPIKeys(openAI: String, anthropic: String, google: String) async {
-        if !openAI.isEmpty {
-            do { try await (currentBackend as? NativeSwiftBackend)?.persistence?.saveAPIKey(provider: "openai", key: openAI) } catch {}
+    public func saveAPIKeys(xai: String, openAI: String) async {
+        guard let backend = currentBackend as? NativeSwiftBackend else {
+            addErrorEvent("Start the sandbox before saving a key.")
+            return
         }
-        if !anthropic.isEmpty {
-            do { try await (currentBackend as? NativeSwiftBackend)?.persistence?.saveAPIKey(provider: "anthropic", key: anthropic) } catch {}
+        do {
+            if !xai.isEmpty {
+                try await backend.persistence?.saveAPIKey(provider: "xai", key: xai)
+            }
+            if !openAI.isEmpty {
+                try await backend.persistence?.saveAPIKey(provider: "openai", key: openAI)
+            }
+            try await backend.reloadSandboxModel()
+            connectionStatus = await backend.connectionStatus
+            await loadModelsAndAgents()
+            if let model = availableModels.first {
+                sessionState.selectedModel = model
+            }
+            addSystemEvent(connectionStatus)
+        } catch {
+            addErrorEvent("Could not save the API key: \(error.localizedDescription)")
         }
-        if !google.isEmpty {
-            do { try await (currentBackend as? NativeSwiftBackend)?.persistence?.saveAPIKey(provider: "google", key: google) } catch {}
-        }
-        addSystemEvent("API keys saved")
     }
 }

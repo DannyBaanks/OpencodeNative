@@ -113,7 +113,7 @@ public struct ProjectListContent: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(OCColor.bgDeep)
+        .background(OCColor.bgDeep.ignoresSafeArea())
         .navigationTitle("OpenCode")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -334,7 +334,7 @@ public struct SessionListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(OCColor.bgDeep)
+        .background(OCColor.bgDeep.ignoresSafeArea())
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -493,15 +493,15 @@ struct SettingsSheet: View {
         NavigationStack {
             List {
                 Section("Connection") {
-                    if store.backendMode == .remote {
+                    if store.backendMode == .remote || store.backendMode == .native {
                         HStack {
                             Text("Status")
                             Spacer()
                             Text(store.connectionStatus)
                                 .font(OCTypography.metaMono)
                                 .foregroundColor(OCColor.textFaint)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.trailing)
                         }
                         HStack {
                             Text("Health")
@@ -510,13 +510,15 @@ struct SettingsSheet: View {
                                 .font(OCTypography.metaMono)
                                 .foregroundColor(healthColor)
                         }
-                        Button("Forget Connection") {
-                            Task {
-                                await store.forgetPairing()
-                                await store.disconnect()
+                        if store.backendMode == .remote {
+                            Button("Forget Connection") {
+                                Task {
+                                    await store.forgetPairing()
+                                    await store.disconnect()
+                                }
                             }
+                            .foregroundColor(OCColor.danger)
                         }
-                        .foregroundColor(OCColor.danger)
                     } else {
                         Text("Not connected")
                             .foregroundColor(OCColor.textFaint)
@@ -526,7 +528,7 @@ struct SettingsSheet: View {
                 Section("Runtime") {
                     Picker("Mode", selection: modeBinding) {
                         Text("Remote (OpenCode Server)").tag(BackendMode.remote.rawValue)
-                        Text("Native (Swift Sandbox)").tag(BackendMode.native.rawValue)
+                        Text("Sandbox (this phone)").tag(BackendMode.native.rawValue)
                     }
                     
                     if store.backendMode == .native {
@@ -600,23 +602,28 @@ struct SettingsSheet: View {
 struct APIKeysView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: WorkbenchStore
+    @State private var xaiKey = ""
     @State private var openAIKey = ""
-    @State private var anthropicKey = ""
-    @State private var googleKey = ""
     
     var body: some View {
         Form {
-            Section("OpenAI") {
-                SecureField("API Key", text: $openAIKey)
+            Section {
+                SecureField("xai-…", text: $xaiKey)
+                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+            } header: {
+                Text("SpaceXAI")
+            } footer: {
+                Text("This key calls Grok 4.7 at api.x.ai. It stays in the keychain and powers the sandbox. Without it, the sandbox is the offline demo.")
             }
-            Section("Anthropic") {
-                SecureField("API Key", text: $anthropicKey)
+            Section {
+                SecureField("sk-…", text: $openAIKey)
+                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-            }
-            Section("Google") {
-                SecureField("API Key", text: $googleKey)
-                    .autocorrectionDisabled()
+            } header: {
+                Text("OpenAI, optional")
+            } footer: {
+                Text("Used only when no SpaceXAI key is saved. Link Desktop ignores both and uses the model on your computer.")
             }
         }
         .navigationTitle("API Keys")
@@ -625,14 +632,13 @@ struct APIKeysView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
                     Task {
-                        await store.saveAPIKeys(openAI: openAIKey, anthropic: anthropicKey, google: googleKey)
+                        await store.saveAPIKeys(xai: xaiKey, openAI: openAIKey)
+                        xaiKey = ""
                         openAIKey = ""
-                        anthropicKey = ""
-                        googleKey = ""
                         dismiss()
                     }
                 }
-                .disabled(openAIKey.isEmpty && anthropicKey.isEmpty && googleKey.isEmpty)
+                .disabled(xaiKey.isEmpty && openAIKey.isEmpty)
             }
         }
     }
