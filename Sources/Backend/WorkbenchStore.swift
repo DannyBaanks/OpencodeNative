@@ -17,6 +17,8 @@ public final class WorkbenchStore: ObservableObject {
     @Published public private(set) var connectionStatus: String = ""
     @Published public private(set) var isConnecting: Bool = false
     @Published public private(set) var connectionHealth: ConnectionHealth = .disconnected
+    /// False when the on-phone sandbox is the canned notes.txt script.
+    @Published public private(set) var sandboxUsesLiveModel = false
     @Published public var availableModels: [ModelInfo] = []
     @Published public var availableAgents: [String] = []
     @Published public var availableCommands: [CommandInfo] = []
@@ -116,6 +118,17 @@ public final class WorkbenchStore: ObservableObject {
         sessionState.clearTimeline()
         currentProjectID = nil
         currentSessionID = nil
+        sandboxUsesLiveModel = false
+    }
+
+    /// Saves the SpaceXAI key before the sandbox starts, so the first turn
+    /// calls Grok instead of the notes.txt script.
+    public func startSandbox(xaiKey: String?) async {
+        let trimmed = xaiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty, let persistence = try? IOSPersistence() {
+            try? await persistence.saveAPIKey(provider: "xai", key: trimmed)
+        }
+        await useNativeRuntime()
     }
     
     public func useNativeRuntime() async {
@@ -136,6 +149,7 @@ public final class WorkbenchStore: ObservableObject {
             
             connectionStatus = await backend.connectionStatus
             connectionHealth = .connected
+            sandboxUsesLiveModel = backend.usesLiveModel
             sessionState.clearTimeline()
             if let first = sessions.first {
                 await selectSession(first)
@@ -718,6 +732,7 @@ public final class WorkbenchStore: ObservableObject {
             }
             try await backend.reloadSandboxModel()
             connectionStatus = await backend.connectionStatus
+            sandboxUsesLiveModel = backend.usesLiveModel
             await loadModelsAndAgents()
             if let model = availableModels.first {
                 sessionState.selectedModel = model

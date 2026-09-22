@@ -43,9 +43,9 @@ final class FullScreenAppDelegate: NSObject, UIApplicationDelegate {
     static func expandWindows() {
         let fill = UIColor(red: 8.0 / 255.0, green: 8.0 / 255.0, blue: 8.0 / 255.0, alpha: 1)
         for case let windowScene as UIWindowScene in UIApplication.shared.connectedScenes {
-            let bounds = windowScene.screen.bounds
-            windowScene.sizeRestrictions?.minimumSize = bounds.size
-            windowScene.sizeRestrictions?.maximumSize = bounds.size
+            // Do not lock sizeRestrictions. A first call while the scene is
+            // still the letterboxed size would freeze the window at that size.
+            let bounds = windowScene.coordinateSpace.bounds
             for window in windowScene.windows {
                 if window.frame != bounds {
                     window.frame = bounds

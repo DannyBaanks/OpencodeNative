@@ -33,6 +33,15 @@ public struct ActiveSessionView: View {
                     onReconnect: { Task { await store.reconnect() } }
                 )
             }
+            if store.backendMode == .native && !store.sandboxUsesLiveModel {
+                Text("Esto es el guion de demo, no Grok. Crea notes.txt y lo lee. Sal y entra al sandbox con una clave de SpaceXAI.")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(OCColor.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(OCSpacing.base)
+                    .background(OCColor.bgBase)
+            }
             
             surfaceContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

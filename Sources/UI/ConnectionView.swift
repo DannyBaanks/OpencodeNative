@@ -4,6 +4,7 @@ public struct ConnectionView: View {
     @EnvironmentObject private var store: WorkbenchStore
     @State private var pairingLink = ""
     @State private var showReconnectSheet = false
+    @State private var showSandboxSheet = false
     @FocusState private var fieldFocused: Bool
     
     public init() {}
@@ -123,14 +124,14 @@ public struct ConnectionView: View {
                 .padding(.vertical, 26)
                 
                 Button {
-                    Task { await store.useNativeRuntime() }
+                    showSandboxSheet = true
                 } label: {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("use sandbox")
                                 .font(.system(size: 13, weight: .medium, design: .monospaced))
                                 .foregroundColor(.white)
-                            Text("Grok 4.7 on this phone, if a SpaceXAI key is saved")
+                            Text("Grok 4.7. Sin clave solo corre un guion que escribe notes.txt")
                                 .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(Color.white.opacity(0.38))
                         }
@@ -157,6 +158,8 @@ public struct ConnectionView: View {
                 .padding(.vertical, 24)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.ignoresSafeArea())
         .contentShape(Rectangle())
         .onTapGesture { fieldFocused = false }
         .toolbar {
@@ -168,6 +171,9 @@ public struct ConnectionView: View {
         }
         .sheet(isPresented: $showReconnectSheet) {
             ReconnectSheet(isPresented: $showReconnectSheet)
+        }
+        .sheet(isPresented: $showSandboxSheet) {
+            SandboxKeySheet()
         }
     }
     
@@ -402,5 +408,105 @@ struct ReconnectSheet: View {
         .padding(12)
         .background(Color(red: 0.025, green: 0.025, blue: 0.025))
         .overlay(Rectangle().stroke(Color.white.opacity(0.14), lineWidth: 1))
+    }
+}
+
+struct SandboxKeySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var store: WorkbenchStore
+    @State private var key = ""
+    @State private var hasKey = false
+    @FocusState private var fieldFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer(minLength: 28)
+                Text("sandbox")
+                    .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                    .foregroundColor(.white)
+                Text("Sin una clave de SpaceXAI esto no llama a Grok. Corre un guion fijo: crea notes.txt, lo relee y se despide.")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(Color.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 12)
+
+                Spacer().frame(height: 24)
+                Text("CLAVE SPACEXAI")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1.2)
+                    .foregroundColor(Color.white.opacity(0.42))
+                    .padding(.bottom, 8)
+                SecureField(hasKey ? "ya hay una clave. pega otra para cambiarla" : "xai-…", text: $key)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.white)
+                    .focused($fieldFocused)
+                    .padding(12)
+                    .background(Color(red: 0.035, green: 0.035, blue: 0.035))
+                    .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+
+                Button {
+                    fieldFocused = false
+                    let typed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Task {
+                        await store.startSandbox(xaiKey: typed.isEmpty ? nil : typed)
+                        dismiss()
+                    }
+                } label: {
+                    HStack {
+                        Text(hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "entrar con la clave guardada" : "entrar con Grok")
+                            .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        Spacer()
+                        Text("↵")
+                            .font(.system(size: 14, design: .monospaced))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 12)
+                    .frame(height: 44)
+                    .background(Color.white)
+                }
+                .buttonStyle(.plain)
+                .disabled(!hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity((!hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 0.5 : 1)
+                .padding(.top, 12)
+
+                Button {
+                    Task {
+                        await store.useNativeRuntime()
+                        dismiss()
+                    }
+                } label: {
+                    Text("ver el guion de demo")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(Color.white.opacity(0.45))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 16)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Color.black.ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("cancel") { dismiss() }
+                        .font(.system(size: 14, design: .monospaced))
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .onAppear {
+            Task {
+                if let persistence = try? IOSPersistence() {
+                    let saved = try? await persistence.loadAPIKey(provider: "xai")
+                    hasKey = !(saved ?? "").isEmpty
+                }
+            }
+        }
     }
 }

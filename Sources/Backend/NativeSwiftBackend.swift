@@ -13,6 +13,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     private var providerID = "scripted"
     private var providerDisplay = "Scripted Demo"
     private var providerModelIDs = ["scripted-1"]
+    public var usesLiveModel: Bool { providerID != "scripted" }
     private var liveAnswerID: String?
     private var toolExecutor: FileSystemToolExecutor?
     private var boundSessionID: String?
