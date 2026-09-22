@@ -31,6 +31,8 @@ public final class WorkbenchStore: ObservableObject {
     private var pairingStore = PairingStore()
     private var backendEventTask: Task<Void, Never>?
     private var isProcessingRemote = false
+    /// part id → "assistant" | "reasoning" | "user". Deltas have no type of their own.
+    private var streamPartKinds: [String: String] = [:]
     
     public init() {}
     
@@ -211,6 +213,7 @@ public final class WorkbenchStore: ObservableObject {
         guard backendMode != .unconfigured else { return }
         sessionState.currentSession = session
         currentSessionID = session.id
+        streamPartKinds.removeAll()
         sessionState.clearTimeline()
         
         if let backend = currentBackend {
@@ -511,6 +514,9 @@ public final class WorkbenchStore: ObservableObject {
             
         case .partUpdated(let partID, let kind, let text, let tool, let callID, let status, let input, let output, let error):
             handlePartUpdate(partID: partID, kind: kind, text: text, tool: tool, callID: callID, status: status, input: input, output: output, error: error)
+
+        case .partDelta(let partID, let delta):
+            appendAssistantDelta(partID: partID, delta: delta)
             
         case .permissionAsked(let requestID, let sessionID, let tool, let command, let explanation):
             if sessionID == currentSessionID {
@@ -558,14 +564,21 @@ public final class WorkbenchStore: ObservableObject {
     private func handlePartUpdate(partID: String, kind: String, text: String?, tool: String?, callID: String?, status: String?, input: [String: String], output: String?, error: String?) {
         let eventID = callID ?? partID
         
-        if kind == "assistantText" || kind == "text", let text = text, !text.isEmpty {
-            // Unknown role still looks like `text`. A growing copy of the prompt
-            // we just showed is the server echoing the user, not a new answer.
-            if kind == "text", isEchoOfLatestUserPrompt(text) {
+        if kind == "assistantText" || kind == "text" {
+            streamPartKinds[eventID] = "assistant"
+            let body = text ?? ""
+            // text-start arrives empty. The tokens come later as part deltas.
+            if body.isEmpty {
+                upsertAssistantText(id: eventID, text: "")
+                return
+            }
+            // Unknown role still looks like `text`. A copy of the prompt we just
+            // showed is the server echoing the user, not a new answer.
+            if kind == "text", isEchoOfLatestUserPrompt(body) {
                 removeTimelineEvent(id: eventID)
                 return
             }
-            upsertAssistantText(id: eventID, text: text)
+            upsertAssistantText(id: eventID, text: body)
         } else if kind == "tool" {
             let state: ToolCallState
             switch status {
@@ -584,8 +597,10 @@ public final class WorkbenchStore: ObservableObject {
                 }
             }
         } else if kind == "reasoning" {
+            streamPartKinds[eventID] = "reasoning"
             upsertThinking(id: eventID)
         } else if kind == "userPrompt", let text = text, !text.isEmpty {
+            streamPartKinds[eventID] = "user"
             if isEchoOfLatestUserPrompt(text) {
                 removeTimelineEvent(id: eventID)
                 return
@@ -607,6 +622,25 @@ public final class WorkbenchStore: ObservableObject {
 
     private func removeTimelineEvent(id: String) {
         sessionState.timelineEvents.removeAll { $0.id == id }
+    }
+
+    /// Appends one token. `message.part.delta` is the live stream; the later
+    /// `message.part.updated` replaces the bubble with the finished text.
+    private func appendAssistantDelta(partID: String, delta: String) {
+        switch streamPartKinds[partID] {
+        case "reasoning", "user":
+            return
+        default:
+            break
+        }
+        if let index = sessionState.timelineEvents.firstIndex(where: { $0.id == partID }) {
+            guard sessionState.timelineEvents[index].kind == .assistantText else { return }
+            let current = sessionState.timelineEvents[index].assistantText ?? ""
+            sessionState.timelineEvents[index].assistantText = current + delta
+            return
+        }
+        streamPartKinds[partID] = "assistant"
+        upsertAssistantText(id: partID, text: delta)
     }
 
     private func upsertAssistantText(id: String, text: String) {

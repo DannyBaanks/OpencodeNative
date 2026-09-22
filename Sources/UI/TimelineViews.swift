@@ -113,15 +113,22 @@ public struct UserPromptView: View {
 
 public struct AssistantTextView: View {
     let event: TimelineEvent
+    @EnvironmentObject private var sessionState: ActiveSessionState
 
     public init(event: TimelineEvent) {
         self.event = event
     }
 
+    private var isLiveTail: Bool {
+        sessionState.isProcessing
+            && sessionState.timelineEvents.last(where: { $0.kind == .assistantText })?.id == event.id
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: OCSpacing.base) {
-            if let text = event.assistantText, !text.isEmpty {
-                Text(text)
+            let text = event.assistantText ?? ""
+            if !text.isEmpty || isLiveTail {
+                Text(isLiveTail ? text + "▍" : text)
                     .font(OCTypography.body)
                     .foregroundColor(OCColor.textPrimary)
                     .textSelection(.enabled)

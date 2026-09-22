@@ -99,6 +99,7 @@ public enum WorkbenchEvent: Sendable {
     case connected
     case disconnected(String?)
     case partUpdated(partID: String, kind: String, text: String?, tool: String?, callID: String?, status: String?, input: [String: String], output: String?, error: String?)
+    case partDelta(partID: String, delta: String)
     case permissionAsked(requestID: String, sessionID: String, tool: String, command: String, explanation: String)
     case sessionIdle(sessionID: String)
     case sessionError(String)

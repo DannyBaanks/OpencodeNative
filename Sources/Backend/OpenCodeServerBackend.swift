@@ -350,6 +350,10 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
                 output: part.output,
                 error: part.error
             ))
+        case .partDelta(let sessionID, let partID, let field, let delta):
+            if let current = currentSessionIDStorage, !sessionID.isEmpty, sessionID != current { break }
+            guard field == "text" else { break }
+            eventContinuation?.yield(.partDelta(partID: partID, delta: delta))
         case .messageRole(let messageID, let role):
             messageRoles[messageID] = role
         case .permission(let perm):

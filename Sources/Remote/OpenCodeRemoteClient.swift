@@ -130,6 +130,7 @@ public struct OpenCodeRemotePermission: Sendable {
 
 public enum OpenCodeRemoteEvent: Sendable {
     case part(OpenCodeRemotePart)
+    case partDelta(sessionID: String, partID: String, field: String, delta: String)
     case permission(OpenCodeRemotePermission)
     case messageRole(messageID: String, role: String)
     case sessionIdle(String)
@@ -351,6 +352,16 @@ public actor OpenCodeRemoteClient {
         case "message.part.updated":
             guard let partJSON = properties["part"] as? [String: Any], let part = parsePart(partJSON) else { return nil }
             return .part(part)
+        case "message.part.delta":
+            guard let partID = properties["partID"] as? String,
+                  let delta = properties["delta"] as? String,
+                  !delta.isEmpty else { return nil }
+            return .partDelta(
+                sessionID: properties["sessionID"] as? String ?? "",
+                partID: partID,
+                field: properties["field"] as? String ?? "text",
+                delta: delta
+            )
         case "message.updated", "message.created":
             let info = (properties["info"] as? [String: Any]) ?? properties
             guard let messageID = info["id"] as? String, let role = info["role"] as? String else { return nil }
