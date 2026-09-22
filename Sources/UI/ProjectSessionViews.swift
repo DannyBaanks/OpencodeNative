@@ -117,16 +117,6 @@ public struct ProjectListContent: View {
         .navigationTitle("OpenCode")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                if store.backendMode == .native {
-                    Button { } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-                    .disabled(true)
-                    .opacity(0.3)
-                }
-            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape")
@@ -185,18 +175,6 @@ public struct ProjectListContent: View {
                     .font(OCTypography.meta)
                     .foregroundColor(OCColor.textFaint)
                     .multilineTextAlignment(.center)
-            }
-            
-            if store.backendMode == .unconfigured {
-                Button("Configure") { }
-                    .font(OCTypography.control)
-                    .padding(.horizontal, OCSpacing.xl)
-                    .padding(.vertical, OCSpacing.base)
-                    .background(OCColor.agentBuild)
-                    .foregroundColor(OCColor.bgDeep)
-                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r24))
-                    .disabled(true)
-                    .opacity(0.3)
             }
         }
         .padding(OCSpacing.huge)

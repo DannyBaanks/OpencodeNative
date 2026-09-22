@@ -8,6 +8,8 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
     private let client: OpenCodeRemoteClient
     private let pairing: OpenCodePairing
     private var eventTask: Task<Void, Never>?
+    private var streamGeneration = 0
+    private var messageRoles: [String: String] = [:]
     private var currentSessionIDStorage: String?
     private var connectionStatusStorage = "connected"
     
@@ -221,23 +223,31 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
     
     public func startEventStream() async throws {
         eventTask?.cancel()
+        streamGeneration += 1
+        let generation = streamGeneration
         eventTask = Task { [weak self] in
             guard let self else { return }
             do {
                 let stream = await self.client.events()
                 for try await event in stream {
                     try Task.checkCancellation()
+                    if self.streamGeneration != generation { return }
                     await self.handleRemoteEvent(event)
                 }
+                if self.streamGeneration != generation || Task.isCancelled { return }
+                await self.handleStreamEnded()
             } catch is CancellationError {
                 return
             } catch {
+                if Task.isCancelled || self.streamGeneration != generation { return }
                 await self.handleEventError(error)
             }
         }
     }
     
     public func stopEventStream() async {
+        // Bump first so a cancelled stream does not look like a dropped connection.
+        streamGeneration += 1
         eventTask?.cancel()
         eventTask = nil
     }
@@ -328,9 +338,10 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
         case .connected:
             eventContinuation?.yield(.connected)
         case .part(let part):
+            let role = part.messageID.flatMap { messageRoles[$0] }
             eventContinuation?.yield(.partUpdated(
                 partID: part.id,
-                kind: String(describing: part.kind),
+                kind: partKind(part, role: role),
                 text: part.text,
                 tool: part.tool,
                 callID: part.callID,
@@ -339,6 +350,8 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
                 output: part.output,
                 error: part.error
             ))
+        case .messageRole(let messageID, let role):
+            messageRoles[messageID] = role
         case .permission(let perm):
             eventContinuation?.yield(.permissionAsked(
                 requestID: perm.id,
@@ -358,7 +371,28 @@ public final class OpenCodeServerBackend: WorkbenchBackend {
     
     private func handleEventError(_ error: Error) async {
         connectionStatusStorage = "error: \(error.localizedDescription)"
+        eventContinuation?.yield(.disconnected(error.localizedDescription))
         eventContinuation?.yield(.sessionError(error.localizedDescription))
+    }
+
+    private func handleStreamEnded() async {
+        connectionStatusStorage = "disconnected"
+        eventContinuation?.yield(.disconnected("Event stream ended"))
+    }
+
+    private func partKind(_ part: OpenCodeRemotePart, role: String?) -> String {
+        switch part.kind {
+        case .text:
+            if role == "user" { return "userPrompt" }
+            if role == "assistant" { return "assistantText" }
+            return "text"
+        case .reasoning:
+            return "reasoning"
+        case .tool:
+            return "tool"
+        case .other:
+            return "other"
+        }
     }
 }
 

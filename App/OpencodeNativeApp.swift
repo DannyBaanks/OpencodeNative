@@ -45,7 +45,7 @@ struct RootView: View {
     private var stackLayout: some View {
         NavigationStack {
             if sessionState.currentProject == nil {
-                ProjectListView()
+                ProjectListContent()
             } else if sessionState.currentSession == nil {
                 SessionListView(project: sessionState.currentProject!)
             } else {

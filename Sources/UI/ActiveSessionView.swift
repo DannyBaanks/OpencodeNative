@@ -70,11 +70,10 @@ public struct ActiveSessionView: View {
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: OCSpacing.xs) {
                     if sessionState.activeSurface == .files {
-                        Button { Task { await store.loadFiles() } } label: {
+                        Button { Task { await store.loadFiles(path: store.filesPath) } } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 17))
                         }
-                        .disabled(store.fileTree.isEmpty)
                     }
                     
                     if sessionState.activeSurface == .review {
@@ -98,7 +97,7 @@ public struct ActiveSessionView: View {
             AgentPickerSheet(selectedMode: $sessionState.agentMode, availableModes: availableModesForPicker)
         }
         .sheet(isPresented: $sessionState.showModelPicker) {
-            ModelPickerSheet(selectedModel: $sessionState.selectedModel, models: store.availableModels.isEmpty ? ModelInfo.demoModels : store.availableModels)
+            ModelPickerSheet(selectedModel: $sessionState.selectedModel, models: store.availableModels)
         }
         .sheet(isPresented: $sessionState.showAttachments) {
             AttachmentsSheet()
@@ -186,6 +185,9 @@ struct ChatSurfaceView: View {
             }
             .onAppear { scrollProxy = proxy }
             .onChange(of: sessionState.timelineEvents.count) { _ in
+                scrollToBottom()
+            }
+            .onChange(of: sessionState.timelineEvents.last?.assistantText) { _ in
                 scrollToBottom()
             }
             .onChange(of: sessionState.isProcessing) { processing in
@@ -554,7 +556,9 @@ struct EmptyReviewView: View {
                     .font(OCTypography.bodyStrong)
                     .foregroundColor(OCColor.textPrimary)
                 
-                Text("No diff available for this session")
+                Text(store.backendMode == .native
+                     ? "Diff runs on the linked desktop, not in the sandbox"
+                     : "No diff available for this session")
                     .font(OCTypography.meta)
                     .foregroundColor(OCColor.textFaint)
                     .multilineTextAlignment(.center)
@@ -791,7 +795,10 @@ struct TerminalSurfaceView: View {
         }
         .onAppear {
             if output.isEmpty {
-                output.append(TerminalOutput(text: "OpenCodeNative Terminal — commands run via OpenCode server", color: OCColor.textFaint))
+                let banner = store.backendMode == .native
+                    ? "Shell runs on the linked OpenCode server. The sandbox has no shell."
+                    : "OpenCodeNative Terminal — commands run via OpenCode server"
+                output.append(TerminalOutput(text: banner, color: OCColor.textFaint))
                 output.append(TerminalOutput(text: "Type a command and press Enter", color: OCColor.textFaint))
                 output.append(TerminalOutput(text: "", color: OCColor.textPrimary))
             }

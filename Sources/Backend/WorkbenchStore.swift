@@ -36,6 +36,7 @@ public final class WorkbenchStore: ObservableObject {
     
     public func connectRemote(_ rawPairingLink: String) async {
         guard !isConnecting else { return }
+        await currentBackend?.stopEventStream()
         isConnecting = true
         connectionHealth = .connecting
         connectionStatus = "connecting..."
@@ -117,6 +118,7 @@ public final class WorkbenchStore: ObservableObject {
     
     public func useNativeRuntime() async {
         do {
+            await currentBackend?.stopEventStream()
             let backend = NativeSwiftBackend()
             currentBackend = backend
             backendMode = .native
@@ -128,16 +130,17 @@ public final class WorkbenchStore: ObservableObject {
                 currentProjectID = project.id
                 sessionState.currentProject = project
                 sessions = try await backend.listSessions(projectID: project.id)
-                if let first = sessions.first {
-                    sessionState.currentSession = first
-                    currentSessionID = first.id
-                }
             }
             
             connectionStatus = await backend.connectionStatus
             connectionHealth = .connected
             sessionState.clearTimeline()
-            addSystemEvent("Native Swift runtime ready")
+            if let first = sessions.first {
+                await selectSession(first)
+            }
+            if sessionState.timelineEvents.isEmpty {
+                addSystemEvent("Native Swift runtime ready")
+            }
             
             await loadModelsAndAgents()
             await subscribeToBackendEvents(backend)
@@ -192,11 +195,11 @@ public final class WorkbenchStore: ObservableObject {
             do {
                 sessions = try await backend.listSessions(projectID: project.id)
                 if let first = sessions.first {
-                    sessionState.currentSession = first
-                    currentSessionID = first.id
+                    await selectSession(first)
                 } else {
                     sessionState.currentSession = nil
                     currentSessionID = nil
+                    sessionState.clearTimeline()
                 }
             } catch {
                 addErrorEvent("Failed to load sessions: \(error.localizedDescription)")
@@ -302,7 +305,12 @@ public final class WorkbenchStore: ObservableObject {
                 // nativo las recibe como texto plano.
                 let promptText = attachments.isEmpty
                     ? trimmed
-                    : trimmed + "\n" + attachments.map { "@\($0.name)" }.joined(separator: " ")
+                    : trimmed + "\n" + attachments.map { attachment in
+                        if let path = attachment.path, !path.isEmpty {
+                            return "@\(path)"
+                        }
+                        return "@\(attachment.name)"
+                    }.joined(separator: " ")
                 try await backend.sendPrompt(promptText, agent: agent, model: model)
             } catch is CancellationError {
                 await MainActor.run {
@@ -408,7 +416,11 @@ public final class WorkbenchStore: ObservableObject {
         do {
             diffFiles = try await backend.sessionDiff(sessionID: sessionID)
         } catch {
-            addErrorEvent("Failed to load diff: \(error.localizedDescription)")
+            // Native sandbox has no diff. The Review surface already says so;
+            // writing the error into the chat hid it on the wrong tab.
+            if backendMode != .native {
+                addErrorEvent("Failed to load diff: \(error.localizedDescription)")
+            }
         }
     }
     
@@ -424,7 +436,13 @@ public final class WorkbenchStore: ObservableObject {
                 addErrorEvent("Shell error: \(error)")
             }
         } catch {
-            addErrorEvent("Shell failed: \(error.localizedDescription)")
+            shellHistory.append((command, ShellResult(
+                sessionID: currentSessionID ?? "",
+                messageID: "",
+                textParts: [],
+                toolParts: [:],
+                error: error.localizedDescription
+            )))
         }
     }
     
@@ -540,13 +558,14 @@ public final class WorkbenchStore: ObservableObject {
     private func handlePartUpdate(partID: String, kind: String, text: String?, tool: String?, callID: String?, status: String?, input: [String: String], output: String?, error: String?) {
         let eventID = callID ?? partID
         
-        if kind == "text", let text = text, !text.isEmpty {
-            if let index = sessionState.timelineEvents.firstIndex(where: { $0.id == eventID }) {
-                sessionState.timelineEvents[index].assistantText = text
-            } else {
-                let event = TimelineEvent.assistantText(text, agentMode: sessionState.agentMode)
-                sessionState.addEvent(event)
+        if kind == "assistantText" || kind == "text", let text = text, !text.isEmpty {
+            // Unknown role still looks like `text`. A growing copy of the prompt
+            // we just showed is the server echoing the user, not a new answer.
+            if kind == "text", isEchoOfLatestUserPrompt(text) {
+                removeTimelineEvent(id: eventID)
+                return
             }
+            upsertAssistantText(id: eventID, text: text)
         } else if kind == "tool" {
             let state: ToolCallState
             switch status {
@@ -564,15 +583,67 @@ public final class WorkbenchStore: ObservableObject {
                     sessionState.updateToolCall(id: eventID, state: state, output: output, duration: nil)
                 }
             }
-        } else if kind == "reasoning", let text = text, !text.isEmpty {
-            let event = TimelineEvent.system("thinking · \(text)")
-            sessionState.addEvent(event)
-        } else if kind == "userPrompt", let text = text {
-            let event = TimelineEvent.userPrompt(text, agentMode: sessionState.agentMode)
-            sessionState.addEvent(event)
+        } else if kind == "reasoning" {
+            upsertThinking(id: eventID)
+        } else if kind == "userPrompt", let text = text, !text.isEmpty {
+            if isEchoOfLatestUserPrompt(text) {
+                removeTimelineEvent(id: eventID)
+                return
+            }
+            upsertUserPrompt(id: eventID, text: text)
         } else if kind == "system", let text = text {
-            addSystemEvent(text)
+            upsertSystem(id: eventID, text: text)
         }
+    }
+
+    /// True when `text` is the optimistic user bubble, or a prefix of it while
+    /// the server streams that same message back.
+    private func isEchoOfLatestUserPrompt(_ text: String) -> Bool {
+        guard let prompt = sessionState.timelineEvents.last(where: { $0.kind == .userPrompt })?.promptText else {
+            return false
+        }
+        return prompt == text || prompt.hasPrefix(text)
+    }
+
+    private func removeTimelineEvent(id: String) {
+        sessionState.timelineEvents.removeAll { $0.id == id }
+    }
+
+    private func upsertAssistantText(id: String, text: String) {
+        if let index = sessionState.timelineEvents.firstIndex(where: { $0.id == id }) {
+            sessionState.timelineEvents[index].assistantText = text
+            return
+        }
+        var event = TimelineEvent(id: id, kind: .assistantText, agentMode: sessionState.agentMode)
+        event.assistantText = text
+        sessionState.addEvent(event)
+    }
+
+    private func upsertUserPrompt(id: String, text: String) {
+        if let index = sessionState.timelineEvents.firstIndex(where: { $0.id == id }) {
+            sessionState.timelineEvents[index].promptText = text
+            return
+        }
+        var event = TimelineEvent(id: id, kind: .userPrompt, agentMode: sessionState.agentMode)
+        event.promptText = text
+        sessionState.addEvent(event)
+    }
+
+    private func upsertThinking(id: String) {
+        if sessionState.timelineEvents.contains(where: { $0.id == id }) { return }
+        var event = TimelineEvent(id: id, kind: .thinking, agentMode: sessionState.agentMode)
+        event.statusLabel = "Thinking"
+        sessionState.addEvent(event)
+    }
+
+    private func upsertSystem(id: String, text: String) {
+        if let index = sessionState.timelineEvents.firstIndex(where: { $0.id == id }) {
+            sessionState.timelineEvents[index].assistantText = text
+            return
+        }
+        var event = TimelineEvent(id: id, kind: .system)
+        event.assistantText = text
+        sessionState.addEvent(event)
     }
     
     private func addSystemEvent(_ text: String) {

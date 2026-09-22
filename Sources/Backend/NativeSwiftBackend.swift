@@ -9,9 +9,11 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     var persistence: IOSPersistence?
     private var agentLoop: AgentLoop?
     private var modelProvider: (any ModelProvider)?
+    private var activeModelName: String?
     private var toolExecutor: FileSystemToolExecutor?
-    private let conversationId = UUID().uuidString
+    private var boundSessionID: String?
     private var runningTask: Task<Void, Never>?
+    private var permissionWaiters: [String: CheckedContinuation<PermissionResponse.Decision, Never>] = [:]
     private var connectionStatusStorage = "native runtime"
     private var currentSessionIDStorage: String?
     private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
@@ -36,10 +38,13 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     }
     
     public func disconnect() async {
+        failPendingPermissions()
         runningTask?.cancel()
         runningTask = nil
         agentLoop = nil
+        boundSessionID = nil
         modelProvider = nil
+        activeModelName = nil
         toolExecutor = nil
         workspace = nil
         persistence = nil
@@ -60,52 +65,75 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             
             let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
             self.modelProvider = provider
+            self.activeModelName = provider.availableModels.first
             
             let exec = FileSystemToolExecutor(workspace: ws)
             self.toolExecutor = exec
-            
-            let ctx = AgentContext(
-                conversationId: conversationId,
-                workspace: ws,
-                persistence: ps,
-                modelProvider: provider,
-                modelName: provider.availableModels.first,
-                toolExecutor: exec,
-                systemPrompt: systemPromptText(),
-                maxTurns: 12,
-                permissionHandler: { [weak self] request in
-                    return await withCheckedContinuation { continuation in
-                        Task { @MainActor [weak self] in
-                            guard let self else {
-                                continuation.resume(returning: PermissionResponse(requestId: request.id, decision: .deny))
-                                return
-                            }
-                            self.eventContinuation?.yield(.permissionAsked(
-                                requestID: request.id,
-                                sessionID: self.conversationId,
-                                tool: request.toolName,
-                                command: request.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: " "),
-                                explanation: request.reason
-                            ))
-                            self.eventContinuation?.yield(.connected)
-                            continuation.resume(returning: PermissionResponse(requestId: request.id, decision: .allowAlways))
-                        }
-                    }
-                }
-            )
-            
-            let loop = AgentLoop(context: ctx)
-            await loop.setEventHandler { [weak self] event in
-                await self?.handleAgentEvent(event)
-            }
-            self.agentLoop = loop
-            self.currentSessionIDStorage = self.conversationId
             
             connectionStatusStorage = "native runtime · sandbox: \(ws.rootURL.path)"
             eventContinuation?.yield(.connected)
         } catch {
             connectionStatusStorage = "error: \(error.localizedDescription)"
             throw error
+        }
+    }
+
+    /// The loop persists under the session the UI opened. A backend-wide id
+    /// made `session.idle` miss the open session, so the composer never left Stop.
+    private func installLoop(sessionID: String) async {
+        guard let ws = workspace, let ps = persistence, let provider = modelProvider, let exec = toolExecutor else { return }
+        let modelName = activeModelName
+        if boundSessionID == sessionID, agentLoop != nil {
+            currentSessionIDStorage = sessionID
+            return
+        }
+        failPendingPermissions()
+        runningTask?.cancel()
+        runningTask = nil
+        let loop = AgentLoop(context: AgentContext(
+            conversationId: sessionID,
+            workspace: ws,
+            persistence: ps,
+            modelProvider: provider,
+            modelName: modelName,
+            toolExecutor: exec,
+            systemPrompt: systemPromptText(),
+            maxTurns: 12,
+            permissionHandler: { [weak self] request in
+                guard let self else {
+                    return PermissionResponse(requestId: request.id, decision: .deny)
+                }
+                let decision = await self.waitForPermission(request)
+                return PermissionResponse(requestId: request.id, decision: decision)
+            }
+        ))
+        await loop.setEventHandler { [weak self] event in
+            await self?.handleAgentEvent(event)
+        }
+        agentLoop = loop
+        boundSessionID = sessionID
+        currentSessionIDStorage = sessionID
+    }
+
+    private func waitForPermission(_ request: PermissionRequest) async -> PermissionResponse.Decision {
+        guard let sessionID = currentSessionIDStorage else { return .deny }
+        eventContinuation?.yield(.permissionAsked(
+            requestID: request.id,
+            sessionID: sessionID,
+            tool: request.toolName,
+            command: request.arguments.map { "\($0.key)=\($0.value)" }.joined(separator: " "),
+            explanation: request.reason
+        ))
+        return await withCheckedContinuation { continuation in
+            permissionWaiters[request.id] = continuation
+        }
+    }
+
+    private func failPendingPermissions() {
+        let waiters = permissionWaiters
+        permissionWaiters.removeAll()
+        for waiter in waiters.values {
+            waiter.resume(returning: .deny)
         }
     }
     
@@ -149,7 +177,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         guard let ps = persistence else { throw WorkbenchError.notConnected }
         let conv = Conversation(title: title.isEmpty ? "New Session" : title)
         try await ps.saveConversation(conv)
-        currentSessionIDStorage = conv.id
+        await installLoop(sessionID: conv.id)
         eventContinuation?.yield(.sessionsChanged)
         return Session(id: conv.id, projectId: projectID, title: conv.title, lastEventSummary: "New session", timestamp: conv.updatedAt, agentMode: .build, isRunning: false)
     }
@@ -167,48 +195,52 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         guard let ps = persistence else { throw WorkbenchError.notConnected }
         try await ps.deleteConversation(id: sessionID)
         if currentSessionIDStorage == sessionID {
+            failPendingPermissions()
+            runningTask?.cancel()
+            runningTask = nil
+            agentLoop = nil
+            boundSessionID = nil
             currentSessionIDStorage = nil
         }
         eventContinuation?.yield(.sessionsChanged)
     }
     
     public func selectSession(_ sessionID: String) async throws {
-        currentSessionIDStorage = sessionID
-        guard let ps = persistence else { throw WorkbenchError.notConnected }
-        if let conv = try await ps.loadConversation(id: sessionID) {
-            eventContinuation?.yield(.partUpdated(partID: UUID().uuidString, kind: "system", text: "Loaded session: \(conv.title)", tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil))
-        }
+        guard persistence != nil else { throw WorkbenchError.notConnected }
+        await installLoop(sessionID: sessionID)
     }
     
     public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws {
+        guard let sessionID = currentSessionIDStorage else { throw WorkbenchError.noSession }
+        await installLoop(sessionID: sessionID)
         guard let loop = agentLoop else {
             throw WorkbenchError.unsupportedFeature("Agent runtime not initialized")
         }
         
-        eventContinuation?.yield(.partUpdated(partID: UUID().uuidString, kind: "userPrompt", text: text, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil))
-        
+        let sessionAtStart = sessionID
         runningTask = Task { [weak self] in
             guard let self else { return }
             do {
                 _ = try await loop.run(userInput: text)
-                guard !Task.isCancelled else { throw CancellationError() }
-                self.eventContinuation?.yield(.sessionIdle(sessionID: self.conversationId))
             } catch is CancellationError {
-                self.eventContinuation?.yield(.sessionError("Stopped"))
+                return
             } catch {
+                guard self.currentSessionIDStorage == sessionAtStart else { return }
                 self.eventContinuation?.yield(.sessionError(error.localizedDescription))
             }
         }
     }
     
     public func abort() async throws {
+        failPendingPermissions()
         runningTask?.cancel()
         runningTask = nil
         eventContinuation?.yield(.sessionError("Stopped"))
     }
     
     public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws {
-        // Native permissions handled via AgentLoop continuation; already resolved in handler
+        guard let waiter = permissionWaiters.removeValue(forKey: requestID) else { return }
+        waiter.resume(returning: decision)
     }
     
     public func loadHistory(sessionID: String) async throws -> [TimelineEvent] {
@@ -247,7 +279,9 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     }
     
     public func stopEventStream() async {
-        // No separate stream
+        failPendingPermissions()
+        runningTask?.cancel()
+        runningTask = nil
     }
     
     public func listFiles(path: String) async throws -> [WorkbenchFileNode] {
@@ -307,7 +341,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             
         case .modelResponse(let response):
             if !response.content.isEmpty {
-                eventContinuation?.yield(.partUpdated(partID: UUID().uuidString, kind: "text", text: response.content, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil))
+                eventContinuation?.yield(.partUpdated(partID: UUID().uuidString, kind: "assistantText", text: response.content, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil))
             }
             if let calls = response.toolCalls, !calls.isEmpty {
                 for call in calls {
@@ -337,7 +371,9 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             eventContinuation?.yield(.sessionError(error.localizedDescription))
             
         case .finished:
-            eventContinuation?.yield(.sessionIdle(sessionID: conversationId))
+            if let sessionID = currentSessionIDStorage {
+                eventContinuation?.yield(.sessionIdle(sessionID: sessionID))
+            }
             
         default:
             break

@@ -103,6 +103,7 @@ public struct OpenCodeRemoteSession: Identifiable, Sendable {
 public struct OpenCodeRemotePart: Sendable {
     public enum Kind: Sendable { case text, reasoning, tool, other }
     public let id: String
+    public let messageID: String?
     public let kind: Kind
     public let text: String?
     public let tool: String?
@@ -130,6 +131,7 @@ public struct OpenCodeRemotePermission: Sendable {
 public enum OpenCodeRemoteEvent: Sendable {
     case part(OpenCodeRemotePart)
     case permission(OpenCodeRemotePermission)
+    case messageRole(messageID: String, role: String)
     case sessionIdle(String)
     case sessionError(String)
     case connected
@@ -251,7 +253,14 @@ public actor OpenCodeRemoteClient {
 
     private nonisolated func makeRequest(path: String, method: String, jsonBody: [String: Any]?) -> URLRequest {
         var components = URLComponents(url: pairing.baseURL, resolvingAgainstBaseURL: false)!
-        components.path = path
+        // `URLComponents.path` percent-encodes `?`, so a query glued onto the
+        // path never reaches OpenCode (`GET /file` without `path` is 400).
+        if let queryIndex = path.firstIndex(of: "?") {
+            components.path = String(path[..<queryIndex])
+            components.percentEncodedQuery = String(path[path.index(after: queryIndex)...])
+        } else {
+            components.path = path
+        }
         var request = URLRequest(url: components.url!)
         request.httpMethod = method
         request.timeoutInterval = 90
@@ -303,17 +312,19 @@ public actor OpenCodeRemoteClient {
 
     private static func parsePart(_ json: [String: Any]) -> OpenCodeRemotePart? {
         guard let id = json["id"] as? String, let type = json["type"] as? String else { return nil }
+        let messageID = json["messageID"] as? String
         switch type {
         case "text":
-            return OpenCodeRemotePart(id: id, kind: .text, text: json["text"] as? String, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil)
+            return OpenCodeRemotePart(id: id, messageID: messageID, kind: .text, text: json["text"] as? String, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil)
         case "reasoning":
-            return OpenCodeRemotePart(id: id, kind: .reasoning, text: json["text"] as? String, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil)
+            return OpenCodeRemotePart(id: id, messageID: messageID, kind: .reasoning, text: json["text"] as? String, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil)
         case "tool":
             let state = json["state"] as? [String: Any] ?? [:]
             let inputRaw = state["input"] as? [String: Any] ?? [:]
             let input = inputRaw.mapValues { String(describing: $0) }
             return OpenCodeRemotePart(
                 id: id,
+                messageID: messageID,
                 kind: .tool,
                 text: nil,
                 tool: json["tool"] as? String,
@@ -324,7 +335,7 @@ public actor OpenCodeRemoteClient {
                 error: state["error"] as? String
             )
         default:
-            return OpenCodeRemotePart(id: id, kind: .other, text: nil, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil)
+            return OpenCodeRemotePart(id: id, messageID: messageID, kind: .other, text: nil, tool: nil, callID: nil, status: nil, input: [:], output: nil, error: nil)
         }
     }
 
@@ -340,6 +351,10 @@ public actor OpenCodeRemoteClient {
         case "message.part.updated":
             guard let partJSON = properties["part"] as? [String: Any], let part = parsePart(partJSON) else { return nil }
             return .part(part)
+        case "message.updated", "message.created":
+            let info = (properties["info"] as? [String: Any]) ?? properties
+            guard let messageID = info["id"] as? String, let role = info["role"] as? String else { return nil }
+            return .messageRole(messageID: messageID, role: role)
         case "permission.updated", "permission.asked":
             let p = (properties["permission"] as? [String: Any]) ?? properties
             guard let id = p["id"] as? String,
@@ -354,6 +369,11 @@ public actor OpenCodeRemoteClient {
             ))
         case "session.idle":
             guard let sessionID = properties["sessionID"] as? String else { return nil }
+            return .sessionIdle(sessionID)
+        case "session.status":
+            let status = properties["status"] as? [String: Any]
+            let statusType = status?["type"] as? String
+            guard statusType == "idle", let sessionID = properties["sessionID"] as? String else { return nil }
             return .sessionIdle(sessionID)
         case "session.error":
             let error = properties["error"] as? [String: Any]
