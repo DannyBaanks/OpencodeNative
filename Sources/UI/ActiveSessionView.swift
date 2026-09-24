@@ -58,22 +58,28 @@ public struct ActiveSessionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                HStack(spacing: OCSpacing.xs) {
-                    // RootView intercambia vistas por estado (no hay push), asi que
-                    // la salida de la sesion es explicita: currentSession = nil.
-                    Button {
-                        sessionState.currentSession = nil
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(OCColor.iconPrimary)
-                    }
-                    
-                    SessionNavTitle(
-                        title: sessionState.currentSession?.title ?? "Session",
-                        subtitle: sessionState.currentProject?.name ?? "Project"
-                    )
+                // RootView intercambia vistas por estado (no hay push), asi que
+                // la salida de la sesion es explicita: currentSession = nil.
+                Button {
+                    sessionState.currentSession = nil
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(OCColor.iconPrimary)
+                        .frame(width: 44, height: 44, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Back")
+            }
+
+            // El titulo va al centro: en el lado izquierdo se aplastaba contra
+            // los botones y se cortaba en pantallas angostas.
+            ToolbarItem(placement: .principal) {
+                SessionNavTitle(
+                    title: sessionState.currentSession?.title ?? "Session",
+                    subtitle: sessionState.currentProject?.name ?? "Project"
+                )
+                .frame(maxWidth: 220)
             }
             
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -850,7 +856,7 @@ struct SessionNavTitle: View {
     let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .center, spacing: 1) {
             Text(title)
                 .font(OCTypography.navTitle)
                 .foregroundColor(OCColor.textPrimary)
@@ -875,14 +881,19 @@ struct WorkSurfaceSwitcher: View {
                     UISelectionFeedbackGenerator().selectionChanged()
                     selectedSurface = surface
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         Image(systemName: surface.icon)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: 12, weight: .medium))
                         Text(surface.rawValue)
                             .font(OCTypography.control)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                     .foregroundColor(selectedSurface == surface ? OCColor.textPrimary : OCColor.textFaint)
-                    .padding(.horizontal, OCSpacing.lg)
+                    .padding(.horizontal, OCSpacing.xs)
+                    // Los 4 botones se reparten el ancho; con padding fijo no
+                    // cabian en un iPhone de 375pt y "Terminal" salia cortado.
+                    .frame(maxWidth: .infinity)
                     .frame(height: 32)
                     .background(
                         selectedSurface == surface ? OCColor.bgLayer1 : Color.clear
@@ -890,6 +901,7 @@ struct WorkSurfaceSwitcher: View {
                     .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
                 .frame(height: 44)
                 .contentShape(Rectangle())
             }

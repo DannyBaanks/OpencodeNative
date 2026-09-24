@@ -40,6 +40,8 @@ targets:
     sources:
       - path: App
         type: group
+        excludes:
+          - LaunchScreen.storyboard
       - path: Assets.xcassets
       - path: LocalPacks
         type: folder

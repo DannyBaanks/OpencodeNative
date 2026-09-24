@@ -4,7 +4,6 @@ import OpencodeNativeCore
 
 @main
 public struct OpencodeNativeApp: App {
-    @UIApplicationDelegateAdaptor(FullScreenAppDelegate.self) private var appDelegate
     @StateObject private var store = WorkbenchStore()
 
     public init() {}
@@ -17,41 +16,6 @@ public struct OpencodeNativeApp: App {
                 .preferredColorScheme(.dark)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(OCColor.bgDeep.ignoresSafeArea())
-                .onAppear { FullScreenAppDelegate.expandWindows() }
-        }
-    }
-}
-
-/// iOS letterboxes the process when it does not see a real launch screen.
-/// Sideload hosts can also hand the scene a window smaller than the display.
-/// Stretch every window to the screen the system actually gave us.
-final class FullScreenAppDelegate: NSObject, UIApplicationDelegate {
-    func application(
-        _ application: UIApplication,
-        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
-    ) -> Bool {
-        NotificationCenter.default.addObserver(
-            forName: UIScene.didActivateNotification,
-            object: nil,
-            queue: .main
-        ) { _ in
-            Self.expandWindows()
-        }
-        return true
-    }
-
-    static func expandWindows() {
-        let fill = UIColor(red: 8.0 / 255.0, green: 8.0 / 255.0, blue: 8.0 / 255.0, alpha: 1)
-        for case let windowScene as UIWindowScene in UIApplication.shared.connectedScenes {
-            // Do not lock sizeRestrictions. A first call while the scene is
-            // still the letterboxed size would freeze the window at that size.
-            let bounds = windowScene.coordinateSpace.bounds
-            for window in windowScene.windows {
-                if window.frame != bounds {
-                    window.frame = bounds
-                }
-                window.backgroundColor = fill
-            }
         }
     }
 }
