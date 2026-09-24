@@ -43,6 +43,13 @@
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
+		<!-- Tailnet (100.64/10 CGNAT) no cuenta como "local" para ATS, asi que
+		     http://<tailscale-ip>:4096 se bloquea sin esta excepcion. El trafico
+		     igual viaja cifrado por WireGuard; solo se permite cleartext porque
+		     el servidor OpenCode/OpenISy enlazado no termina TLS por si mismo.
+		     Para https via `tailscale serve` no hace falta nada extra. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to the OpenCode server running on your computer over your local network.</string>

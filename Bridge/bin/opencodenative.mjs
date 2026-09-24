@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import os from "node:os";
@@ -35,12 +35,30 @@ function lanIPv4() {
   return bestLanIPv4(addresses);
 }
 
+// `--host` ausente = LAN como siempre. `--host tailscale` resuelve la IPv4 del
+// Tailnet (`tailscale ip -4`); cualquier otro valor se usa literal (IP o
+// MagicDNS). Las IPs Tailscale (100.64/10 CGNAT) NO son RFC1918, asi que el
+// WARNING de alcance LAN no aplica en ese modo.
+export function resolvePairingHost(explicitHost, exec = execSync) {
+  if (!explicitHost) return { host: lanIPv4(), tailscale: false };
+  if (explicitHost !== "tailscale") return { host: explicitHost, tailscale: false };
+  let output;
+  try {
+    output = exec("tailscale ip -4", { encoding: "utf8" });
+  } catch {
+    throw new Error("could not resolve Tailscale IPv4 (is tailscale up? check `tailscale status`)");
+  }
+  const ip = String(output).split(/\s+/).find((t) => /^\d+\.\d+\.\d+\.\d+$/.test(t));
+  if (!ip) throw new Error("could not resolve Tailscale IPv4 (is tailscale up? check `tailscale status`)");
+  return { host: ip, tailscale: true };
+}
+
 export function parseLinkOptions(args, env = process.env) {
   const command = args[0] ?? "link";
-  if (command !== "link") throw new Error("usage: opencodenative link [--runtime opencode|openisy] [--openisy-root PATH] [--port 4096] [--directory PATH]");
+  if (command !== "link") throw new Error("usage: opencodenative link [--runtime opencode|openisy] [--openisy-root PATH] [--port 4096] [--directory PATH] [--host LAN|tailscale|IP]");
 
   const values = new Map();
-  const valid = new Set(["--runtime", "--openisy-root", "--port", "--directory"]);
+  const valid = new Set(["--runtime", "--openisy-root", "--port", "--directory", "--host"]);
   for (let i = 1; i < args.length; i += 2) {
     const name = args[i];
     const value = args[i + 1];
@@ -62,6 +80,7 @@ export function parseLinkOptions(args, env = process.env) {
     port,
     directory: path.resolve(values.get("--directory") ?? process.cwd()),
     openisyRoot: openisyRoot ? path.resolve(openisyRoot) : undefined,
+    host: values.get("--host"),
   };
 }
 
@@ -101,8 +120,8 @@ export function main(args = process.argv.slice(2), env = process.env) {
     return 2;
   }
 
-  const host = lanIPv4();
-  const lanReachable = isPrivateRoutableIPv4(host);
+  const { host, tailscale } = resolvePairingHost(options.host);
+  const lanReachable = tailscale || isPrivateRoutableIPv4(host);
   const username = "opencode";
   const password = randomBytes(24).toString("base64url");
   const query = new URLSearchParams({
@@ -119,7 +138,7 @@ export function main(args = process.argv.slice(2), env = process.env) {
   console.log("────────────────────────────────────────");
   if (options.runtime === "openisy") console.log("runtime   OpenISy");
   console.log(`project   ${options.directory}`);
-  console.log(`server    http://${host}:${options.port}`);
+  console.log(`server    http://${host}:${options.port}${tailscale ? "  (via Tailscale, cifrado por WireGuard)" : ""}`);
   if (!lanReachable) {
     console.log("");
     console.log("WARNING: no private-routable IPv4 (RFC1918) was found on this");

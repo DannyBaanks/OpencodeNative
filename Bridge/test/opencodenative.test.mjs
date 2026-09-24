@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { bestLanIPv4, childEnvironment, isPrivateRoutableIPv4, parseLinkOptions, runtimeCommand } from "../bin/opencodenative.mjs";
+import { bestLanIPv4, childEnvironment, isPrivateRoutableIPv4, parseLinkOptions, resolvePairingHost, runtimeCommand } from "../bin/opencodenative.mjs";
 
 test("default runtime remains official opencode", () => {
   const options = parseLinkOptions(["link"], {});
@@ -85,4 +85,37 @@ test("isPrivateRoutableIPv4 covers RFC1918 and rejects junk", () => {
   assert.equal(isPrivateRoutableIPv4("169.254.1.2"), false);
   assert.equal(isPrivateRoutableIPv4("8.8.8.8"), false);
   assert.equal(isPrivateRoutableIPv4("nope"), false);
+});
+
+test("--host defaults to LAN resolution", () => {
+  const options = parseLinkOptions(["link"], {});
+  assert.equal(options.host, undefined);
+  const resolved = resolvePairingHost(options.host);
+  assert.equal(resolved.tailscale, false);
+  assert.match(resolved.host, /^\d+\.\d+\.\d+\.\d+$/);
+});
+
+test("--host tailscale resolves via `tailscale ip -4`", () => {
+  const options = parseLinkOptions(["link", "--host", "tailscale"], {});
+  assert.equal(options.host, "tailscale");
+  const stub = () => "100.115.163.4\n";
+  assert.deepEqual(resolvePairingHost(options.host, stub), { host: "100.115.163.4", tailscale: true });
+});
+
+test("--host tailscale fails explicitly when tailscale is down", () => {
+  assert.throws(() => resolvePairingHost("tailscale", () => { throw new Error("exit 1"); }), /could not resolve Tailscale IPv4/);
+  assert.throws(() => resolvePairingHost("tailscale", () => "nope\n"), /could not resolve Tailscale IPv4/);
+});
+
+test("--host literal passes through (IP o MagicDNS)", () => {
+  const ip = parseLinkOptions(["link", "--host", "100.115.163.4"], {});
+  assert.deepEqual(resolvePairingHost(ip.host), { host: "100.115.163.4", tailscale: false });
+  const dns = parseLinkOptions(["link", "--host", "dannyisyco.tail379054.ts.net"], {});
+  assert.deepEqual(resolvePairingHost(dns.host), { host: "dannyisyco.tail379054.ts.net", tailscale: false });
+});
+
+test("Tailscale CGNAT no es RFC1918: el WARNING LAN no aplica en ese modo", () => {
+  // 100.64/10 es la razon por la que el link Tailscale necesita modo propio
+  // (y la excepcion ATS en Info.plist): no es "local" para iOS ni RFC1918.
+  assert.equal(isPrivateRoutableIPv4("100.115.163.4"), false);
 });
