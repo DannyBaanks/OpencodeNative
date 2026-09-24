@@ -55,8 +55,10 @@ targets:
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-    info:
-      path: Info.plist
+        # Usar el Info.plist del repo tal cual. Con `info: path:` XcodeGen lo
+        # REGENERA en CI y se perdian UILaunchScreen, URL scheme y ATS:
+        # sin launch screen iOS corre la app en letterbox 320x480.
+        INFOPLIST_FILE: Info.plist
 
   OpencodeNativeTests:
     type: bundle.unit-test
