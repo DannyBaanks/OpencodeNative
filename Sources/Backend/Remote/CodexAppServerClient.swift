@@ -235,7 +235,10 @@ public actor CodexAppServerClient {
     private func sendPending(_ data: Data, id: CodexAppServerRequestID) async {
         do {
             guard let socket else { throw CodexAppServerError.notConnected }
-            try await socket.send(.data(data))
+            guard let message = String(data: data, encoding: .utf8) else {
+                throw CodexAppServerError.invalidMessage
+            }
+            try await socket.send(.string(message))
         } catch {
             timeouts.removeValue(forKey: id)?.cancel()
             pending.removeValue(forKey: id)?.resume(throwing: error)
@@ -249,7 +252,10 @@ public actor CodexAppServerClient {
     private func send<T: Encodable>(_ value: T) async throws {
         guard let socket else { throw CodexAppServerError.notConnected }
         let data = try JSONEncoder.codex.encode(value)
-        try await socket.send(.data(data))
+        guard let message = String(data: data, encoding: .utf8) else {
+            throw CodexAppServerError.invalidMessage
+        }
+        try await socket.send(.string(message))
     }
 
     private func receiveLoop() async {
