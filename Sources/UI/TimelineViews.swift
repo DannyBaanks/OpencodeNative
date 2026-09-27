@@ -70,29 +70,20 @@ public struct UserPromptView: View {
     }
 
     public var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            // Rail
-            RoundedRectangle(cornerRadius: 1)
-                .fill(agentColor.opacity(0.8))
-                .frame(width: 2)
-                .frame(maxHeight: 72)
+        VStack(alignment: .trailing, spacing: OCSpacing.xs) {
+            Text("TÚ")
+                .font(OCTypography.metaMono)
+                .foregroundColor(agentColor)
 
-            VStack(alignment: .leading, spacing: 6) {
-                // "you" label
-                Text("you")
-                    .font(OCTypography.metaMono)
-                    .foregroundColor(OCColor.textFaint)
-
-                // Prompt text
+            VStack(alignment: .leading, spacing: OCSpacing.md) {
                 if let text = event.promptText {
-                    Text(text)
+                    MarkdownText(content: text, emphasisColor: agentColor)
                         .font(OCTypography.userPrompt)
                         .foregroundColor(OCColor.textPrimary)
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // Attachments
                 if let attachments = event.attachments, !attachments.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: OCSpacing.xs) {
@@ -104,9 +95,19 @@ public struct UserPromptView: View {
                     }
                 }
             }
+            .padding(.horizontal, OCSpacing.xl)
+            .padding(.vertical, OCSpacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .background(agentColor.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r18))
+            .overlay {
+                RoundedRectangle(cornerRadius: OCRadius.r18)
+                    .stroke(agentColor.opacity(0.28), lineWidth: 1)
+            }
+            .frame(maxWidth: 360, alignment: .trailing)
         }
-        .padding(.vertical, OCSpacing.xs)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.vertical, OCSpacing.sm)
     }
 }
 
@@ -125,11 +126,24 @@ public struct AssistantTextView: View {
             && sessionState.timelineEvents.last(where: { $0.kind == .assistantText })?.id == event.id
     }
 
+    private var speakerLabel: String {
+        sessionState.selectedModel?.route == "codex" ? "CODEX" : "ASISTENTE"
+    }
+
     public var body: some View {
-        VStack(alignment: .leading, spacing: OCSpacing.base) {
+        VStack(alignment: .leading, spacing: OCSpacing.sm) {
             let text = event.assistantText ?? ""
             if !text.isEmpty || isLiveTail {
-                Text(isLiveTail ? text + "▍" : text)
+                HStack(spacing: OCSpacing.xs) {
+                    Image(systemName: "sparkle")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(OCColor.agentBuild)
+                    Text(speakerLabel)
+                        .font(OCTypography.metaMono)
+                        .foregroundColor(OCColor.textFaint)
+                }
+
+                MarkdownText(content: isLiveTail ? text + "▍" : text, emphasisColor: OCColor.syntaxType)
                     .font(OCTypography.body)
                     .foregroundColor(OCColor.textPrimary)
                     .textSelection(.enabled)
@@ -137,6 +151,38 @@ public struct AssistantTextView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, OCSpacing.xl)
+        .padding(.vertical, OCSpacing.lg)
+        .background(OCColor.bgLayer1.opacity(0.58))
+        .clipShape(RoundedRectangle(cornerRadius: OCRadius.r18))
+        .overlay {
+            RoundedRectangle(cornerRadius: OCRadius.r18)
+                .stroke(OCColor.borderBase, lineWidth: 1)
+        }
+        .padding(.vertical, OCSpacing.xs)
+    }
+}
+
+/// Uses SwiftUI's native Markdown parser, then gives strong emphasis an
+/// explicit accent so literal `**markers**` never appear in the conversation.
+private struct MarkdownText: View {
+    let content: String
+    let emphasisColor: Color
+
+    private var renderedText: AttributedString {
+        var value = (try? AttributedString(markdown: content)) ?? AttributedString(content)
+        let emphasizedRanges = value.runs.compactMap { run -> Range<AttributedString.Index>? in
+            guard run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true else { return nil }
+            return run.range
+        }
+        for range in emphasizedRanges {
+            value[range].foregroundColor = emphasisColor
+        }
+        return value
+    }
+
+    var body: some View {
+        Text(renderedText)
     }
 }
 
