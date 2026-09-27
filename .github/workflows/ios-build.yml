@@ -180,7 +180,7 @@ jobs:
           sleep 4
           xcrun simctl io "$UDID" screenshot docs/screenshots/connect.png
           xcrun simctl terminate "$UDID" dev.iyscode.movil || true
-          xcrun simctl launch "$UDID" dev.iyscode.movil -native.openSandboxOnLaunch YES
+          xcrun simctl launch "$UDID" dev.iyscode.movil --screenshot-sandbox
           sleep 8
           xcrun simctl io "$UDID" screenshot docs/screenshots/sandbox.png
           sips -Z 1600 docs/screenshots/connect.png docs/screenshots/sandbox.png

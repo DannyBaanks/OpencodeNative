@@ -21,6 +21,7 @@ public final class WorkbenchStore: ObservableObject {
     @Published public private(set) var sandboxUsesLiveModel = false
     @Published public private(set) var sandboxFolderName: String? = UserDefaults.standard.string(forKey: "sandbox.authorizedFolderName")
     @Published public var sandboxFolderError: String?
+    @Published public var sandboxSetupError: String?
     @Published public var availableModels: [ModelInfo] = []
     @Published public var availableAgents: [String] = []
     @Published public var availableCommands: [CommandInfo] = []
@@ -188,25 +189,41 @@ public final class WorkbenchStore: ObservableObject {
         sandboxUsesLiveModel = false
     }
 
-    public func startSandbox(xaiKey: String?) async {
+    @discardableResult
+    public func startSandbox(xaiKey: String?) async -> Bool {
         await startSandbox(providerID: "xai", apiKey: xaiKey)
     }
 
-    public func startSandbox(providerID: String, apiKey: String?) async {
+    @discardableResult
+    public func startSandbox(providerID: String, apiKey: String?) async -> Bool {
+        sandboxSetupError = nil
         let trimmed = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard let provider = SandboxModelProvider.provider(id: providerID) else { return }
-        if let persistence = try? IOSPersistence() {
-            do {
-                if !trimmed.isEmpty { try await persistence.saveAPIKey(provider: provider.id, key: trimmed) }
-                var configuration = try await persistence.loadConfiguration() ?? Configuration()
-                configuration.defaultModelProvider = provider.id
-                try await persistence.saveConfiguration(configuration)
-            } catch {
-                addErrorEvent("Could not save provider settings: \(error.localizedDescription)")
-                return
-            }
+        guard let provider = SandboxModelProvider.provider(id: providerID) else {
+            sandboxSetupError = "No reconozco el proveedor seleccionado. Vuelve a elegirlo."
+            return false
         }
+
+        do {
+            let persistence = try IOSPersistence()
+            if !trimmed.isEmpty {
+                try await persistence.saveAPIKey(provider: provider.id, key: trimmed)
+            }
+            var configuration = try await persistence.loadConfiguration() ?? Configuration()
+            configuration.defaultModelProvider = provider.id
+            try await persistence.saveConfiguration(configuration)
+        } catch {
+            sandboxSetupError = "No pude guardar la clave o la configuración: \(error.localizedDescription)"
+            return false
+        }
+
         await useNativeRuntime()
+        guard backendMode == .native, connectionHealth == .connected else {
+            sandboxSetupError = connectionStatus.isEmpty
+                ? "No pude iniciar el sandbox. Inténtalo de nuevo."
+                : connectionStatus
+            return false
+        }
+        return true
     }
     
     public func useNativeRuntime() async {

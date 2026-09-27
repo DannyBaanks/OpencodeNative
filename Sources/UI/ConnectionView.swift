@@ -464,6 +464,7 @@ struct SandboxKeySheet: View {
     @EnvironmentObject private var store: WorkbenchStore
     @State private var key = ""
     @State private var hasKey = false
+    @State private var isStarting = false
     @State private var selectedProviderID = "nvidia"
     @State private var showProviderDirectory = false
     @FocusState private var fieldFocused: Bool
@@ -532,13 +533,19 @@ struct SandboxKeySheet: View {
                 Button {
                     fieldFocused = false
                     let typed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                    isStarting = true
+                    store.sandboxSetupError = nil
                     Task {
-                        await store.startSandbox(providerID: selectedProviderID, apiKey: typed.isEmpty ? nil : typed)
-                        dismiss()
+                        let started = await store.startSandbox(
+                            providerID: selectedProviderID,
+                            apiKey: typed.isEmpty ? nil : typed
+                        )
+                        isStarting = false
+                        if started { dismiss() }
                     }
                 } label: {
                     HStack {
-                        Text(hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "entrar con la clave guardada" : "guardar y entrar")
+                        Text(isStarting ? "abriendo sandbox..." : (hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "entrar con la clave guardada" : "guardar y entrar"))
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
                         Spacer()
                         Text("↵")
@@ -550,14 +557,31 @@ struct SandboxKeySheet: View {
                     .background(IysThemePreferences.active.accent)
                 }
                 .buttonStyle(.plain)
-                .disabled(!hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .opacity((!hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 0.5 : 1)
+                .disabled(isStarting || (!hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                .opacity((isStarting || hasKey || !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 1 : 0.5)
                 .padding(.top, 12)
 
+                if let error = store.sandboxSetupError {
+                    Text(error)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(Color.red.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 10)
+                }
+
                 Button {
+                    isStarting = true
+                    store.sandboxSetupError = nil
                     Task {
                         await store.useNativeRuntime()
-                        dismiss()
+                        isStarting = false
+                        if store.backendMode == .native, store.connectionHealth == .connected {
+                            dismiss()
+                        } else {
+                            store.sandboxSetupError = store.connectionStatus.isEmpty
+                                ? "No pude iniciar el sandbox. Inténtalo de nuevo."
+                                : store.connectionStatus
+                        }
                     }
                 } label: {
                     Text("ver el guion de demo")
