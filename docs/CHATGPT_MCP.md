@@ -2,9 +2,12 @@
 
 ## Current state
 
-The iOS app now has a canonical MCP tool projection for native capability
-descriptors in `NativeMCPToolCatalog`. It emits JSON Schema inputs and MCP tool
-annotations only when both conditions are true:
+The iOS app has a canonical MCP tool projection for native capability
+descriptors in `NativeMCPToolCatalog`, plus a request validator in
+`NativeMCPToolRouter` for incoming `tools/call` arguments. The validator
+returns a capability proposal only; it does not execute it or treat ChatGPT's
+confirmation as approval on the iPhone. The catalog emits JSON Schema inputs
+and MCP tool annotations only when both conditions are true:
 
 1. iOS reports the capability as available and authorized (or authorization is
    not applicable).
@@ -42,6 +45,8 @@ visible system UI or a fresh approval.
   mobile bridge.
 - Add an on-device approval queue for MCP-originated actions. ChatGPT's own
   confirmation does not replace the iPhone approval.
+- Connect validated MCP proposals to registered native executors after the
+  local approval queue is in place.
 - Register executable adapters one at a time; keep unsupported catalog entries
   out of `tools/list`.
 - Document Secure MCP Tunnel setup and ChatGPT's developer-mode connection.
