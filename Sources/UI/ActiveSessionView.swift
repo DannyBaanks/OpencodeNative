@@ -47,7 +47,17 @@ public struct ActiveSessionView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.easeInOut(duration: 0.18), value: sessionState.activeSurface)
 
-            WorkSurfaceSwitcher(selectedSurface: $sessionState.activeSurface)
+            if store.backendMode == .remote && sessionState.selectedModel?.route == "codex" {
+                Text("Experimental · Tailscale/VPN · chat and approvals only")
+                    .font(OCTypography.metaMono)
+                    .foregroundColor(OCColor.warning)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, OCSpacing.contentMargin)
+            }
+            WorkSurfaceSwitcher(
+                selectedSurface: $sessionState.activeSurface,
+                surfaces: store.backendMode == .remote && sessionState.selectedModel?.route == "codex" ? [.chat] : WorkSurface.allCases
+            )
                 .padding(.horizontal, OCSpacing.contentMargin)
                 .padding(.vertical, OCSpacing.xs)
 
@@ -126,10 +136,13 @@ public struct ActiveSessionView: View {
                     store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowOnce)
                 },
                 onDeny: {
-                    store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .deny)
+                    store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: event.permissionTool?.hasPrefix("Codex") == true ? .decline : .deny)
                 },
                 onPersistent: {
                     store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways)
+                },
+                onCodexCancel: {
+                    store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .cancel)
                 }
             )
             .presentationDetents([.medium, .large])
@@ -148,6 +161,11 @@ public struct ActiveSessionView: View {
                 Task { await store.loadFiles() }
             } else if newSurface == .review, let sessionID = sessionState.currentSession?.id {
                 Task { await store.loadDiff(sessionID: sessionID) }
+            }
+        }
+        .onAppear {
+            if store.backendMode == .remote, sessionState.selectedModel?.route == "codex" {
+                sessionState.activeSurface = .chat
             }
         }
         .onChange(of: sessionState.pendingPermission?.id) { _ in
@@ -873,10 +891,11 @@ struct SessionNavTitle: View {
 
 struct WorkSurfaceSwitcher: View {
     @Binding var selectedSurface: WorkSurface
+    var surfaces: [WorkSurface] = WorkSurface.allCases
 
     var body: some View {
         HStack(spacing: OCSpacing.sm) {
-            ForEach(WorkSurface.allCases) { surface in
+            ForEach(surfaces) { surface in
                 Button {
                     UISelectionFeedbackGenerator().selectionChanged()
                     selectedSurface = surface

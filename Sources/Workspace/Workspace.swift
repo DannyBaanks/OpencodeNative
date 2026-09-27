@@ -99,23 +99,26 @@ public actor IOSWorkspace: Workspace {
     public let capabilities = WorkspaceCapabilities()
     
     private let fileManager = FileManager.default
-    private let allowedRoots: [URL]
     
     public init(rootName: String = "workspace") throws {
         // Directorio base en Application Support (persistente, privado a la app)
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let baseDir = appSupport.appendingPathComponent("IysCodeMovil", isDirectory: true)
-        
+
         try fileManager.createDirectory(at: baseDir, withIntermediateDirectories: true)
-        
-        self.rootURL = baseDir.appendingPathComponent(rootName, isDirectory: true)
-        try fileManager.createDirectory(at: self.rootURL, withIntermediateDirectories: true)
-        
-        // Raíces permitidas: workspace + Documents + tmp (para operaciones temporales)
-        let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let tmp = fileManager.temporaryDirectory
-        
-        self.allowedRoots = [self.rootURL, documents, tmp]
+
+        let normalizedBase = baseDir.standardizedFileURL
+        let workspaceURL = normalizedBase.appendingPathComponent(rootName, isDirectory: true).standardizedFileURL
+        guard workspaceURL.deletingLastPathComponent().path == normalizedBase.path else {
+            throw WorkspaceError.pathNotInSandbox("Workspace name must be a single directory name")
+        }
+        try fileManager.createDirectory(at: workspaceURL, withIntermediateDirectories: true)
+        let resolvedWorkspace = workspaceURL.resolvingSymlinksInPath().standardizedFileURL
+        let resolvedBase = normalizedBase.resolvingSymlinksInPath().standardizedFileURL
+        guard resolvedWorkspace.deletingLastPathComponent().path == resolvedBase.path else {
+            throw WorkspaceError.pathNotInSandbox("Workspace root resolves outside Application Support")
+        }
+        self.rootURL = resolvedWorkspace
     }
     
     /// Verifica que una ruta relativa está dentro de las raíces permitidas
@@ -125,24 +128,28 @@ public actor IOSWorkspace: Workspace {
             .filter { !$0.isEmpty && $0 != "." }
             .joined(separator: "/")
         
-        // Construir URL relativa al rootURL
+        // Construir la ruta desde la raíz y rechazar symlinks en cualquier
+        // componente. Canonicalizar solo después de detectar enlaces evita
+        // que un enlace dentro del workspace apunte a Documents/tmp u otra
+        // carpeta del contenedor de la app.
         var url = rootURL
         for component in cleaned.split(separator: "/") {
             if component == ".." {
                 throw WorkspaceError.pathNotInSandbox("Path traversal not allowed: \(relativePath)")
             }
             url.appendPathComponent(String(component))
+            if (try? fileManager.destinationOfSymbolicLink(atPath: url.path)) != nil {
+                throw WorkspaceError.pathNotInSandbox("Symbolic links are not allowed: \(relativePath)")
+            }
         }
-        
-        // Verificar que está dentro de alguna raíz permitida
-        let isAllowed = allowedRoots.contains { allowed in
-            url.path.hasPrefix(allowed.path)
-        }
-        
-        if !isAllowed {
+
+        let resolved = url.resolvingSymlinksInPath().standardizedFileURL
+        let rootPath = rootURL.standardizedFileURL.path
+        let resolvedPath = resolved.path
+        guard resolvedPath == rootPath || resolvedPath.hasPrefix(rootPath + "/") else {
             throw WorkspaceError.pathNotInSandbox("Path not in allowed roots: \(url.path)")
         }
-        
+
         return url
     }
     

@@ -53,7 +53,7 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
 
     // MARK: - WorkbenchBackend
 
-    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func connectRemote(pairing: BackendPairing) async throws { throw Self.unsupported }
     public func disconnect() async {}
     public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
     public func listProjects() async throws -> [Project] { throw Self.unsupported }
@@ -96,7 +96,7 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
     public var connectionStatus: String { get async { "not implemented" } }
     public var currentSessionID: String? { get async { nil } }
 
-    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func connectRemote(pairing: BackendPairing) async throws { throw Self.unsupported }
     public func disconnect() async {}
     public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
     public func listProjects() async throws -> [Project] { throw Self.unsupported }
@@ -126,7 +126,7 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
     public var connectionStatus: String { get async { "not implemented" } }
     public var currentSessionID: String? { get async { nil } }
 
-    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func connectRemote(pairing: BackendPairing) async throws { throw Self.unsupported }
     public func disconnect() async {}
     public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
     public func listProjects() async throws -> [Project] { throw Self.unsupported }
@@ -156,7 +156,7 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
     public var connectionStatus: String { get async { "not implemented" } }
     public var currentSessionID: String? { get async { nil } }
 
-    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func connectRemote(pairing: BackendPairing) async throws { throw Self.unsupported }
     public func disconnect() async {}
     public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
     public func listProjects() async throws -> [Project] { throw Self.unsupported }
@@ -186,7 +186,7 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
     public var connectionStatus: String { get async { "not implemented" } }
     public var currentSessionID: String? { get async { nil } }
 
-    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func connectRemote(pairing: BackendPairing) async throws { throw Self.unsupported }
     public func disconnect() async {}
     public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
     public func listProjects() async throws -> [Project] { throw Self.unsupported }
@@ -216,7 +216,7 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
     public var connectionStatus: String { get async { "not implemented" } }
     public var currentSessionID: String? { get async { nil } }
 
-    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func connectRemote(pairing: BackendPairing) async throws { throw Self.unsupported }
     public func disconnect() async {}
     public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
     public func listProjects() async throws -> [Project] { throw Self.unsupported }
@@ -246,7 +246,7 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
     public var connectionStatus: String { get async { "not implemented" } }
     public var currentSessionID: String? { get async { nil } }
 
-    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func connectRemote(pairing: BackendPairing) async throws { throw Self.unsupported }
     public func disconnect() async {}
     public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
     public func listProjects() async throws -> [Project] { throw Self.unsupported }

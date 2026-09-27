@@ -103,7 +103,7 @@ public final class GeminiRemoteBackend: WorkbenchBackend, RemoteBackend {
 
     // MARK: - WorkbenchBackend
 
-    public func connectRemote(pairing: RemotePairing) async throws {
+    public func connectRemote(pairing: BackendPairing) async throws {
         throw RemoteBackendError.unsupportedFeature("Gemini remote backend not yet implemented")
     }
 

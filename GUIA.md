@@ -11,7 +11,7 @@
 En la carpeta del proyecto que quieres que OpenCode controle:
 
 ```bash
-npx --yes github:DannyBaanks/OpencodeNative link
+npx --yes github:DannyBaanks/IysCodeMovil#main link
 ```
 
 Eso es todo en el escritorio. El resto es pegar el link en el iPhone.
@@ -34,20 +34,23 @@ cada corrida genera uno nuevo):
 
 ```
 
-opencode native / desktop link
+iyscode native / desktop link
 ────────────────────────────────────────
-project   C:\Development\ISyCo Git\OpencodeNative
+project   C:\Development\ISyCo Git\IysCodeMovil
 server    http://192.168.1.102:4096
 
 paste this into the iPhone app:
 
-opencodenative://pair?host=192.168.1.102&port=4096&username=opencode&password=X8oewoOZRcd5wARbzJCvW4X4t0yHcY17&directory=C%3A%5CDevelopment%5CISyCo+Git%5COpencodeNative
+iyscodemovil://pair?host=192.168.1.102&port=4096&username=iyscode&password=%3CREDACTED%3E&directory=C%3A%5CDevelopment%5CISyCo+Git%5CIysCodeMovil
 
 Keep this terminal open. Ctrl+C stops the link.
 ────────────────────────────────────────
 
 opencode server listening on http://0.0.0.0:4096
 ```
+
+El password del pairing está oculto en este ejemplo. El Bridge genera uno
+nuevo en cada ejecución y avisa que HTTP no cifra credenciales ni tráfico.
 
 Si el Bridge no encuentra una IPv4 privada enrutable (RFC1918) imprime un
 `WARNING` — significa que la IP impresa probablemente no la alcanza el
@@ -56,9 +59,9 @@ equipos al mismo Wi-Fi y reintenta.
 
 ## Paso 2 — Conectar el iPhone
 
-1. Instala la app (artefacto `OpencodeNative-unsigned` del CI, firmado con
+1. Instala la app (artefacto `IysCodeMovil-unsigned` del CI, firmado con
    iloader o vía sideload).
-2. Pega el link `opencodenative://pair?...` en la primera pantalla y toca
+2. Pega el link `iyscodemovil://pair?...` en la primera pantalla y toca
    **connect**.
 3. Si todo va bien verás `OpenCode connected` y la sesión del servidor.
 
@@ -117,7 +120,7 @@ red tiene el iPhone.
 
 ### 3. `--directory` con espacios por línea de comandos
 
-`node Bridge/bin/opencodenative.mjs link --directory "C:\ruta con espacios"`
+`node Bridge/bin/iyscodemovil.mjs link --directory "C:\ruta con espacios"`
 funciona en una shell normal, pero lanzarlo vía `Start-Process -ArgumentList`
 partió el argumento (`unknown option: Git\OpencodeNative` — capturado real).
 Si usas wrappers que parten argumentos, **no pases `--directory`**: el Bridge

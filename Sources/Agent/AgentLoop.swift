@@ -180,6 +180,8 @@ public struct PermissionResponse: Codable, Sendable {
         case allowOnce
         case allowAlways
         case deny
+        case decline
+        case cancel
     }
     
     public init(requestId: String, decision: Decision) {
@@ -416,7 +418,7 @@ public actor AgentLoop {
                         }
 
                         switch permission.decision {
-                        case .deny:
+                        case .deny, .decline, .cancel:
                             let deniedResult = ToolExecutionResult(
                                 toolCallId: invocation.id,
                                 output: "",

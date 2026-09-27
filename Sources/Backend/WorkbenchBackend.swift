@@ -7,6 +7,12 @@ public enum BackendMode: String, Sendable {
     case remote
 }
 
+public enum BackendPairing: Sendable {
+    case openCode(OpenCodePairing)
+    case codex(CodexPairing)
+    case remote(RemotePairing)
+}
+
 public struct WorkbenchFileNode: Sendable, Identifiable, Hashable {
     public let id: String
     public let name: String
@@ -77,7 +83,7 @@ public protocol WorkbenchBackend: Sendable {
     var currentSessionID: String? { get async }
     var eventStream: AsyncStream<WorkbenchEvent> { get }
     
-    func connectRemote(pairing: OpenCodePairing) async throws
+    func connectRemote(pairing: BackendPairing) async throws
     func disconnect() async
     func useNativeRuntime() async throws
     

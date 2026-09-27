@@ -38,7 +38,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         get async { currentSessionIDStorage }
     }
     
-    public func connectRemote(pairing: OpenCodePairing) async throws {
+    public func connectRemote(pairing: BackendPairing) async throws {
         throw WorkbenchError.unsupportedFeature("Native backend doesn't support remote connection")
     }
     

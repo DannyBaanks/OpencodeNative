@@ -24,41 +24,33 @@ public enum WorkbenchBackendFactory {
     /// - Parameter pairing: Pairing genérico con tipo de backend incluido
     /// - Returns: Backend configurado y listo para connectRemote
     @MainActor
-    public static func makeBackend(from pairing: RemotePairing) throws -> WorkbenchBackend {
-        switch pairing.type {
-        case .opencode:
-            let opencodePairing = OpenCodePairing(
-                scheme: pairing.scheme,
-                host: pairing.host,
-                port: pairing.port,
-                username: pairing.username,
-                password: pairing.password,
-                directory: pairing.directory
-            )
+    public static func makeBackend(from pairing: BackendPairing) throws -> WorkbenchBackend {
+        switch pairing {
+        case .openCode(let opencodePairing):
             return OpenCodeRemoteBackend(pairing: opencodePairing)
-            
-        case .openisy:
-            let opencodePairing = OpenCodePairing(
-                scheme: pairing.scheme,
-                host: pairing.host,
-                port: pairing.port,
-                username: pairing.username,
-                password: pairing.password,
-                directory: pairing.directory
-            )
-            return OpenCodeRemoteBackend(pairing: opencodePairing)
-            
-        case .crush:
-            return CrushRemoteBackend()
-
         case .codex:
             return CodexRemoteBackend()
-
-        case .claudeCode:
-            return ClaudeCodeRemoteBackend()
-
-        case .gemini:
-            return GeminiRemoteBackend()
+        case .remote(let remotePairing):
+            switch remotePairing.type {
+            case .opencode, .openisy:
+                let opencodePairing = OpenCodePairing(
+                    scheme: remotePairing.scheme,
+                    host: remotePairing.host,
+                    port: remotePairing.port,
+                    username: remotePairing.username,
+                    password: remotePairing.password,
+                    directory: remotePairing.directory
+                )
+                return OpenCodeRemoteBackend(pairing: opencodePairing)
+            case .crush:
+                return CrushRemoteBackend()
+            case .claudeCode:
+                return ClaudeCodeRemoteBackend()
+            case .gemini:
+                return GeminiRemoteBackend()
+            case .codex:
+                throw FactoryError.missingConfiguration("Codex requires a typed Codex pairing.")
+            }
         }
     }
     
@@ -74,8 +66,8 @@ public enum WorkbenchBackendFactory {
         NativeSwiftBackend() // usa sandbox local
     }
     
-    /// Parsea una URL de pairing y devuelve el tipo de backend y la pairing genérica
-    public static func parsePairingURL(_ url: String) throws -> (RemoteBackendType, RemotePairing) {
+    /// Parsea una URL sin mezclar credenciales Codex con auth Basic de OpenCode.
+    public static func parsePairingURL(_ url: String) throws -> (RemoteBackendType, BackendPairing) {
         let value = url.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let components = URLComponents(string: value),
               components.scheme != nil else {
@@ -108,16 +100,28 @@ public enum WorkbenchBackendFactory {
             // Default a opencode para compatibilidad
             backendType = .opencode
         }
+
+        if backendType == .codex {
+            do {
+                return (.codex, .codex(try CodexPairing.parse(value)))
+            } catch {
+                throw FactoryError.invalidPairingLink(error.localizedDescription)
+            }
+        }
         
         // Parsear query items
-        let items = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item -> (String, String)? in
-            guard let value = item.value else { return nil }
-            return (item.name, value)
-        })
+        var items: [String: String] = [:]
+        for item in components.queryItems ?? [] {
+            guard let value = item.value else { continue }
+            guard items.updateValue(value, forKey: item.name) == nil else {
+                throw FactoryError.invalidPairingLink("Duplicate query parameter: \(item.name)")
+            }
+        }
         
         let remoteScheme = items["scheme"] ?? "http"
-        guard let host = items["host"], !host.isEmpty,
-              let portText = items["port"], let port = Int(portText),
+        guard remoteScheme == "http" || remoteScheme == "https",
+              let host = items["host"], !host.isEmpty,
+              let portText = items["port"], let port = Int(portText), (1...65535).contains(port),
               let password = items["password"], !password.isEmpty else {
             throw FactoryError.invalidPairingLink("Missing required fields: host, port, password")
         }
@@ -132,17 +136,28 @@ public enum WorkbenchBackendFactory {
             directory: items["directory"] ?? ""
         )
         
-        return (backendType, pairing)
+        if backendType == .opencode || backendType == .openisy {
+            let opencodePairing = OpenCodePairing(
+                scheme: pairing.scheme,
+                host: pairing.host,
+                port: pairing.port,
+                username: pairing.username,
+                password: pairing.password,
+                directory: pairing.directory
+            )
+            return (backendType, .openCode(opencodePairing))
+        }
+        return (backendType, .remote(pairing))
     }
     
     /// Tipos de backend soportados (backends que existen y se conectan)
     public static var supportedBackendTypes: [RemoteBackendType] {
-        [.opencode, .openisy]
+        [.opencode, .openisy, .codex]
     }
 
     /// Tipos de backend con stub compilado pero sin transporte implementado
     public static var stubbedBackendTypes: [RemoteBackendType] {
-        [.crush, .codex, .claudeCode, .gemini]
+        [.crush, .claudeCode, .gemini]
     }
 
     /// Tipos de backend planificados (no implementados)

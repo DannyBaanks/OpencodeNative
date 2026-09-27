@@ -37,8 +37,9 @@ public struct TimelineEventContainer: View {
             PermissionView(
                 event: event,
                 onAllow: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowOnce) },
-                onDeny: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .deny) },
-                onPersistent: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways) }
+                onDeny: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: event.permissionTool?.hasPrefix("Codex") == true ? .decline : .deny) },
+                onPersistent: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .allowAlways) },
+                onCodexCancel: { store.respondToPermission(requestId: event.permissionRequestId ?? event.id, decision: .cancel) }
             )
         case .question:
             QuestionView(
@@ -780,15 +781,18 @@ public struct PermissionView: View {
     let onAllow: () -> Void
     let onDeny: () -> Void
     let onPersistent: () -> Void
+    let onCodexCancel: (() -> Void)?
 
-    public init(event: TimelineEvent, onAllow: @escaping () -> Void, onDeny: @escaping () -> Void, onPersistent: @escaping () -> Void) {
+    public init(event: TimelineEvent, onAllow: @escaping () -> Void, onDeny: @escaping () -> Void, onPersistent: @escaping () -> Void, onCodexCancel: (() -> Void)? = nil) {
         self.event = event
         self.onAllow = onAllow
         self.onDeny = onDeny
         self.onPersistent = onPersistent
+        self.onCodexCancel = onCodexCancel
     }
 
     public var body: some View {
+        let isCodex = event.permissionTool?.hasPrefix("Codex") == true
         VStack(alignment: .leading, spacing: OCSpacing.lg) {
             // Header
             HStack(spacing: OCSpacing.base) {
@@ -837,7 +841,7 @@ public struct PermissionView: View {
             VStack(spacing: OCSpacing.base) {
                 HStack(spacing: OCSpacing.base) {
                     Button(action: onDeny) {
-                        Text("Deny")
+                        Text(isCodex ? "Decline" : "Deny")
                             .font(OCTypography.control)
                             .foregroundColor(OCColor.textPrimary)
                             .frame(maxWidth: .infinity)
@@ -863,10 +867,21 @@ public struct PermissionView: View {
                     .buttonStyle(.plain)
                 }
 
+                if isCodex {
+                    Button(action: onCodexCancel ?? onDeny) {
+                        Text("Cancel turn")
+                            .font(OCTypography.control)
+                            .foregroundColor(OCColor.textPrimary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 40)
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 Menu {
-                    Button("Always Allow", action: onPersistent)
+                    Button(isCodex ? "Allow for this session" : "Always Allow", action: onPersistent)
                 } label: {
-                    Label("Persist Permission…", systemImage: "ellipsis.circle")
+                    Label(isCodex ? "Session approval…" : "Persist Permission…", systemImage: "ellipsis.circle")
                         .font(OCTypography.control)
                         .foregroundColor(OCColor.textSecondary)
                         .frame(maxWidth: .infinity)

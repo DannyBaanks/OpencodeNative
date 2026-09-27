@@ -31,6 +31,7 @@ public final class WorkbenchStore: ObservableObject {
     private var currentSessionID: String?
     var currentBackend: (any WorkbenchBackend)?
     private var pairingStore = PairingStore()
+    private var codexPairingStore = CodexPairingStore()
     private var backendEventTask: Task<Void, Never>?
     private var isProcessingRemote = false
     /// part id → "assistant" | "reasoning" | "user". Deltas have no type of their own.
@@ -39,64 +40,9 @@ public final class WorkbenchStore: ObservableObject {
     public init() {}
     
     public func connectRemote(_ rawPairingLink: String) async {
-        guard !isConnecting else { return }
-        await currentBackend?.stopEventStream()
-        isConnecting = true
-        connectionHealth = .connecting
-        connectionStatus = "connecting..."
-        
         do {
             let (backendType, pairing) = try WorkbenchBackendFactory.parsePairingURL(rawPairingLink)
-            let backend = try WorkbenchBackendFactory.makeBackend(from: pairing)
-            currentBackend = backend
-            backendMode = .remote
-            
-            try await backend.connectRemote(pairing: pairing)
-            
-            let project = Project(
-                id: "remote:\(pairing.host):\(pairing.port)",
-                name: "\(pairing.type.displayName) @ \(pairing.host)",
-                path: pairing.directory.isEmpty ? "remote" : pairing.directory,
-                avatarColor: .white,
-                sessionCount: 0
-            )
-            projects = [project]
-            currentProjectID = project.id
-            sessionState.currentProject = project
-            
-            sessionState.clearTimeline()
-            let remoteSessions = try await backend.listSessions(projectID: project.id)
-            sessions = remoteSessions
-            if let first = remoteSessions.first {
-                await selectSession(first)
-            }
-            
-            sessionState.selectedModel = ModelInfo(
-                name: "\(pairing.type.displayName) server default",
-                provider: pairing.type.displayName,
-                providerIcon: "terminal",
-                isLocal: false,
-                route: pairing.type.rawValue
-            )
-            
-            connectionStatus = await backend.connectionStatus
-            isConnecting = false
-            connectionHealth = .connected
-            addSystemEvent("\(pairing.type.displayName) connected")
-            
-            let opencodePairing = OpenCodePairing(
-                scheme: pairing.scheme,
-                host: pairing.host,
-                port: pairing.port,
-                username: pairing.username,
-                password: pairing.password,
-                directory: pairing.directory
-            )
-            try await pairingStore.save(opencodePairing)
-            
-            await loadModelsAndAgents()
-            await subscribeToBackendEvents(backend)
-            
+            await connectRemote(pairing: pairing, backendType: backendType)
         } catch {
             isConnecting = false
             connectionHealth = .disconnected
@@ -104,7 +50,96 @@ public final class WorkbenchStore: ObservableObject {
             connectionStatus = "error: \(error.localizedDescription)"
         }
     }
-    
+
+    private func connectRemote(pairing: BackendPairing, backendType: RemoteBackendType) async {
+        guard !isConnecting else { return }
+        await currentBackend?.stopEventStream()
+        isConnecting = true
+        connectionHealth = .connecting
+        connectionStatus = "connecting..."
+
+        do {
+            let backend = try WorkbenchBackendFactory.makeBackend(from: pairing)
+            currentBackend = backend
+            backendMode = .remote
+            try await backend.connectRemote(pairing: pairing)
+
+            let host: String
+            let port: Int
+            let directory: String
+            switch pairing {
+            case .openCode(let value):
+                host = value.host
+                port = value.port
+                directory = value.directory
+            case .codex(let value):
+                host = value.host
+                port = value.port
+                directory = value.directory
+            case .remote(let value):
+                host = value.host
+                port = value.port
+                directory = value.directory
+            }
+
+            let project = Project(
+                id: "\(backendType.rawValue):\(host):\(port)",
+                name: "\(backendType.displayName) @ \(host)",
+                path: directory.isEmpty ? "remote" : directory,
+                avatarColor: .white,
+                sessionCount: 0
+            )
+            projects = [project]
+            currentProjectID = project.id
+            sessionState.currentProject = project
+
+            sessionState.clearTimeline()
+            sessions = try await backend.listSessions(projectID: project.id)
+            if let first = sessions.first {
+                await selectSession(first)
+            }
+
+            sessionState.selectedModel = ModelInfo(
+                name: "\(backendType.displayName) server default",
+                provider: backendType.displayName,
+                providerIcon: "terminal",
+                isLocal: false,
+                route: backendType.rawValue
+            )
+
+            connectionStatus = await backend.connectionStatus
+            isConnecting = false
+            connectionHealth = .connected
+            addSystemEvent("\(backendType.displayName) connected")
+
+            switch pairing {
+            case .openCode(let value):
+                try await pairingStore.save(value)
+            case .codex(let value):
+                try await codexPairingStore.save(value)
+            case .remote(let value) where value.type == .opencode || value.type == .openisy:
+                try await pairingStore.save(OpenCodePairing(
+                    scheme: value.scheme,
+                    host: value.host,
+                    port: value.port,
+                    username: value.username,
+                    password: value.password,
+                    directory: value.directory
+                ))
+            case .remote:
+                break
+            }
+
+            await loadModelsAndAgents()
+            await subscribeToBackendEvents(backend)
+        } catch {
+            isConnecting = false
+            connectionHealth = .disconnected
+            backendMode = .unconfigured
+            connectionStatus = "error: \(error.localizedDescription)"
+        }
+    }
+
     public func disconnect() async {
         await currentBackend?.disconnect()
         currentBackend = nil
@@ -177,6 +212,10 @@ public final class WorkbenchStore: ObservableObject {
     }
     
     public func reconnectStoredPairing() async {
+        if let codex = try? await codexPairingStore.load() {
+            await connectRemote(pairing: .codex(codex), backendType: .codex)
+            return
+        }
         if let stored = try? await pairingStore.load() {
             let pairing = OpenCodePairing(
                 host: stored.host,
@@ -185,7 +224,7 @@ public final class WorkbenchStore: ObservableObject {
                 password: stored.password,
                 directory: stored.directory
             )
-            await connectRemote(pairing.rawValue)
+            await connectRemote(pairing: .openCode(pairing), backendType: .opencode)
         }
     }
     
@@ -202,10 +241,17 @@ public final class WorkbenchStore: ObservableObject {
     
     public func forgetPairing() async {
         try? await pairingStore.clear()
+        do {
+            try await codexPairingStore.clear()
+        } catch {
+            addErrorEvent("Could not remove Codex pairing secret: \(error.localizedDescription)")
+        }
     }
     
     public func hasStoredPairing() async -> Bool {
-        await pairingStore.hasStoredPairing()
+        let hasOpenCodePairing = await pairingStore.hasStoredPairing()
+        let hasCodexPairing = await codexPairingStore.hasStoredPairing()
+        return hasOpenCodePairing || hasCodexPairing
     }
     
     public func selectProject(_ project: Project) async {
@@ -240,7 +286,19 @@ public final class WorkbenchStore: ObservableObject {
             do {
                 try await backend.selectSession(session.id)
                 let events = try await backend.loadHistory(sessionID: session.id)
-                sessionState.timelineEvents = events
+                var mergedEvents = events
+                for streamedEvent in sessionState.timelineEvents {
+                    if let index = mergedEvents.firstIndex(where: { $0.id == streamedEvent.id }) {
+                        if streamedEvent.kind == .assistantText,
+                           let liveText = streamedEvent.assistantText,
+                           !liveText.isEmpty {
+                            mergedEvents[index].assistantText = liveText
+                        }
+                    } else {
+                        mergedEvents.append(streamedEvent)
+                    }
+                }
+                sessionState.timelineEvents = mergedEvents
             } catch {
                 addErrorEvent("Failed to load session: \(error.localizedDescription)")
             }
@@ -380,12 +438,13 @@ public final class WorkbenchStore: ObservableObject {
             return
         }
         
-        sessionState.pendingPermission = nil
-        
         Task { [weak self] in
             do {
                 try await backend.replyPermission(requestID: requestId, decision: decision)
                 await MainActor.run { [weak self] in
+                    if self?.sessionState.pendingPermission?.permissionRequestId == requestId {
+                        self?.sessionState.pendingPermission = nil
+                    }
                     self?.addSystemEvent("Permission \(decision.rawValue)")
                 }
             } catch {
@@ -461,6 +520,12 @@ public final class WorkbenchStore: ObservableObject {
     
     public func loadModelsAndAgents() async {
         guard let backend = currentBackend else { return }
+        if sessionState.selectedModel?.route == "codex" {
+            availableModels = [sessionState.selectedModel!]
+            availableAgents = []
+            availableCommands = []
+            return
+        }
         do {
             let providers = try await backend.availableProviders()
             var models: [ModelInfo] = []
@@ -535,7 +600,7 @@ public final class WorkbenchStore: ObservableObject {
                     tool: tool,
                     command: command,
                     explanation: explanation,
-                    scope: backendMode == .remote ? "remote workspace" : "sandbox",
+                    scope: tool.hasPrefix("Codex") ? "Codex · para esta sesión" : (backendMode == .remote ? "remote workspace" : "sandbox"),
                     agentMode: sessionState.agentMode
                 )
             }

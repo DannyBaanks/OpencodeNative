@@ -1,16 +1,16 @@
 {
-  "name": "opencodenative-link",
+  "name": "iyscodemovil-bridge",
   "version": "0.1.0",
   "private": true,
-  "description": "Pair OpencodeNative for iOS with the official OpenCode headless server.",
+  "description": "Pair IysCode Movil with OpenCode-compatible desktop runtimes.",
   "type": "module",
   "scripts": {
-    "test:bridge": "node --test Bridge/test/opencodenative.test.mjs",
+    "test:bridge": "node --test Bridge/test/iyscodemovil.test.mjs",
     "probe:openisy-transport": "node Bridge/test/openisy-transport-probe.mjs",
     "probe:official-opencode": "node Bridge/test/official-opencode-probe.mjs"
   },
   "bin": {
-    "opencodenative": "Bridge/bin/opencodenative.mjs"
+    "iyscodemovil": "Bridge/bin/iyscodemovil.mjs"
   },
   "engines": {
     "node": ">=18"

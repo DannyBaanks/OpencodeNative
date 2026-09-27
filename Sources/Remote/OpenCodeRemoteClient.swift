@@ -45,14 +45,17 @@ public struct OpenCodePairing: Equatable, Sendable {
               components.host == "pair" else {
             throw OpenCodeRemoteError.invalidPairingLink
         }
-        let items = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item -> (String, String)? in
-            guard let value = item.value else { return nil }
-            return (item.name, value)
-        })
+        var items: [String: String] = [:]
+        for item in components.queryItems ?? [] {
+            guard let value = item.value else { continue }
+            guard items.updateValue(value, forKey: item.name) == nil else {
+                throw OpenCodeRemoteError.invalidPairingLink
+            }
+        }
         let scheme = items["scheme"] ?? "http"
         guard scheme == "http" || scheme == "https",
               let host = items["host"], !host.isEmpty,
-              let portText = items["port"], let port = Int(portText),
+              let portText = items["port"], let port = Int(portText), (1...65535).contains(port),
               let password = items["password"], !password.isEmpty else {
             throw OpenCodeRemoteError.invalidPairingLink
         }

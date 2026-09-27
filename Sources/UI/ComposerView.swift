@@ -68,7 +68,8 @@ public struct ComposerView: View {
                 onAgentTap: { sessionState.showAgentPicker = true },
                 selectedModel: sessionState.selectedModel,
                 onModelTap: { sessionState.showModelPicker = true },
-                onAttachTap: { sessionState.showAttachments = true }
+                onAttachTap: { sessionState.showAttachments = true },
+                codexMode: sessionState.selectedModel?.route == "codex"
             )
             .padding(.horizontal, OCSpacing.contentMargin)
             .padding(.bottom, OCSpacing.base)
@@ -162,23 +163,31 @@ public struct ComposerControlRow: View {
     let selectedModel: ModelInfo?
     let onModelTap: () -> Void
     let onAttachTap: () -> Void
+    let codexMode: Bool
 
     public init(
         agentMode: AgentMode,
         onAgentTap: @escaping () -> Void,
         selectedModel: ModelInfo?,
         onModelTap: @escaping () -> Void,
-        onAttachTap: @escaping () -> Void
+        onAttachTap: @escaping () -> Void,
+        codexMode: Bool = false
     ) {
         self.agentMode = agentMode
         self.onAgentTap = onAgentTap
         self.selectedModel = selectedModel
         self.onModelTap = onModelTap
         self.onAttachTap = onAttachTap
+        self.codexMode = codexMode
     }
 
     public var body: some View {
         HStack(spacing: OCSpacing.base) {
+            if codexMode {
+                Label("Codex · server default", systemImage: "terminal")
+                    .font(OCTypography.control)
+                    .foregroundColor(OCColor.textSecondary)
+            } else {
             // Attach button
             Button(action: onAttachTap) {
                 Image(systemName: "paperclip")
@@ -197,6 +206,7 @@ public struct ComposerControlRow: View {
                 ModelPill(model: model, onTap: onModelTap)
             } else {
                 ModelPillPlaceholder(onTap: onModelTap)
+            }
             }
 
             Spacer()

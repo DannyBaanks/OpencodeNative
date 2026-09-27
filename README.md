@@ -54,7 +54,7 @@ open IysCodeMovil.xcodeproj
 ### Desktop Link (Bridge CLI)
 ```bash
 # Install
-npm i -g github:DannyBaanks/IysCodeMovil#bridge
+npm i -g github:DannyBaanks/IysCodeMovil#main
 
 # Link OpenCode (default)
 iyscodemovil link --runtime opencode --port 4096
