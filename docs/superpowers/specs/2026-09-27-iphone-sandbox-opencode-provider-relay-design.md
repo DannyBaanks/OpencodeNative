@@ -1,6 +1,6 @@
 # iPhone Sandbox with OpenCode Provider Relay
 
-**Status:** Proposed design. The user approved the hybrid architecture, OpenCode-only provider source, per-session parallel runs, and Keychain/API-key relay behavior in conversation on 2026-09-27. The host contract and this written spec still require review before implementation planning.
+**Status:** Approved architecture; implementation in progress. The user approved the hybrid architecture, OpenCode-only provider source, per-session parallel runs, Keychain/API-key relay behavior, and Native iOS Capability Fabric on 2026-09-27. The host/TUI repo owns the host contract; this repo consumes it and does not modify it.
 
 ## Goal
 
@@ -147,3 +147,39 @@ The replacement design:
 - API keys sent transiently to the host are protected in transit and at rest on the phone, but the host process can access them in memory while servicing the request. Log redaction and TLS are release blockers.
 - Concurrent sessions can target the same files. Workspace coordination/conflict behavior must be resolved before enabling simultaneous local file mutations.
 - Provider/model context is sent off-device. The UI disclosure must appear before first use and remain accessible from provider settings.
+
+
+## Native iOS Capability Fabric
+
+The phone is the authority boundary for Apple-device capabilities. Model output is data: it can create a typed proposal, but it cannot directly access UIKit, Foundation file URLs, Keychain, or Apple frameworks. Native operations pass through `NativeCapabilityBroker`, which checks capability availability, entitlement/setup, the current OS authorization state, effect policy, and any required explicit approval before calling a native adapter. The adapter returns a bounded result and a privacy-safe receipt. Host/OpenCode relay remains inference-only and cannot invoke this broker.
+
+The shared descriptor records a stable capability ID, availability, authorization state, entitlement/setup requirement, user-presence requirement, effect class, and input/output schema. Effect classes are `READ`, `WRITE`, `PRESENT_UI`, `SENSITIVE_READ`, `SENSITIVE_WRITE`, `DEVICE_ACTION`, and `EXTERNAL_SIDE_EFFECT`. Discovery is not authorization; authorization is not model permission; model permission never suppresses an Apple system prompt. Only context-relevant tools are projected into a model turn.
+
+### First vertical slice
+
+- **App Intents / Shortcuts:** expose only real typed ISyCode actions through App Intents/App Shortcuts. Support launching only individually configured user-owned shortcuts through Apple's documented URL integration. The app cannot claim to enumerate all shortcuts. The user configures/approves names or identifiers, external effects pass local approval policy, and launching may present Shortcuts UI.
+- **Keychain:** retain provider API-key behavior. Add secret existence/store/replace/delete only where the app needs them; do not expose `secret.read` to the model. Provider credentials are app-owned Keychain values, never other apps' Keychain entries, and never model context.
+- **Files:** retain the app sandbox and current user-picked folder bookmark. Any additional files or folders require the system picker and security-scoped URLs, minimal supported bookmark persistence, and coordinated access. The Files app does not grant broad Files access.
+- **Notifications:** request authorization in context, then schedule/cancel local notifications for app-defined semantic events. The model may suggest wording but cannot choose policy or bypass authorization.
+- **Settings catalog:** report `available`, `authorized`, `denied`, `restricted`, `needs setup`, or `unsupported` separately. “Available” never means “granted.”
+
+The first slice does not request Calendar, Contacts, Photos library, Camera, Microphone, Speech, Location, HealthKit, HomeKit, Bluetooth, or motion permissions on launch. Later modules use the same typed broker: EventKit operations request only needed access; Contacts fetch only necessary fields; Photos prefers the system picker; camera/audio require visible invocation and current Apple permissions; location requests foreground access in context; share/open URL/compose use system UI and policy validation. HomeKit, Bluetooth, HealthKit, motion and other entitlement-gated APIs remain opt-in until a concrete use case and privacy review exist. BackgroundTasks are a supported opportunity, not an unrestricted daemon guarantee; durable run IDs and reconciliation are required for future long work.
+
+### Policy, discovery, and receipts
+
+Approval follows effect class rather than framework. Current sandbox reads use the existing grant; file writes retain explicit approval; sensitive reads require OS permission and local policy; shortcuts require a user-configured allowlist and any action approval; URL targets are validated; message composition presents Apple UI and is not reported as delivered; camera/microphone require OS permission plus visible user action. External side effects fail closed without approval. A model cannot fabricate capability state or permission.
+
+Receipts record tool ID, request ID, authorization state, approval decision, effect class, success/failure, safe metadata, and timestamp. They must omit Keychain/OAuth secrets, media bytes, contact dumps, and unnecessary location precision. The host relay cannot call native tools. Capability tools are projected only when relevant to the user task; the full catalog is not sent with every model request.
+
+### Directed witnesses
+
+Automated tests cover registry state distinctions, model permission vs OS authorization, effect approval, fabricated-grant rejection, host/native boundary, secret redaction, picker bookmark scope, notification denial, shortcut allowlist/denial, and session/run recovery. Real-device witnesses are required for Apple permission prompts and system surfaces. Simulator results must be labeled simulator-only; no system-permission behavior may be claimed from simulator evidence alone.
+
+### Expanded milestones
+
+1. Session isolation and native Capability Fabric contracts: typed descriptors, broker/policy/receipts, shortcut/App Intent seam, Keychain secret boundary, existing Files grant integration, notification adapter and status UI.
+2. Host contract coordination for provider discovery, OAuth, model-only inference streaming, and cancellation. This mobile repo does not edit host routes or legacy Bridge behavior.
+3. OpenCode provider catalog/OAuth and NVIDIA/API-key setup when the host contract is implemented.
+4. Native sandbox model relay through the host while all native capabilities execute locally.
+5. Incremental capability modules: Calendar/Reminders, Contacts, Photos, Camera/Mic/Speech, Location, Share/URL, and MessageUI.
+6. Hardening, real-device permission witnesses, CI, and release.

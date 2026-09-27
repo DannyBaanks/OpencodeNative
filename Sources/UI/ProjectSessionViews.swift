@@ -599,6 +599,12 @@ struct SettingsSheet: View {
                 }
 
                 Section("Sandbox del iPhone") {
+                    NavigationLink {
+                        NativeCapabilitySettingsView()
+                    } label: {
+                        Label("Capacidades nativas", systemImage: "iphone.gen3.radiowaves.left.and.right")
+                    }
+
                     Label {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(store.sandboxFolderName ?? "Carpeta privada de iSyCode")

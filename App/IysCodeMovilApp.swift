@@ -53,7 +53,11 @@ struct RootView: View {
         }
         .onOpenURL { url in
             guard url.scheme == "iyscodemovil" else { return }
-            Task { await store.connectRemote(url.absoluteString) }
+            if url.host == "native", url.path == "/sandbox" {
+                Task { await store.useNativeRuntime() }
+            } else {
+                Task { await store.connectRemote(url.absoluteString) }
+            }
         }
         .onChange(of: scenePhase) { phase in
             Task { await hostStore.setAppActive(phase == .active) }
