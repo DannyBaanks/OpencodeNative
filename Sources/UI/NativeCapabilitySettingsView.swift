@@ -11,7 +11,7 @@ struct NativeCapabilitySettingsView: View {
 
     var body: some View {
         List {
-            Section("Native iPhone") {
+            Section {
                 ForEach(capabilities) { capability in
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: icon(for: capability))
@@ -32,11 +32,13 @@ struct NativeCapabilitySettingsView: View {
                     }
                     .padding(.vertical, 3)
                 }
+            } header: {
+                Text("Native iPhone")
             } footer: {
                 Text("Disponibilidad, permiso de iOS y aprobación de iSyCode son controles separados. El catálogo no concede acceso por sí mismo.")
             }
 
-            Section("Shortcuts configurados por ti") {
+            Section {
                 TextField("Nombre exacto del atajo", text: $shortcutName)
                     .textInputAutocapitalization(.sentences)
                     .autocorrectionDisabled()
@@ -60,11 +62,13 @@ struct NativeCapabilitySettingsView: View {
                         UserDefaults.standard.removeObject(forKey: "native.configuredShortcut")
                     }
                 }
+            } header: {
+                Text("Shortcuts configurados por ti")
             } footer: {
                 Text("Solo se configura este nombre. iSyCode no enumera tus atajos ni los ejecuta en segundo plano.")
             }
 
-            Section("Notificaciones") {
+            Section {
                 Button(notificationState == .authorized ? "Actualizar permiso" : "Permitir notificaciones") {
                     Task {
                         do {
@@ -78,6 +82,8 @@ struct NativeCapabilitySettingsView: View {
                 if let statusMessage {
                     Text(statusMessage).font(OCTypography.meta).foregroundStyle(OCColor.textFaint)
                 }
+            } header: {
+                Text("Notificaciones")
             } footer: {
                 Text("El permiso se solicita solo después de tocar el botón. iSyCode decide qué eventos de tarea merecen una notificación.")
             }
