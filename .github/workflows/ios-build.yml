@@ -160,6 +160,40 @@ jobs:
           cat test-output.log | tr -d '\r' | sed $'s/\x1b\[[0-9;]*m//g' > test-output-clean.log
           grep -E "(Executed [0-9]+ test|TEST (FAILED|PASSED))" test-output-clean.log || (echo "::error::No tests executed" && exit 1)
 
+      - name: Capture README screenshots from iOS Simulator
+        run: |
+          set -euo pipefail
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          for devices in data.get("devices", {}).values():
+            for device in devices:
+              if device.get("isAvailable") and "iPhone" in device.get("name", ""):
+                print(device["udid"])
+                raise SystemExit
+          raise SystemExit("No iPhone Simulator available")
+          ')
+          APP_PATH="/tmp/iyscodemovil_dd_test/Build/Products/Debug-iphonesimulator/IysCodeMovil.app"
+          test -d "$APP_PATH"
+          mkdir -p docs/screenshots
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcrun simctl install "$UDID" "$APP_PATH"
+          xcrun simctl terminate "$UDID" dev.iyscode.movil || true
+          xcrun simctl launch "$UDID" dev.iyscode.movil
+          sleep 4
+          xcrun simctl io "$UDID" screenshot docs/screenshots/connect.png
+          xcrun simctl openurl "$UDID" 'iyscodemovil://native/sandbox'
+          sleep 7
+          xcrun simctl io "$UDID" screenshot docs/screenshots/sandbox.png
+
+      - name: Upload README screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: IysCodeMovil-ci-screenshots
+          path: docs/screenshots/*.png
+          retention-days: 30
+
       - name: Upload test log
         if: always()
         uses: actions/upload-artifact@v4
