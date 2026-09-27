@@ -73,12 +73,7 @@ struct RootView: View {
     }
 
     private func consumePendingAppIntent() {
-        #if DEBUG
-        let screenshotSandbox = ProcessInfo.processInfo.arguments.contains("--screenshot-sandbox")
-        #else
-        let screenshotSandbox = false
-        #endif
-        guard screenshotSandbox || UserDefaults.standard.bool(forKey: "native.openSandboxOnLaunch") else { return }
+        guard UserDefaults.standard.bool(forKey: "native.openSandboxOnLaunch") else { return }
         UserDefaults.standard.removeObject(forKey: "native.openSandboxOnLaunch")
         Task { await store.useNativeRuntime() }
     }
