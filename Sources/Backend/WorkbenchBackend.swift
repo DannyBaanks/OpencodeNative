@@ -79,6 +79,7 @@ public enum WorkbenchEvent: Sendable {
 
 public protocol WorkbenchBackend: Sendable {
     var mode: BackendMode { get }
+    var usesLiveModel: Bool { get }
     var connectionStatus: String { get async }
     var currentSessionID: String? { get async }
     var eventStream: AsyncStream<WorkbenchEvent> { get }
@@ -113,4 +114,8 @@ public protocol WorkbenchBackend: Sendable {
     func availableCommands() async throws -> [CommandInfo]
     
     func sendWorkbenchEvent(_ event: WorkbenchEvent)
+}
+
+public extension WorkbenchBackend {
+    var usesLiveModel: Bool { false }
 }

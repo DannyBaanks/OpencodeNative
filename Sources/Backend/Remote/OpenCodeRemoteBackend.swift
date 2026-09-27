@@ -44,14 +44,6 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
         return RemoteSession(id: remote.id, title: remote.title, directory: remote.directory, updatedAt: remote.updatedAt, backendType: .opencode)
     }
     
-    public func deleteSession(sessionID: String) async throws {
-        try await client.deleteSession(sessionID: sessionID)
-    }
-    
-    public func renameSession(sessionID: String, title: String) async throws {
-        try await client.renameSession(sessionID: sessionID, title: title)
-    }
-    
     public func sendPrompt(sessionID: String, text: String, agent: String?, modelProvider: String?, modelID: String?) async throws {
         let provider = modelProvider
         var modelID = modelID
@@ -270,7 +262,7 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
             _ = try await loadHistory(sessionID: first.id)
         }
         
-        connectionStatusStorage = "connected · OpenCode \(health.version) · \(pairing.host):\(pairing.port)"
+        connectionStatusStorage = "connected · OpenCode \(health.version) · \(requestedPairing.host):\(requestedPairing.port)"
         try await startEventStream()
         
         eventContinuation?.yield(.connected)
@@ -505,18 +497,23 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
     public func runShell(command: String, agent: String?) async throws -> ShellResult {
         guard let sessionID = currentSessionIDStorage else { throw WorkbenchError.noSession }
         let result = try await client.runShell(sessionID: sessionID, command: command, agent: agent)
-        let textParts = result.parts.compactMap { $0.text }
-        let toolParts = result.parts.compactMap { part -> (String, String)? in
-            if let tool = part.tool, let output = part.output { return (tool, output) }
-            return nil
-        }
-        let error = result.parts.first { $0.kind == .tool && $0.status == "error" }?.error
         return ShellResult(
             sessionID: result.sessionID,
             messageID: result.messageID,
-            textParts: textParts,
-            toolParts: Dictionary(uniqueKeysWithValues: toolParts),
-            error: error
+            parts: result.parts.map { part in
+                RemotePart(
+                    id: part.id,
+                    messageID: part.messageID,
+                    kind: Self.mapPartKind(part.kind),
+                    text: part.text,
+                    tool: part.tool,
+                    callID: part.callID,
+                    status: part.status,
+                    input: part.input,
+                    output: part.output,
+                    error: part.error
+                )
+            }
         )
     }
     

@@ -511,9 +511,18 @@ public final class WorkbenchStore: ObservableObject {
             shellHistory.append((command, ShellResult(
                 sessionID: currentSessionID ?? "",
                 messageID: "",
-                textParts: [],
-                toolParts: [:],
-                error: error.localizedDescription
+                parts: [RemotePart(
+                    id: UUID().uuidString,
+                    messageID: nil,
+                    kind: .tool,
+                    text: nil,
+                    tool: nil,
+                    callID: nil,
+                    status: "error",
+                    input: [:],
+                    output: nil,
+                    error: error.localizedDescription
+                )]
             )))
         }
     }

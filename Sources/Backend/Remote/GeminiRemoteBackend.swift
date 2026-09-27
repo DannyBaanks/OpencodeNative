@@ -125,14 +125,6 @@ public final class GeminiRemoteBackend: WorkbenchBackend, RemoteBackend {
         throw RemoteBackendError.unsupportedFeature("Gemini remote backend not yet implemented")
     }
 
-    public func renameSession(sessionID: String, title: String) async throws {
-        throw RemoteBackendError.unsupportedFeature("Gemini remote backend not yet implemented")
-    }
-
-    public func deleteSession(sessionID: String) async throws {
-        throw RemoteBackendError.unsupportedFeature("Gemini remote backend not yet implemented")
-    }
-
     public func selectSession(_ sessionID: String) async throws {
         throw RemoteBackendError.unsupportedFeature("Gemini remote backend not yet implemented")
     }
@@ -176,10 +168,6 @@ public final class GeminiRemoteBackend: WorkbenchBackend, RemoteBackend {
     }
 
     public func availableProviders() async throws -> ProviderListResult {
-        throw RemoteBackendError.unsupportedFeature("Gemini remote backend not yet implemented")
-    }
-
-    public func config() async throws -> ConfigInfo {
         throw RemoteBackendError.unsupportedFeature("Gemini remote backend not yet implemented")
     }
 

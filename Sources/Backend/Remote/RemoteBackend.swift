@@ -220,6 +220,11 @@ public struct ShellResult: Sendable {
     public let sessionID: String
     public let messageID: String
     public let parts: [RemotePart]
+
+    public var textParts: [String] { parts.compactMap(\.text) }
+    public var error: String? {
+        parts.first { $0.kind == .tool && $0.status == "error" }?.error
+    }
 }
 
 /// Diff de sesión

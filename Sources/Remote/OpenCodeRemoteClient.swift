@@ -29,6 +29,11 @@ public struct OpenCodePairing: Equatable, Sendable {
     public let password: String
     public let directory: String
 
+    public var authHeaders: [String: String] {
+        let credentials = Data("\(username):\(password)".utf8).base64EncodedString()
+        return ["Authorization": "Basic \(credentials)"]
+    }
+
     public init(scheme: String = "http", host: String, port: Int, username: String = "opencode", password: String, directory: String) {
         self.scheme = scheme
         self.host = host
