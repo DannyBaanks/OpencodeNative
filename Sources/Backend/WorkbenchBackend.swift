@@ -52,48 +52,10 @@ public struct SessionDiffFile: Sendable, Identifiable {
     }
 }
 
-public struct ShellResult: Sendable {
-    public let sessionID: String
-    public let messageID: String
-    public let textParts: [String]
-    public let toolParts: [String: String]
-    public let error: String?
-}
 
-public struct ProviderInfo: Sendable, Identifiable {
-    public let id: String
-    public let name: String
-    public let models: [String: [String: Any]]?
-    
-    public init(id: String, name: String, models: [String: [String: Any]]? = nil) {
-        self.id = id
-        self.name = name
-        self.models = models
-    }
-}
 
-public struct ProviderListResult: Sendable {
-    public let all: [ProviderInfo]
-    public let connected: [String]
-    public let defaultProvider: String?
-}
 
-public struct ConfigInfo: Sendable {
-    public let agents: [String: [String: Any]]?
-    public let provider: [String: Any]?
-}
 
-public struct CommandInfo: Sendable, Identifiable {
-    public let id: String
-    public let name: String
-    public let description: String?
-    
-    public init(id: String = UUID().uuidString, name: String, description: String? = nil) {
-        self.id = id
-        self.name = name
-        self.description = description
-    }
-}
 
 public enum WorkbenchEvent: Sendable {
     case connected
