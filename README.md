@@ -13,13 +13,11 @@ iSyCode Móvil es una app nativa para iPhone que se conecta a herramientas de de
 
 ## Así se ve
 
-Estas imágenes se capturan automáticamente en un **iPhone Simulator de GitHub Actions** con datos limpios de demostración; no son capturas de un dispositivo personal.
+Esta pantalla de inicio se captura automáticamente en un **iPhone Simulator de GitHub Actions** con datos limpios; no es una captura de un dispositivo personal. Desde aquí puedes conectar un host o abrir la tarjeta **Entorno de prueba** para entrar al sandbox.
 
-| Conexión | Sandbox en el iPhone |
-| --- | --- |
-| ![Pantalla de conexión de iSyCode Móvil generada por CI](docs/screenshots/connect.png) | ![Pantalla del sandbox de iSyCode Móvil generada por CI](docs/screenshots/sandbox.png) |
+![Pantalla de conexión y acceso al sandbox, generada por CI](docs/screenshots/connect.png)
 
-El mismo workflow que compila la app genera estas capturas y las publica como el artefacto **IysCodeMovil-ci-screenshots**.
+El workflow genera la captura y la publica como el artefacto **IysCodeMovil-ci-screenshots**.
 
 ---
 
