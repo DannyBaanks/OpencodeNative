@@ -55,7 +55,7 @@ final class NativeCapabilityBrokerTests: XCTestCase {
         let shortcuts = NativeCapabilityCatalog.current(hasExternalFolderGrant: false)
             .first { $0.id == "shortcuts.configured" }
         XCTAssertEqual(shortcuts?.availability, .needsSetup)
-        XCTAssertEqual(shortcuts?.authorization, .notRequested)
+        XCTAssertEqual(shortcuts?.authorization, .notApplicable)
         XCTAssertEqual(shortcuts?.displayState, "Needs setup")
     }
 
