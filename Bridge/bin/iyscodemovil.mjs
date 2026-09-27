@@ -224,14 +224,17 @@ export function main(args = process.argv.slice(2), env = process.env) {
             codexVersion: codexInfo.version,
             profile: JSON.stringify(codexInfo.profile),
         });
-        pairing = `codex://pair?${query.toString()}`;
+        // URLSearchParams uses `+` for spaces, but URI custom-scheme query
+        // parsing on iOS preserves `+` literally. Encode spaces as `%20` so
+        // version labels and paths round-trip through URLComponents.
+        pairing = `codex://pair?${query.toString().replaceAll("+", "%20")}`;
         runtime.env = env;
     } else {
         const username = "iyscode";
         const password = randomBytes(24).toString("base64url");
         runtime.env = childEnvironment(env, username, password, RUNTIMES[options.runtime].env(env, username, password));
         const query = new URLSearchParams({ host, port: String(options.port), username, password, directory: options.directory });
-        pairing = `iyscodemovil://pair?${query.toString()}`;
+        pairing = `iyscodemovil://pair?${query.toString().replaceAll("+", "%20")}`;
     }
 
     console.log("");
