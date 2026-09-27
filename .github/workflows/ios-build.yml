@@ -142,6 +142,7 @@ jobs:
             exit 1
           fi
           echo "Resolved simulator UDID: $UDID"
+          echo "IOS_SIMULATOR_UDID=$UDID" >> "$GITHUB_ENV"
 
           # Clean derived data before testing to avoid "Multiple commands produce" errors
           rm -rf /tmp/iyscodemovil_dd_test
@@ -163,20 +164,15 @@ jobs:
       - name: Capture README screenshots from iOS Simulator
         run: |
           set -euo pipefail
-          UDID=$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          data = json.load(sys.stdin)
-          for devices in data.get("devices", {}).values():
-            for device in devices:
-              if device.get("isAvailable") and "iPhone" in device.get("name", ""):
-                print(device["udid"])
-                raise SystemExit
-          raise SystemExit("No iPhone Simulator available")
-          ')
+          UDID="$IOS_SIMULATOR_UDID"
           APP_PATH="/tmp/iyscodemovil_dd_test/Build/Products/Debug-iphonesimulator/IysCodeMovil.app"
           test -d "$APP_PATH"
           mkdir -p docs/screenshots
-          xcrun simctl bootstatus "$UDID" -b
+          DEVICE_STATE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin); print(next((x.get('state','') for group in d.get('devices',{}).values() for x in group if x.get('udid')=='$UDID'),''))")
+          if [ "$DEVICE_STATE" != "Booted" ]; then
+            xcrun simctl boot "$UDID"
+            xcrun simctl bootstatus "$UDID" -b
+          fi
           xcrun simctl status_bar "$UDID" override --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$UDID" "$APP_PATH"
           xcrun simctl terminate "$UDID" dev.iyscode.movil || true
