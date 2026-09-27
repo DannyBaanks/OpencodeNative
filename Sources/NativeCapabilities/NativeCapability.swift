@@ -192,12 +192,39 @@ public enum NativeCapabilityCatalog {
     public static func current(hasExternalFolderGrant: Bool,
                                hasConfiguredShortcut: Bool = false,
                                notificationAuthorization: NativeAuthorizationState = .notRequested) -> [NativeCapabilityDescriptor] {
-        [
+        let implemented = [
             .init(id: "files.sandbox", title: "Files sandbox", detail: "Private iSyCode workspace", availability: .available, authorization: .authorized, effectClass: .read),
             .init(id: "files.external-folder", title: "Selected folder", detail: hasExternalFolderGrant ? "User-selected folder grant" : "Choose a folder in Files to enable", availability: hasExternalFolderGrant ? .available : .needsSetup, authorization: hasExternalFolderGrant ? .authorized : .notRequested, effectClass: .write),
             .init(id: "keychain.app-secrets", title: "Keychain", detail: "App-owned credentials; values hidden from the model", availability: .available, authorization: .authorized, effectClass: .sensitiveWrite),
-            .init(id: "shortcuts.configured", title: "Apple Shortcuts", detail: "Only shortcuts explicitly configured by you", availability: hasConfiguredShortcut ? .available : .needsSetup, authorization: .notApplicable, userPresenceRequired: true, effectClass: .externalSideEffect, inputSchema: ["shortcut_id": "string"], requiredInput: ["shortcut_id"], implementationSurface: .appIntentOrShortcut),
+            .init(id: "shortcuts.configured", title: "Apple Shortcuts", detail: "Only shortcuts explicitly configured by you", availability: hasConfiguredShortcut ? .available : .needsSetup, authorization: .notApplicable, userPresenceRequired: true, effectClass: .externalSideEffect, inputSchema: ["shortcut_id": "string", "text": "string"], requiredInput: ["shortcut_id"], implementationSurface: .appIntentOrShortcut),
             .init(id: "notifications.local", title: "Notifications", detail: "Local task and approval notifications", availability: .available, authorization: notificationAuthorization, userPresenceRequired: true, effectClass: .deviceAction, inputSchema: ["title": "string", "body": "string", "delay_seconds": "string"], requiredInput: ["title", "body", "delay_seconds"])
         ]
+
+        // Product-facing discovery candidates. They are deliberately non-executable
+        // until an adapter, permission flow and focused approval policy exist.
+        let candidates = [
+            candidate("calendar.events", "Calendar", "Read or create events with EventKit", surface: .directFramework),
+            candidate("reminders.items", "Reminders", "Read or create reminders with EventKit", surface: .directFramework),
+            candidate("contacts.lookup", "Contacts", "Find only requested contact fields", surface: .directFramework),
+            candidate("photos.select", "Photos", "Import user-selected photos with the system picker", surface: .systemUI),
+            candidate("camera.capture", "Camera", "Capture only from a visible camera flow", surface: .systemUI),
+            candidate("speech.transcribe", "Speech and microphone", "Transcribe after visible microphone invocation", surface: .directFramework),
+            candidate("location.current", "Location", "Read foreground location at user-requested precision", surface: .directFramework),
+            candidate("health.read", "Health", "Read explicitly authorized HealthKit data", surface: .directFramework),
+            candidate("share.present", "Share sheet", "Present the iOS share sheet with user confirmation", surface: .systemUI),
+            candidate("messages.compose", "Message composer", "Prepare a message in system UI; never report it sent", surface: .systemUI),
+            candidate("notes.create", "Notes", "Investigate a user-configured Shortcut or supported system surface", surface: .appIntentOrShortcut),
+            candidate("home.control", "Home", "HomeKit actions require a concrete use case and authorization", surface: .directFramework),
+            candidate("bluetooth.devices", "Bluetooth", "Bluetooth access requires a concrete use case and permission", surface: .directFramework),
+            candidate("motion.activity", "Motion", "Motion data requires a concrete use case and authorization", surface: .directFramework),
+            candidate("appintents.actions", "App Intents", "Expose supported iSyCode actions to Siri and Shortcuts", surface: .appIntentOrShortcut)
+        ]
+        return implemented + candidates
+    }
+
+    private static func candidate(_ id: String, _ title: String, _ detail: String,
+                                  surface: NativeImplementationSurface) -> NativeCapabilityDescriptor {
+        .init(id: id, title: title, detail: detail, availability: .needsSetup,
+              authorization: .notRequested, effectClass: .read, implementationSurface: surface)
     }
 }

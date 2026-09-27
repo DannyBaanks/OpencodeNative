@@ -15,7 +15,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     private var providerModelIDs = ["scripted-1"]
     public var usesLiveModel: Bool { providerID != "scripted" }
     private var liveAnswerID: String?
-    private var toolExecutor: FileSystemToolExecutor?
+    private var toolExecutor: NativeCapabilityToolExecutor?
     private var boundSessionID: String?
     private var runningTask: Task<Void, Never>?
     private var permissionWaiters: [String: CheckedContinuation<PermissionResponse.Decision, Never>] = [:]
@@ -75,7 +75,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             self.workspace = ws
             self.persistence = ps
             
-            let exec = FileSystemToolExecutor(workspace: ws)
+            let exec = NativeCapabilityToolExecutor(workspace: ws)
             self.toolExecutor = exec
             try await reloadSandboxModel()
             eventContinuation?.yield(.connected)

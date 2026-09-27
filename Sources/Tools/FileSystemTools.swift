@@ -4,6 +4,11 @@ import Foundation
 /// Cada herramienta declara explícitamente sus capacidades y restricciones
 public actor FileSystemToolExecutor: @preconcurrency ToolExecutor {
     private let workspace: any Workspace
+
+    public static let toolNames: Set<String> = [
+        "read_file", "write_file", "list_directory", "search_files",
+        "file_info", "create_directory", "delete_file", "move_file"
+    ]
     
     public init(workspace: any Workspace) {
         self.workspace = workspace

@@ -83,7 +83,7 @@
 
 **Steps:** test state labels and task-to-tool projection; implement SwiftUI settings link; verify VoiceOver labels and existing theme.
 
-**Expected:** users can distinguish installed framework support from OS grant and app policy permission.
+**Expected:** users can distinguish implemented capability adapters from discovery candidates, OS grant, and app policy permission. Only notifications and the one configured Shortcut are currently projected as native model tools; each action requests fresh in-app approval. Calendar, Contacts, Photos, Camera, Speech, Location, Health, Share Sheet, message composer, Notes, Home, Bluetooth, Motion, and App Intents appear as non-executable candidates until their adapter and permission path exists.
 
 ## Task 7: Provider relay and session isolation integration
 

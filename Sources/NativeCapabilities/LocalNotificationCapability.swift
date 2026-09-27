@@ -36,7 +36,10 @@ public actor LocalNotificationCapability {
     @discardableResult
     public func schedule(id: String, title: String, body: String, after seconds: TimeInterval,
                         userApproved: Bool) async throws -> NativeCapabilityReceipt {
-        let authorization = await authorizationState()
+        var authorization = await authorizationState()
+        if authorization == .notRequested, userApproved {
+            authorization = try await requestAuthorizationFromUserAction()
+        }
         let descriptor = NativeCapabilityCatalog.current(hasExternalFolderGrant: false,
             notificationAuthorization: authorization).first { $0.id == "notifications.local" }!
         let proposal = NativeCapabilityProposal(capabilityID: descriptor.id,

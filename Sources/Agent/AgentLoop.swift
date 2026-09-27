@@ -36,17 +36,23 @@ public struct AgentTool: Sendable, Codable {
         public var requiresFileSystem: Bool = false
         public var isDestructive: Bool = false
         public var restrictions: [String] = []
+        public var approvalReason: String? = nil
+        public var requiresApprovalEveryTime: Bool = false
         
         public init(
             requiresNetwork: Bool = false,
             requiresFileSystem: Bool = false,
             isDestructive: Bool = false,
-            restrictions: [String] = []
+            restrictions: [String] = [],
+            approvalReason: String? = nil,
+            requiresApprovalEveryTime: Bool = false
         ) {
             self.requiresNetwork = requiresNetwork
             self.requiresFileSystem = requiresFileSystem
             self.isDestructive = isDestructive
             self.restrictions = restrictions
+            self.approvalReason = approvalReason
+            self.requiresApprovalEveryTime = requiresApprovalEveryTime
         }
     }
     
@@ -107,7 +113,16 @@ public struct ToolExecutionResult: Codable, Sendable, Identifiable {
 /// Protocolo para ejecutor de herramientas
 public protocol ToolExecutor: Sendable {
     var availableTools: [AgentTool] { get }
+    func tools(relevantTo messages: [ModelMessage]) async -> [AgentTool]
     func execute(_ invocation: ToolInvocation) async -> ToolExecutionResult
+    func execute(_ invocation: ToolInvocation, approval: PermissionResponse.Decision?) async -> ToolExecutionResult
+}
+
+public extension ToolExecutor {
+    func tools(relevantTo messages: [ModelMessage]) async -> [AgentTool] { availableTools }
+    func execute(_ invocation: ToolInvocation, approval: PermissionResponse.Decision?) async -> ToolExecutionResult {
+        await execute(invocation)
+    }
 }
 
 /// Contexto de ejecución del agente
@@ -279,7 +294,8 @@ public actor AgentLoop {
             ))
             
             // Llamar al modelo
-            let tools = context.toolExecutor.availableTools.map { tool in
+            let turnTools = await context.toolExecutor.tools(relevantTo: modelMessages)
+            let tools = turnTools.map { tool in
                 ToolDefinition(
                     name: tool.name,
                     description: tool.description,
@@ -336,6 +352,7 @@ public actor AgentLoop {
                 // Ejecutar cada tool call
                 for toolCall in toolCalls {
                     let invocation = ToolInvocation(id: toolCall.id, name: toolCall.name, arguments: toolCall.arguments)
+                    var toolApproval: PermissionResponse.Decision?
                     await eventHandler?(.toolInvocation(invocation))
                     
                     // Persist tool call event
@@ -346,16 +363,16 @@ public actor AgentLoop {
                     ))
                     
                     // Destructive tools are fail-closed unless explicitly allowed.
-                    if let tool = context.toolExecutor.availableTools.first(where: { $0.name == toolCall.name }),
+                    if let tool = turnTools.first(where: { $0.name == toolCall.name }),
                        tool.capabilities.isDestructive,
-                       !alwaysAllowedTools.contains(tool.name) {
+                       (tool.capabilities.requiresApprovalEveryTime || !alwaysAllowedTools.contains(tool.name)) {
                         try Task.checkCancellation()
 
                         let request = PermissionRequest(
                             toolName: tool.name,
                             toolDescription: tool.description,
                             arguments: toolCall.arguments,
-                            reason: "This tool will modify files in your workspace. Are you sure you want to proceed?"
+                            reason: tool.capabilities.approvalReason ?? "This tool will modify files in your workspace. Are you sure you want to proceed?"
                         )
 
                         await eventHandler?(.permissionRequested(request))
@@ -445,15 +462,16 @@ public actor AgentLoop {
                             continue
 
                         case .allowOnce:
-                            break
+                            toolApproval = .allowOnce
 
                         case .allowAlways:
                             alwaysAllowedTools.insert(tool.name)
+                            toolApproval = .allowAlways
                         }
                     }
 
                     try Task.checkCancellation()
-                    let result = await context.toolExecutor.execute(invocation)
+                    let result = await context.toolExecutor.execute(invocation, approval: toolApproval)
                     
                     await eventHandler?(.toolResult(result))
                     

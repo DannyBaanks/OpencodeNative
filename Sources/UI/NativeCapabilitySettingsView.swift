@@ -59,7 +59,7 @@ struct NativeCapabilitySettingsView: View {
                     }
                     Button("Quitar atajo permitido", role: .destructive) {
                         self.configuredShortcut = nil
-                        UserDefaults.standard.removeObject(forKey: "native.configuredShortcut")
+                        ShortcutRegistry.remove()
                     }
                 }
             } header: {
@@ -109,14 +109,11 @@ struct NativeCapabilitySettingsView: View {
         guard !shortcut.name.isEmpty else { return }
         configuredShortcut = shortcut
         shortcutName = ""
-        if let data = try? JSONEncoder().encode(shortcut) {
-            UserDefaults.standard.set(data, forKey: "native.configuredShortcut")
-        }
+        ShortcutRegistry.save(shortcut)
     }
 
     private func loadShortcut() -> ConfiguredShortcut? {
-        guard let data = UserDefaults.standard.data(forKey: "native.configuredShortcut") else { return nil }
-        return try? JSONDecoder().decode(ConfiguredShortcut.self, from: data)
+        ShortcutRegistry.loadConfiguredShortcut()
     }
 
     private func launch(_ shortcut: ConfiguredShortcut) {

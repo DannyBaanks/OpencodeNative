@@ -59,6 +59,20 @@ final class NativeCapabilityBrokerTests: XCTestCase {
         XCTAssertEqual(shortcuts?.displayState, "Needs setup")
     }
 
+    func testNativeSurfaceInventoryLabelsCandidatesWithoutEnablingThemAsTools() {
+        let catalog = NativeCapabilityCatalog.current(hasExternalFolderGrant: false)
+        let photos = catalog.first { $0.id == "photos.select" }
+        XCTAssertEqual(photos?.availability, .needsSetup)
+        XCTAssertEqual(photos?.implementationSurface, .systemUI)
+        XCTAssertFalse(NativeCapabilityToolProjection.relevantCapabilityIDs(for: [
+            ModelMessage(role: .user, content: "Pick a photo")
+        ]).contains("photos.select"))
+
+        let notes = catalog.first { $0.id == "notes.create" }
+        XCTAssertEqual(notes?.availability, .needsSetup)
+        XCTAssertEqual(notes?.implementationSurface, .appIntentOrShortcut)
+    }
+
     func testConfiguredShortcutNameIsEncodedAsAppleSupportedURL() throws {
         let shortcut = ConfiguredShortcut(name: "Review & Build")
         let url = try XCTUnwrap(ShortcutURLBuilder.runURL(shortcut: shortcut, text: "check the patch"))
@@ -71,6 +85,32 @@ final class NativeCapabilityBrokerTests: XCTestCase {
 
     func testEmptyShortcutNameCannotBeLaunched() {
         XCTAssertNil(ShortcutURLBuilder.runURL(shortcut: ConfiguredShortcut(name: "  ")))
+    }
+
+    func testNativeToolsAreProjectedOnlyForRelevantUserRequests() {
+        let unrelated = [ModelMessage(role: .user, content: "List my project files")]
+        XCTAssertTrue(NativeCapabilityToolProjection.relevantCapabilityIDs(for: unrelated).isEmpty)
+
+        let reminder = [ModelMessage(role: .user, content: "Recuérdame llamar mañana")]
+        XCTAssertEqual(NativeCapabilityToolProjection.relevantCapabilityIDs(for: reminder), ["notifications.schedule"])
+
+        let cancel = [ModelMessage(role: .user, content: "Cancela este recordatorio")]
+        XCTAssertEqual(NativeCapabilityToolProjection.relevantCapabilityIDs(for: cancel), ["notifications.schedule", "notifications.cancel"])
+
+        let shortcut = [ModelMessage(role: .user, content: "Run my configured Shortcut")]
+        XCTAssertEqual(NativeCapabilityToolProjection.relevantCapabilityIDs(for: shortcut), ["shortcuts.run"])
+    }
+
+    func testConfiguredShortcutRegistryRoundTripsInIsolatedDefaults() throws {
+        let suite = "NativeCapabilityTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let shortcut = ConfiguredShortcut(name: "My reminder")
+
+        ShortcutRegistry.save(shortcut, to: defaults)
+        XCTAssertEqual(ShortcutRegistry.loadConfiguredShortcut(from: defaults), shortcut)
+        ShortcutRegistry.remove(from: defaults)
+        XCTAssertNil(ShortcutRegistry.loadConfiguredShortcut(from: defaults))
     }
 
     func testRegistryProjectsOnlyTaskRelevantRegisteredCapabilities() async {
