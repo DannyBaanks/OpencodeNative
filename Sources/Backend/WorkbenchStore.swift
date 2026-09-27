@@ -19,6 +19,8 @@ public final class WorkbenchStore: ObservableObject {
     @Published public private(set) var connectionHealth: ConnectionHealth = .disconnected
     /// False when the on-phone sandbox is the canned notes.txt script.
     @Published public private(set) var sandboxUsesLiveModel = false
+    @Published public private(set) var sandboxFolderName: String? = UserDefaults.standard.string(forKey: "sandbox.authorizedFolderName")
+    @Published public var sandboxFolderError: String?
     @Published public var availableModels: [ModelInfo] = []
     @Published public var availableAgents: [String] = []
     @Published public var availableCommands: [CommandInfo] = []
@@ -197,7 +199,15 @@ public final class WorkbenchStore: ObservableObject {
     public func useNativeRuntime() async {
         do {
             await currentBackend?.stopEventStream()
-            let backend = WorkbenchBackendFactory.makeNativeBackend()
+            await currentBackend?.disconnect()
+            let bookmarkText = try await KeychainHelper.shared.load(key: "sandbox.authorizedFolderBookmark")
+            let bookmark = bookmarkText.flatMap { Data(base64Encoded: $0) }
+            if bookmarkText != nil && bookmark == nil {
+                throw WorkspaceError.permissionDenied("The saved Files permission could not be read. Choose the folder again.")
+            }
+            let backend = WorkbenchBackendFactory.makeNativeBackend(
+                workspaceBookmark: bookmark
+            )
             currentBackend = backend
             backendMode = .native
             
@@ -232,6 +242,45 @@ public final class WorkbenchStore: ObservableObject {
             connectionHealth = .disconnected
             connectionStatus = "error: \(error.localizedDescription)"
         }
+    }
+
+    /// Persists only the security-scoped bookmark returned after the user picks a folder.
+    /// Models never provide or widen this root; Files remains the permission authority.
+    public func authorizeSandboxFolder(_ url: URL) async throws {
+        guard url.startAccessingSecurityScopedResource() else {
+            throw WorkspaceError.permissionDenied("iOS no concedió acceso a esta carpeta. Vuelve a elegirla desde Archivos.")
+        }
+        defer { url.stopAccessingSecurityScopedResource() }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw WorkspaceError.invalidPath("Selecciona una carpeta, no un archivo.")
+        }
+        let bookmark = try url.bookmarkData(options: [.minimalBookmark], includingResourceValuesForKeys: nil, relativeTo: nil)
+        try await KeychainHelper.shared.save(key: "sandbox.authorizedFolderBookmark", value: bookmark.base64EncodedString())
+        UserDefaults.standard.set(url.lastPathComponent, forKey: "sandbox.authorizedFolderName")
+        sandboxFolderName = url.lastPathComponent
+        if backendMode == .native {
+            await useNativeRuntime()
+            guard connectionHealth == .connected else {
+                throw WorkspaceError.permissionDenied(connectionStatus)
+            }
+        }
+    }
+
+    public func revokeSandboxFolderAccess() async throws {
+        try await KeychainHelper.shared.delete(key: "sandbox.authorizedFolderBookmark")
+        UserDefaults.standard.removeObject(forKey: "sandbox.authorizedFolderName")
+        sandboxFolderName = nil
+        if backendMode == .native {
+            await useNativeRuntime()
+            guard connectionHealth == .connected else {
+                throw WorkspaceError.permissionDenied(connectionStatus)
+            }
+        }
+    }
+
+    public func clearSandboxFolderError() {
+        sandboxFolderError = nil
     }
     
     public func reconnectStoredPairing() async {

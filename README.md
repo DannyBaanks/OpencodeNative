@@ -39,6 +39,16 @@ IysCodeMovil (iOS app)
 | **Remote Claude Code** | `ClaudeCodeRemoteBackend` | *Stub — not yet implemented* |
 | **Remote Gemini** | `GeminiRemoteBackend` | *Stub — not yet implemented* |
 
+### iPhone sandbox access
+
+The native runtime starts inside iSyCode's private container by default. From
+Settings, the user can choose one folder in Apple's Files picker and grant the
+app a persistent, revocable security-scoped bookmark. The agent is confined to
+that folder, file-provider operations are coordinated, and write/delete tools
+keep their per-action approval flow. When a cloud model is configured, files it
+reads may be sent to that model provider. This does not grant access to other
+apps' private data or let iSyCode automate their screens.
+
 ---
 
 ## Quick Start

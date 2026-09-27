@@ -41,3 +41,19 @@
 - "Bash tool" sin PTY — proyectado pero no entregado como fake; el `AgentLoop` aquí expone solo tools de fs.
 - Compilar libgit2 o tree-sitter para iOS — fuera del alcance de este experimento.
 - App móvil convencional con chips/bubbles — reemplazada por consola TUI-first.
+
+## E. Addendum: sandbox del iPhone
+
+- El runtime puede usar una carpeta externa seleccionada por el usuario en el
+  picker de Archivos. iSyCode guarda el bookmark entregado por iOS en Keychain y conserva
+  el acceso solo mientras el workspace nativo está abierto; el usuario puede
+  cambiar o revocar la carpeta.
+- El agente queda confinado a esa raíz. El acceso no se extiende a carpetas
+  vecinas, datos privados de otras apps ni al sistema. File Provider I/O se
+  coordina con `NSFileCoordinator`; escrituras y borrados continúan sujetos a
+  la aprobación de herramientas de la sesión.
+- Si se usa un modelo remoto, el contenido de archivos que el agente lea puede
+  viajar al proveedor configurado. La UI lo informa antes de conceder acceso.
+- No hay permiso general para leer la pantalla, automatizar taps o controlar
+  otras apps. La vía soportada para acciones entre apps es la superficie que
+  cada app exponga mediante App Intents, Atajos o el picker/hoja Compartir.

@@ -23,8 +23,10 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     private var currentSessionIDStorage: String?
     private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
     public let eventStream: AsyncStream<WorkbenchEvent>
+    private let workspaceBookmark: Data?
     
-    public init() {
+    public init(workspaceBookmark: Data? = nil) {
+        self.workspaceBookmark = workspaceBookmark
         var cont: AsyncStream<WorkbenchEvent>.Continuation?
         self.eventStream = AsyncStream { cont = $0 }
         self.eventContinuation = cont
@@ -63,7 +65,12 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         guard workspace == nil else { return }
         
         do {
-            let ws = try IOSWorkspace()
+            let ws: IOSWorkspace
+            if let workspaceBookmark {
+                ws = try IOSWorkspace(securityScopedBookmark: workspaceBookmark)
+            } else {
+                ws = try IOSWorkspace()
+            }
             let ps = try IOSPersistence()
             self.workspace = ws
             self.persistence = ps

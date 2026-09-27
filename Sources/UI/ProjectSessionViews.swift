@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 public struct ProjectRow: View {
     let project: Project
@@ -506,6 +507,7 @@ struct SettingsSheet: View {
     @State private var showRemoteUnavailableNote = false
     @State private var selectedTheme = IysThemePreferences.pending ?? IysThemePreferences.active
     @State private var showThemeRestartNotice = false
+    @State private var showSandboxFolderPicker = false
     
     var body: some View {
         NavigationStack {
@@ -595,6 +597,47 @@ struct SettingsSheet: View {
                             .foregroundColor(OCColor.warning)
                     }
                 }
+
+                Section("Sandbox del iPhone") {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(store.sandboxFolderName ?? "Carpeta privada de iSyCode")
+                                .foregroundColor(OCColor.textPrimary)
+                                .lineLimit(1)
+                            Text(store.sandboxFolderName == nil
+                                 ? "El agente solo ve su espacio privado"
+                                 : "Acceso concedido por Archivos · carpeta seleccionada")
+                                .font(OCTypography.meta)
+                                .foregroundColor(OCColor.textFaint)
+                        }
+                    } icon: {
+                        Image(systemName: store.sandboxFolderName == nil ? "iphone" : "folder.badge.plus")
+                            .foregroundColor(IysThemePreferences.active.accent)
+                    }
+
+                    Button {
+                        showSandboxFolderPicker = true
+                    } label: {
+                        Label(store.sandboxFolderName == nil ? "Elegir carpeta en Archivos" : "Cambiar carpeta autorizada",
+                              systemImage: "folder.open")
+                    }
+
+                    if store.sandboxFolderName != nil {
+                        Button("Revocar acceso a la carpeta", role: .destructive) {
+                            Task {
+                                do {
+                                    try await store.revokeSandboxFolderAccess()
+                                } catch {
+                                    store.sandboxFolderError = error.localizedDescription
+                                }
+                            }
+                        }
+                    }
+
+                    Text("El agente queda limitado a esta carpeta. Sus cambios y borrados siguen pidiendo aprobación. Si usas un modelo en la nube, el contenido que lea puede enviarse a ese proveedor. iOS puede revocar el acceso desde Ajustes; esto no da acceso a otras apps ni al resto del iPhone.")
+                        .font(OCTypography.meta)
+                        .foregroundColor(OCColor.textFaint)
+                }
                 
                 Section("Attribution") {
                     HStack {
@@ -628,6 +671,33 @@ struct SettingsSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .fileImporter(
+            isPresented: $showSandboxFolderPicker,
+            allowedContentTypes: [.folder],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let folder = urls.first else { return }
+                Task {
+                    do {
+                        try await store.authorizeSandboxFolder(folder)
+                    } catch {
+                        store.sandboxFolderError = error.localizedDescription
+                    }
+                }
+            case .failure(let error):
+                store.sandboxFolderError = error.localizedDescription
+            }
+        }
+        .alert("No se pudo autorizar la carpeta", isPresented: Binding(
+            get: { store.sandboxFolderError != nil },
+            set: { if !$0 { store.clearSandboxFolderError() } }
+        )) {
+            Button("Entendido", role: .cancel) { store.clearSandboxFolderError() }
+        } message: {
+            Text(store.sandboxFolderError ?? "")
+        }
     }
     
     // El picker conmuta de verdad: `native` arranca el runtime Swift; `remote`

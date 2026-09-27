@@ -56,8 +56,8 @@ public enum WorkbenchBackendFactory {
     
     /// Crea un backend nativo (sandbox local)
     @MainActor
-    public static func makeNativeBackend() -> WorkbenchBackend {
-        NativeSwiftBackend()
+    public static func makeNativeBackend(workspaceBookmark: Data? = nil) -> WorkbenchBackend {
+        NativeSwiftBackend(workspaceBookmark: workspaceBookmark)
     }
     
     /// Crea un backend demo/fixture para testing
