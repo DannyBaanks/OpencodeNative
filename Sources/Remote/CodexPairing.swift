@@ -13,8 +13,10 @@ public struct CodexCapabilityProfile: Codable, Equatable, Sendable {
     public let commandApproval: Bool
     public let fileApproval: Bool
     public let schemaSHA256: String
+    /// Optional so saved pairing links from earlier bridge versions still decode.
+    public let modelList: Bool?
 
-    public init(profileVersion: Int, initialize: Bool, threadList: Bool, threadStart: Bool, threadResume: Bool, threadRead: Bool, turnStart: Bool, turnInterrupt: Bool, textStreaming: Bool, commandApproval: Bool, fileApproval: Bool, schemaSHA256: String) {
+    public init(profileVersion: Int, initialize: Bool, threadList: Bool, threadStart: Bool, threadResume: Bool, threadRead: Bool, turnStart: Bool, turnInterrupt: Bool, textStreaming: Bool, commandApproval: Bool, fileApproval: Bool, schemaSHA256: String, modelList: Bool? = nil) {
         self.profileVersion = profileVersion
         self.initialize = initialize
         self.threadList = threadList
@@ -27,6 +29,7 @@ public struct CodexCapabilityProfile: Codable, Equatable, Sendable {
         self.commandApproval = commandApproval
         self.fileApproval = fileApproval
         self.schemaSHA256 = schemaSHA256
+        self.modelList = modelList
     }
 
     public var supportsCoreConversation: Bool {

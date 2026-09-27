@@ -84,10 +84,14 @@ public final class CodexRemoteBackend: WorkbenchBackend, RemoteBackend {
     public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws {
         guard let client, let pairing, pairing.profile.turnStart, pairing.profile.textStreaming,
               let selectedSessionID, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Self.unsupported }
-        _ = try await client.request(method: "turn/start", params: .object([
+        var params: [String: CodexJSONValue] = [
             "threadId": .string(selectedSessionID),
             "input": .array([.object(["type": .string("text"), "text": .string(text)])])
-        ]))
+        ]
+        if model?.route == "codex", let modelID = model?.apiModelId {
+            params["model"] = .string(modelID)
+        }
+        _ = try await client.request(method: "turn/start", params: .object(params))
         activeTurn = true
     }
     public func abort() async throws {
@@ -295,7 +299,30 @@ public final class CodexRemoteBackend: WorkbenchBackend, RemoteBackend {
     public func fileContent(path: String) async throws -> WorkbenchFileContent { throw Self.unsupported }
     public func sessionDiff(sessionID: String) async throws -> [SessionDiffFile] { throw Self.unsupported }
     public func runShell(command: String, agent: String?) async throws -> ShellResult { throw Self.unsupported }
-    public func availableProviders() async throws -> ProviderListResult { throw Self.unsupported }
+    public func availableProviders() async throws -> ProviderListResult {
+        guard let client, pairing?.profile.modelList == true else { throw Self.unsupported }
+        var cursor: String?
+        var models: [String: [String: Any]] = [:]
+        var pageCount = 0
+        repeat {
+            pageCount += 1
+            var params: [String: CodexJSONValue] = ["limit": .integer(100), "includeHidden": .bool(false)]
+            if let cursor { params["cursor"] = .string(cursor) }
+            let response = try await client.request(method: "model/list", params: .object(params))
+            guard let result = response.object, let entries = result["data"]?.array else { throw CodexAppServerError.invalidMessage }
+            for entry in entries {
+                guard let object = entry.object,
+                      let id = object["model"]?.string ?? object["id"]?.string else { continue }
+                models[id] = ["displayName": object["displayName"]?.string ?? id]
+            }
+            cursor = result["nextCursor"]?.string
+        } while cursor != nil && pageCount < 20
+        return ProviderListResult(
+            all: [ProviderInfo(id: "codex", name: "Codex", models: models)],
+            connected: ["codex"],
+            defaultProvider: "codex"
+        )
+    }
     public func availableCommands() async throws -> [CommandInfo] { [] }
     public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
 }

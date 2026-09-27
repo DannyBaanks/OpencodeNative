@@ -87,6 +87,7 @@ export function inspectCodex(executable = "codex", tempRoot = os.tmpdir()) {
                 && existsSync(path.join(schemaDir, "CommandExecutionRequestApprovalResponse.json")),
             fileApproval: declared(serverRequests, "item/fileChange/requestApproval")
                 && existsSync(path.join(schemaDir, "FileChangeRequestApprovalResponse.json")),
+            modelList: declared(clientRequests, "model/list"),
             schemaSHA256: createHash("sha256").update(protocolSchema).digest("hex"),
         };
         const required = ["initialize", "threadList", "threadStart", "threadResume", "threadRead", "turnStart", "turnInterrupt", "textStreaming"];

@@ -529,12 +529,6 @@ public final class WorkbenchStore: ObservableObject {
     
     public func loadModelsAndAgents() async {
         guard let backend = currentBackend else { return }
-        if sessionState.selectedModel?.route == "codex" {
-            availableModels = [sessionState.selectedModel!]
-            availableAgents = []
-            availableCommands = []
-            return
-        }
         do {
             let providers = try await backend.availableProviders()
             var models: [ModelInfo] = []
@@ -542,7 +536,7 @@ public final class WorkbenchStore: ObservableObject {
                 if let providerModels = provider.models {
                     for (modelID, _) in providerModels {
                         models.append(ModelInfo(
-                            name: "\(provider.name) / \(modelID)",
+                            name: providerModels[modelID]?["displayName"] as? String ?? "\(provider.name) / \(modelID)",
                             provider: provider.name,
                             providerIcon: "cpu",
                             isLocal: false,
@@ -556,6 +550,12 @@ public final class WorkbenchStore: ObservableObject {
                 models.append(ModelInfo(name: "OpenCode server default", provider: "OpenCode", providerIcon: "terminal", isLocal: false, route: "opencode-server"))
             }
             availableModels = models
+
+            if backend is CodexRemoteBackend {
+                availableAgents = []
+                availableCommands = []
+                return
+            }
             
             let cfg = try await backend.config()
             if let agents = cfg.agents {

@@ -188,9 +188,14 @@ public struct ComposerControlRow: View {
     public var body: some View {
         HStack(spacing: OCSpacing.base) {
             if codexMode {
-                Label("Codex · server default", systemImage: "terminal")
+                Label("Codex · App Server", systemImage: "terminal")
                     .font(OCTypography.control)
                     .foregroundColor(OCColor.textSecondary)
+                if let model = selectedModel {
+                    ModelPill(model: model, onTap: onModelTap)
+                } else {
+                    ModelPillPlaceholder(onTap: onModelTap)
+                }
             } else {
             // Attach button
             Button(action: onAttachTap) {
