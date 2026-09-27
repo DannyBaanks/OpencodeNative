@@ -95,7 +95,9 @@ public enum ModelProviderError: Error, LocalizedError, Sendable {
         switch self {
         case .notConfigured(let m): return "Provider not configured: \(m)"
         case .networkError(let m): return "Network error: \(m)"
-        case .rateLimited(let retry): return "Rate limited" + (retry.map { ", retry after \($0)s" } ?? "")
+        case .rateLimited(let retry):
+            guard let retry, retry > 0 else { return "El proveedor limitó las solicitudes. Espera un momento antes de volver a intentar." }
+            return "El proveedor limitó las solicitudes. Intenta de nuevo en \(Int(ceil(retry))) s."
         case .contextTooLarge(let max): return "Context too large, max \(max) tokens"
         case .invalidRequest(let m): return "Invalid request: \(m)"
         case .modelNotFound(let m): return "Model not found: \(m)"
@@ -439,11 +441,23 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         case 200..<300: return
         case 401: throw ModelProviderError.authenticationFailed
         case 429:
-            let retry = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            let retry = http.value(forHTTPHeaderField: "Retry-After").flatMap(Self.retryDelay)
             throw ModelProviderError.rateLimited(retryAfter: retry)
         case 400..<500: throw ModelProviderError.invalidRequest("HTTP \(http.statusCode)")
         default: throw ModelProviderError.networkError("HTTP \(http.statusCode)")
         }
+    }
+
+    private static func retryDelay(from header: String) -> TimeInterval? {
+        let value = header.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let seconds = TimeInterval(value), seconds >= 0 { return seconds }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        guard let date = formatter.date(from: value) else { return nil }
+        return max(0, date.timeIntervalSinceNow)
     }
     
     private static let openAIDecoder: JSONDecoder = {

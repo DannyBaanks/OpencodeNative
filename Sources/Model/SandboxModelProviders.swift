@@ -52,3 +52,14 @@ public struct SandboxModelProvider: Identifiable, Sendable, Equatable {
         all.first { $0.id == id }
     }
 }
+
+/// Keeps the provider's complete live catalog while placing known-good models first.
+/// `preferredModels` is an ordering hint, never a model allowlist.
+public enum SandboxModelCatalog {
+    public static func orderedModelIDs(available: [String], preferred: [String], fallback: String) -> [String] {
+        var seen = Set<String>()
+        let ordered = preferred.filter { available.contains($0) } + available.filter { !preferred.contains($0) }
+        let unique = ordered.filter { !$0.isEmpty && seen.insert($0).inserted }
+        return unique.isEmpty ? [fallback] : unique
+    }
+}

@@ -123,8 +123,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         let remote = RemoteModelProvider(id: id, name: display)
         try await remote.configure(ModelConfiguration(apiKey: key, baseURL: baseURL))
         let listed = await remote.availableModels
-        let chosen = preferred.filter { listed.contains($0) }
-        let models = chosen.isEmpty ? (listed.isEmpty ? [fallback] : Array(listed.prefix(6))) : chosen
+        let models = SandboxModelCatalog.orderedModelIDs(available: listed, preferred: preferred, fallback: fallback)
         modelProvider = remote
         activeModelName = models.contains(fallback) ? fallback : models[0]
         providerID = id
