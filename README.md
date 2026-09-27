@@ -1,230 +1,114 @@
-# OpencodeNative
+# IysCode Movil
 
-> OpenCode TUI compatibility harness for iOS — documents exactly why the real
-> OpenCode TUI cannot run on iOS, and provides a native Swift agent runtime as
-> an alternative.
+> **IysCode Movil** — OpenCode TUI compatibility harness for iOS, rebranded and made backend-agnostic.
 
-[![iOS Build](https://github.com/DannyBaanks/OpencodeNative/actions/workflows/ios-build.yml/badge.svg)](https://github.com/DannyBaanks/OpencodeNative/actions/workflows/ios-build.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-iOS%2016.0+-lightgrey.svg)](https://developer.apple.com/ios/)
-[![Swift](https://img.shields.io/badge/Swift-5.0-orange.svg)](https://swift.org)
-
----
-
-## What is this?
-
-This project answers a single question: **can the real OpenCode TUI run on iOS?**
-
-The answer is **no**. This repo documents *exactly why* with evidence from the
-actual OpenCode repository, and provides a native Swift agent runtime that
-demonstrates the subset of capabilities iOS *does* support.
-
-### Attribution
-
-OpenCode is &copy; anomalyco and contributors, licensed MIT.
-This project is **not affiliated** with OpenCode. The name is used solely to
-describe the compatibility target. See [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md#10-attribution) for full attribution.
-
----
-
-## Verdict
-
-| | |
-|---|---|
-| **OpenCode TUI compat** | `BLOCKED` — PTY/TTY, spawn/exec, Bun runtime absent on iOS |
-| **Native Swift runtime** | Working — agent loop, 8 filesystem tools, persistence, LLM provider |
-| **Test suite** | 29 tests defined; GitHub Actions runs them on iOS Simulator |
-
-**The first hard blocker is PTY/TTY** — OpenCode's TUI renderer (`@opentui`)
-requires raw terminal access that iOS simply does not expose. This is not a
-bug in this project; it is the platform boundary.
+**The question:** *can the real IysCode TUI run on iOS?*
+**The answer:** **no** — PTY/TTY, spawn/exec, Bun runtime are absent on iOS.
+**This repo** documents exactly why with evidence, and provides a native Swift agent runtime as an alternative.
 
 ---
 
 ## Architecture
 
 ```
-iPhone
-  |
-OpencodeNative (iOS app)
-  |
-  +-- Compatibility Harness (Sources/Host/)
-  |     OpenCodeRuntimeContract   static OpenCode requirements (with evidence)
-  |     IOSCapabilityMatrix       runtime-probed iOS capabilities
-  |     CompatibilityReport       reconciles contract vs. matrix
-  |     OpenCodeBootAttempt       documents boot failure
-  |
-  +-- Native Swift Runtime (not OpenCode)
-  |     AgentLoop                 async multi-turn agent
-  |     FileSystemTools           8 sandbox filesystem tools
-  |     ScriptedModelProvider     offline deterministic demo provider
-  |     RemoteModelProvider       OpenAI-compatible LLM API
-  |     IOSWorkspace              sandbox filesystem
-  |     IOSPersistence            JSON + JSONL audit trail
-  |     ConsoleView               compatibility/debug console
-  |
-  +-- Workbench (Sources/Backend + Sources/UI)
-        WorkbenchStore            backend-agnostic workbench state
-        NativeSwiftBackend        drives the on-device AgentLoop
-        OpenCodeServerBackend     drives the remote OpenCode/OpenISy server
-        ActiveSessionView         iOS workbench timeline + permissions + composer
+IysCodeMovil (iOS app)
+├── NativeSwiftBackend        # Sandbox local, 8 filesystem tools, Grok/OpenAI via Keychain
+├── RemoteBackend (protocol)  # Common interface for all remote backends
+│   ├── OpenCodeRemoteBackend # OpenCode / OpenISy (implemented)
+│   ├── CrushRemoteBackend    # Stub (charmbracelet/crush)
+│   ├── CodexRemoteBackend    # Stub (openai/codex)
+│   ├── ClaudeCodeRemoteBackend # Stub (anthropic/claude-code)
+│   └── GeminiRemoteBackend   # Stub (google/gemini)
+├── WorkbenchBackendFactory   # Creates backend from pairing URL
+└── WorkbenchStore            # ObservableObject, subscribes to backend events
 ```
+
+**Bridge CLI (Node):** `iyscodemovil link --runtime opencode|openisy|crush|codex|claude-code|gemini`
+
+---
+
+## Runtime Modes
+
+| Mode | Backend | Use Case |
+|------|---------|----------|
+| **Native** | `NativeSwiftBackend` | Offline demo, Grok 4.7 via SpaceXAI key, 8 fs tools |
+| **Remote OpenCode** | `OpenCodeRemoteBackend` | Pair with `opencode serve` on desktop |
+| **Remote OpenISy** | `OpenCodeRemoteBackend` | Pair with OpenISy server (Bun) |
+| **Remote Crush** | `CrushRemoteBackend` | *Stub — not yet implemented* |
+| **Remote Codex** | `CodexRemoteBackend` | *Stub — not yet implemented* |
+| **Remote Claude Code** | `ClaudeCodeRemoteBackend` | *Stub — not yet implemented* |
+| **Remote Gemini** | `GeminiRemoteBackend` | *Stub — not yet implemented* |
 
 ---
 
 ## Quick Start
 
-### Requirements
-
-- macOS with Xcode 15+ (iOS builds require macOS)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-
-### Build & Run
-
+### iOS App (XcodeGen)
 ```bash
-brew install xcodegen
-xcodegen generate
-open OpencodeNative.xcodeproj
-# Product → Build (⌒R) → Run on iOS Simulator
+# Requires: xcodegen, xcodebuild
+xcodegen
+open IysCodeMovil.xcodeproj
+# Build & run on device/simulator (iOS 16+)
 ```
 
-### Run Tests
-
+### Desktop Link (Bridge CLI)
 ```bash
-xcodebuild test \
-  -scheme OpencodeNative \
-  -destination 'platform=iOS Simulator,name=iPhone 16'
+# Install
+npm i -g github:DannyBaanks/IysCodeMovil#bridge
+
+# Link OpenCode (default)
+iyscodemovil link --runtime opencode --port 4096
+# -> prints iyscodemovil://pair?... -> paste into iOS app
+
+# Link OpenISy
+iyscodemovil link --runtime openisy --openisy-root ~/OpenISy --port 4096
+```
+
+### Pairing URL Format
+```
+iyscodemovil://pair?scheme=http&host=192.168.1.50&port=4096&username=iyscode&password=...&directory=/path/to/project
 ```
 
 ---
 
-## Use it on your iPhone
+## Compatibility Report (iOS 16+)
 
-OpencodeNative now has two runtime modes behind the same SwiftUI workbench:
+| Capability | Verdict | Evidence |
+|------------|---------|----------|
+| PTY/TTY | BLOCKED | iOS denies `posix_openpt` |
+| Process spawn/exec | BLOCKED | No `fork`/`exec` in sandbox |
+| Bun/Node runtime | BLOCKED | No JIT, no V8 |
+| Raw terminal (OpenTUI) | BLOCKED | No `ioctl(TIOCSTI)` |
+| Filesystem (sandbox) | WORKS | 8 tools via `IOSWorkspace` |
+| Keychain secrets | WORKS | `IOSPersistence` + Keychain |
+| WebSocket/SSE | WORKS | `URLSession.bytes(for:)` |
+| MDNS/Bonjour | WORKS | `NWBrowser` |
+| Background execution | LIMITED | 30s background task only |
 
-- **Link Desktop** — connects to the official OpenCode headless server running on your computer. OpenCode itself owns models, sessions, tools, permissions and file edits.
-- **Native Swift** — runs the project's sandboxed Swift `AgentLoop` directly on iOS with the configured model provider.
+**Full report:** [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md)
 
-### Link the real OpenCode runtime
+---
 
-On the computer that already has OpenCode installed, open the project you want to work on and run:
+## Extending with New Backends
 
-```bash
-npx --yes github:DannyBaanks/OpencodeNative link
+1. **Create backend** in `Sources/Backend/Remote/YourBackend.swift` conforming to `RemoteBackend`
+2. **Add to factory** in `WorkbenchBackendFactory.makeBackend(from:)`
+3. **Add runtime** in `Bridge/bin/iyscodemovil.mjs` `RUNTIMES` object
+4. **Test** with `iyscodemovil link --runtime your-backend`
+
+```swift
+// Minimal stub template
+@MainActor
+public final class YourRemoteBackend: WorkbenchBackend, RemoteBackend {
+    public let remoteType: RemoteBackendType = .yourType
+    // ... implement RemoteBackend protocol
+}
 ```
-
-The command launches a password-protected `opencode serve` on the local network and prints an `opencodenative://pair?...` link. Paste that link into the first screen of the iOS app (or open the link directly once the app is installed). Keep the terminal open while using the remote session.
-
-Remote mode uses OpenCode's own HTTP/SSE API (`/session`, `/prompt_async`, `/abort`, `/permissions`, `/event`); it does not emulate tool execution on the phone. See [`docs/REMOTE.md`](docs/REMOTE.md).
-
-> Local linking uses HTTP Basic Auth on the LAN. Use a trusted network. Do not port-forward the OpenCode server directly to the public internet; use a TLS VPN/tunnel for remote access.
-
----
-
-## Slash Commands
-
-| Command | Description |
-|---|---|
-| `/help` | List available commands |
-| `/boot` | Run the OpenCode boot attempt (compatibility check) |
-| `/matrix` | Show the full capability matrix sheet |
-| `/demo` | Run the scripted agent demo (no API key needed) |
-| `/provider scripted` | Switch to offline demo provider |
-| `/provider remote` | Switch to remote LLM provider |
-| `/clear` | Clear the console transcript |
-
----
-
-## Project Structure
-
-```
-App/
-  OpencodeNativeApp.swift              @main entry point
-
-Sources/
-  Host/                                Compatibility harness
-    OpenCodeRuntimeContract.swift      Static OpenCode requirements + evidence
-    IOSCapabilityMatrix.swift          Runtime-probed iOS capabilities
-    CompatibilityReport.swift          Contract vs. matrix reconciliation
-    OpenCodeBootAttempt.swift          Boot attempt transcript
-  Agent/
-    AgentLoop.swift                    Async multi-turn agent runtime
-  Model/
-    ModelProvider.swift                Remote LLM provider (OpenAI-compat)
-    ScriptedModelProvider.swift        Offline deterministic provider
-  Workspace/
-    Workspace.swift                    iOS sandbox filesystem
-  Persistence/
-    Persistence.swift                  JSON + JSONL audit trail
-    KeychainHelper.swift               Keychain (Security) o honesto en otros hosts
-  Tools/
-    FileSystemTools.swift              8 filesystem tools
-    GlobMatcher.swift                  Pure Swift glob matcher
-  Remote/
-    OpenCodeRemoteClient.swift         Official OpenCode HTTP/SSE client
-    PairingStore.swift                 Persistencia del pairing en Keychain
-  Backend/
-    WorkbenchBackend.swift             Protocolo/backend abstraction
-    WorkbenchStore.swift               Estado del workbench + orquestación
-    NativeSwiftBackend.swift           Backend del runtime Swift nativo
-    OpenCodeServerBackend.swift        Backend del servidor remoto (Link Desktop)
-  UI/
-    ConnectionView.swift               Desktop pairing / native runtime chooser
-    ActiveSessionView.swift            Session timeline + work surfaces
-    ComposerView.swift                 Send/stop + agent/model controls
-    TimelineViews.swift                Tool/diff/permission/todo rendering
-    ProjectSessionViews.swift          Proyecto + selector de sesiones
-    DesignSystem.swift                 Tokens colores/sombras (workbench pass)
-    Models.swift                       Workbench state + UI models
-    SessionViewModel.swift             Legacy console adapter
-    ConsoleView.swift                  Compatibility/debug console
-
-Tests/
-  GlobMatcherTests.swift               Glob pattern matching (7 tests)
-  HostTests.swift                      Capability matrix + compatibility report (5)
-  CoreEndToEndTests.swift              Workspace + persistence + tools + agent E2E (14)
-  RemotePairingTests.swift             Pairing URL parser and defaults (3)
-
-Bridge/                                Node CLI: `opencodenative link`
-  bin/opencodenative.mjs               Lanza `opencode serve` + imprime pairing URL
-  test/                                Tests node --test + probes de transporte
-
-docs/
-  OPENCODE_COMPAT.md                   Full compatibility report with evidence
-  IOS_LIMITATIONS.md                   iOS capability documentation
-  USAGE.md                             Demo instructions + verification
-  REMOTE.md                            Link iPhone to real OpenCode server
-```
-
----
-
-## CI/CD
-
-The GitHub Actions workflow (`.github/workflows/ios-build.yml`) runs on every push:
-
-| Job | Description |
-|---|---|
-| **build** | Builds unsigned IPA for iOS device |
-| **test** | Runs all unit tests on iOS Simulator |
-| **capability-report** | Generates capability matrix artifact |
-| **sign** | *(optional)* Signs IPA with iloader — requires `ENABLE_ILOADER_SIGN=true` var + `APPLE_ID`/`TEAM_ID` secrets |
-
----
-
-## Documentation
-
-| Document | Description |
-|---|---|
-| [`docs/OPENCODE_COMPAT.md`](docs/OPENCODE_COMPAT.md) | Full compatibility report with evidence from OpenCode repository |
-| [`docs/IOS_LIMITATIONS.md`](docs/IOS_LIMITATIONS.md) | Honest iOS capability documentation |
-| [`docs/USAGE.md`](docs/USAGE.md) | Demo instructions, slash commands, verification without Xcode |
-| [`EXPERIMENT_REPORT.md`](EXPERIMENT_REPORT.md) | Final experiment report |
 
 ---
 
 ## License
 
-This project is licensed under the MIT License — see [`LICENSE`](LICENSE) for details.
+MIT — see [`LICENSE`](LICENSE).
 
-OpenCode (`anomalyco/opencode`) is referenced under its MIT license.
-This project is not affiliated with or endorsed by the OpenCode team.
+IysCode is (c) Danny Baanks. Not affiliated with OpenCode, Crush, Codex, Anthropic, Google, or OpenAI.

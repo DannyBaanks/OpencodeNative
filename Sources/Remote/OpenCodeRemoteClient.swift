@@ -12,7 +12,7 @@ public enum OpenCodeRemoteError: Error, LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidPairingLink: return "Invalid OpenCodeNative pairing link"
+        case .invalidPairingLink: return "Invalid IysCodeMovil pairing link"
         case .invalidResponse: return "Invalid response from OpenCode server"
         case .http(let status, let body): return "OpenCode server HTTP \(status): \(body)"
         case .missingSession: return "No OpenCode session is selected"
@@ -41,7 +41,7 @@ public struct OpenCodePairing: Equatable, Sendable {
     public static func parse(_ raw: String) throws -> OpenCodePairing {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let components = URLComponents(string: value),
-              components.scheme == "opencodenative",
+              components.scheme == "iyscodemovil",
               components.host == "pair" else {
             throw OpenCodeRemoteError.invalidPairingLink
         }
@@ -72,7 +72,7 @@ public struct OpenCodePairing: Equatable, Sendable {
     
     public var rawValue: String {
         var components = URLComponents()
-        components.scheme = "opencodenative"
+        components.scheme = "iyscodemovil"
         components.host = "pair"
         components.queryItems = [
             URLQueryItem(name: "scheme", value: scheme),

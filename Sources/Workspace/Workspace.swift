@@ -104,7 +104,7 @@ public actor IOSWorkspace: Workspace {
     public init(rootName: String = "workspace") throws {
         // Directorio base en Application Support (persistente, privado a la app)
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let baseDir = appSupport.appendingPathComponent("OpencodeNative", isDirectory: true)
+        let baseDir = appSupport.appendingPathComponent("IysCodeMovil", isDirectory: true)
         
         try fileManager.createDirectory(at: baseDir, withIntermediateDirectories: true)
         

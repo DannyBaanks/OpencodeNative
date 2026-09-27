@@ -193,7 +193,7 @@ public actor IOSPersistence: Persistence {
     
     public init() throws {
         let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        self.baseURL = appSupport.appendingPathComponent("OpencodeNative", isDirectory: true)
+        self.baseURL = appSupport.appendingPathComponent("IysCodeMovil", isDirectory: true)
         
         self.conversationsDir = baseURL.appendingPathComponent("conversations", isDirectory: true)
         self.eventsDir = baseURL.appendingPathComponent("events", isDirectory: true)

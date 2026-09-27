@@ -1,9 +1,9 @@
 import SwiftUI
 import UIKit
-import OpencodeNativeCore
+import IysCodeMovilCore
 
 @main
-public struct OpencodeNativeApp: App {
+public struct IysCodeMovilApp: App {
     @StateObject private var store = WorkbenchStore()
 
     public init() {}
@@ -41,7 +41,7 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OCColor.bgDeep.ignoresSafeArea())
         .onOpenURL { url in
-            guard url.scheme == "opencodenative" else { return }
+            guard url.scheme == "iyscodemovil" else { return }
             Task { await store.connectRemote(url.absoluteString) }
         }
     }

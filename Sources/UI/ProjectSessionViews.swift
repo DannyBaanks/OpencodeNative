@@ -552,7 +552,7 @@ struct SettingsSheet: View {
                             .foregroundColor(OCColor.textFaint)
                     }
                     HStack {
-                        Text("OpencodeNative")
+                        Text("IysCodeMovil")
                         Spacer()
                         Text("Not affiliated with OpenCode")
                             .foregroundColor(OCColor.textFaint)

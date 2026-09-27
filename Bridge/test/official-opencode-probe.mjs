@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 
-const bridge = spawn(process.execPath, [path.resolve("Bridge/bin/opencodenative.mjs"), "link"], {
+const bridge = spawn(process.execPath, [path.resolve("Bridge/bin/iyscodemovil.mjs"), "link"], {
   cwd: process.cwd(),
   env: process.env,
   stdio: ["ignore", "pipe", "pipe"],
@@ -14,7 +14,7 @@ bridge.stdout.on("data", (chunk) => { stdout += chunk; });
 bridge.stderr.on("data", (chunk) => { stderr += chunk; });
 
 try {
-  const pairing = await waitFor(() => stdout.match(/opencodenative:\/\/pair\?[^\s]+/)?.[0], 15_000);
+  const pairing = await waitFor(() => stdout.match(/iyscodemovil:\/\/pair\?[^\s]+/)?.[0], 15_000);
   const url = new URL(pairing);
   const authorization = `Basic ${Buffer.from(`${url.searchParams.get("username")}:${url.searchParams.get("password")}`).toString("base64")}`;
   const health = await waitFor(async () => {
@@ -29,7 +29,7 @@ try {
     }
   }, 30_000);
   assert.equal(health.healthy, true);
-  console.log(JSON.stringify({ runtime: "official OpenCode", command: "opencodenative link", health }, null, 2));
+  console.log(JSON.stringify({ runtime: "official OpenCode", command: "iyscodemovil link", health }, null, 2));
 } finally {
   if (bridge.exitCode === null && process.platform === "win32") {
     spawnSync("taskkill", ["/PID", String(bridge.pid), "/T", "/F"], { stdio: "ignore" });

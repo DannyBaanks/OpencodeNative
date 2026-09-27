@@ -9,11 +9,11 @@ import process from "node:process";
 const openisyRoot = process.env.OPENISY_ROOT;
 if (!openisyRoot) throw new Error("OPENISY_ROOT is required");
 
-const project = path.resolve(process.env.OPENCODENATIVE_PROJECT ?? path.join(os.tmpdir(), "opencodenative-openisy-probe"));
+const project = path.resolve(process.env.IYSCODEMOVIL_PROJECT ?? path.join(os.tmpdir(), "iyscodemovil-openisy-probe"));
 await mkdir(project, { recursive: true });
 const port = await freePort();
 const bridge = spawn(process.execPath, [
-  path.resolve("Bridge/bin/opencodenative.mjs"),
+  path.resolve("Bridge/bin/iyscodemovil.mjs"),
   "link",
   "--runtime", "openisy",
   "--openisy-root", openisyRoot,
@@ -29,7 +29,7 @@ bridge.stderr.on("data", (chunk) => { stderr += chunk; });
 let sessionID;
 let sseAbort;
 try {
-  const pairing = await waitFor(() => stdout.match(/opencodenative:\/\/pair\?[^\s]+/)?.[0], 60_000, "pairing URL");
+  const pairing = await waitFor(() => stdout.match(/iyscodemovil:\/\/pair\?[^\s]+/)?.[0], 60_000, "pairing URL");
   const pairingURL = new URL(pairing);
   const username = pairingURL.searchParams.get("username");
   const password = pairingURL.searchParams.get("password");
@@ -68,7 +68,7 @@ try {
   const created = await request(`${base}/session`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ title: "OpencodeNative transport probe" }),
+    body: JSON.stringify({ title: "IysCodeMovil transport probe" }),
   });
   sessionID = created.id;
   assert.match(sessionID, /^ses_/);
@@ -141,7 +141,7 @@ try {
   }
   const closed = await waitFor(() => portClosed(port), 10_000, "OpenISy listener shutdown");
   assert.equal(closed, true, `OpenISy listener ${port} remained open`);
-  if (!process.env.OPENCODENATIVE_PROJECT) await rm(project, { recursive: true, force: true });
+  if (!process.env.IYSCODEMOVIL_PROJECT) await rm(project, { recursive: true, force: true });
 }
 
 async function request(url, init) {

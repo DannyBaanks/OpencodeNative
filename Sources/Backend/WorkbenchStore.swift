@@ -46,8 +46,8 @@ public final class WorkbenchStore: ObservableObject {
         connectionStatus = "connecting..."
         
         do {
-            let pairing = try OpenCodePairing.parse(rawPairingLink)
-            let backend = OpenCodeServerBackend(pairing: pairing)
+            let (backendType, pairing) = try WorkbenchBackendFactory.parsePairingURL(rawPairingLink)
+            let backend = try WorkbenchBackendFactory.makeBackend(from: pairing)
             currentBackend = backend
             backendMode = .remote
             
@@ -55,7 +55,7 @@ public final class WorkbenchStore: ObservableObject {
             
             let project = Project(
                 id: "remote:\(pairing.host):\(pairing.port)",
-                name: "OpenCode @ \(pairing.host)",
+                name: "\(pairing.type.displayName) @ \(pairing.host)",
                 path: pairing.directory.isEmpty ? "remote" : pairing.directory,
                 avatarColor: .white,
                 sessionCount: 0
@@ -68,24 +68,31 @@ public final class WorkbenchStore: ObservableObject {
             let remoteSessions = try await backend.listSessions(projectID: project.id)
             sessions = remoteSessions
             if let first = remoteSessions.first {
-                // selectSession carga el historial real de la sesion al timeline.
                 await selectSession(first)
             }
             
             sessionState.selectedModel = ModelInfo(
-                name: "OpenCode server default",
-                provider: "OpenCode",
+                name: "\(pairing.type.displayName) server default",
+                provider: pairing.type.displayName,
                 providerIcon: "terminal",
                 isLocal: false,
-                route: "opencode-server"
+                route: pairing.type.rawValue
             )
             
             connectionStatus = await backend.connectionStatus
             isConnecting = false
             connectionHealth = .connected
-            addSystemEvent("OpenCode connected")
+            addSystemEvent("\(pairing.type.displayName) connected")
             
-            try await pairingStore.save(pairing)
+            let opencodePairing = OpenCodePairing(
+                scheme: pairing.scheme,
+                host: pairing.host,
+                port: pairing.port,
+                username: pairing.username,
+                password: pairing.password,
+                directory: pairing.directory
+            )
+            try await pairingStore.save(opencodePairing)
             
             await loadModelsAndAgents()
             await subscribeToBackendEvents(backend)
@@ -121,8 +128,6 @@ public final class WorkbenchStore: ObservableObject {
         sandboxUsesLiveModel = false
     }
 
-    /// Saves the SpaceXAI key before the sandbox starts, so the first turn
-    /// calls Grok instead of the notes.txt script.
     public func startSandbox(xaiKey: String?) async {
         let trimmed = xaiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmed.isEmpty, let persistence = try? IOSPersistence() {
@@ -134,7 +139,7 @@ public final class WorkbenchStore: ObservableObject {
     public func useNativeRuntime() async {
         do {
             await currentBackend?.stopEventStream()
-            let backend = NativeSwiftBackend()
+            let backend = WorkbenchBackendFactory.makeNativeBackend()
             currentBackend = backend
             backendMode = .native
             
@@ -184,8 +189,6 @@ public final class WorkbenchStore: ObservableObject {
         }
     }
     
-    /// Reconexion manual desde la UI: el backend activo decide la via (remoto
-    /// reusa el pairing guardado; nativo re-arranca el runtime local).
     public func reconnect() async {
         switch backendMode {
         case .remote:
@@ -252,8 +255,6 @@ public final class WorkbenchStore: ObservableObject {
             sessionState.currentSession = session
             currentSessionID = session.id
             sessionState.clearTimeline()
-            // Seleccion real en el backend para que la sesion nueva quede activa
-            // tambien del lado del servidor, no solo en el estado local.
             try? await backend.selectSession(session.id)
             return session
         } catch {
@@ -320,9 +321,6 @@ public final class WorkbenchStore: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             do {
-                // Las @mentions siguen la convencion `@file` de OpenCode para que el
-                // servidor remoto las resuelva como contexto de archivo; el backend
-                // nativo las recibe como texto plano.
                 let promptText = attachments.isEmpty
                     ? trimmed
                     : trimmed + "\n" + attachments.map { attachment in
@@ -388,8 +386,7 @@ public final class WorkbenchStore: ObservableObject {
             do {
                 try await backend.replyPermission(requestID: requestId, decision: decision)
                 await MainActor.run { [weak self] in
-                    let responseText = decision.rawValue
-                    self?.addSystemEvent("Permission \(responseText)")
+                    self?.addSystemEvent("Permission \(decision.rawValue)")
                 }
             } catch {
                 await MainActor.run { [weak self] in
@@ -401,8 +398,6 @@ public final class WorkbenchStore: ObservableObject {
     
     public func setModel(_ model: ModelInfo) {
         sessionState.selectedModel = model
-        // La seleccion viaja real: sendPrompt la envia como
-        // model: {providerID, modelID} al servidor con cada prompt.
         addSystemEvent("Model: \(model.name)")
     }
     
@@ -436,8 +431,6 @@ public final class WorkbenchStore: ObservableObject {
         do {
             diffFiles = try await backend.sessionDiff(sessionID: sessionID)
         } catch {
-            // Native sandbox has no diff. The Review surface already says so;
-            // writing the error into the chat hid it on the wrong tab.
             if backendMode != .native {
                 addErrorEvent("Failed to load diff: \(error.localizedDescription)")
             }
@@ -584,13 +577,10 @@ public final class WorkbenchStore: ObservableObject {
         if kind == "assistantText" || kind == "text" {
             streamPartKinds[eventID] = "assistant"
             let body = text ?? ""
-            // text-start arrives empty. The tokens come later as part deltas.
             if body.isEmpty {
                 upsertAssistantText(id: eventID, text: "")
                 return
             }
-            // Unknown role still looks like `text`. A copy of the prompt we just
-            // showed is the server echoing the user, not a new answer.
             if kind == "text", isEchoOfLatestUserPrompt(body) {
                 removeTimelineEvent(id: eventID)
                 return
@@ -627,22 +617,18 @@ public final class WorkbenchStore: ObservableObject {
             upsertSystem(id: eventID, text: text)
         }
     }
-
-    /// True when `text` is the optimistic user bubble, or a prefix of it while
-    /// the server streams that same message back.
+    
     private func isEchoOfLatestUserPrompt(_ text: String) -> Bool {
         guard let prompt = sessionState.timelineEvents.last(where: { $0.kind == .userPrompt })?.promptText else {
             return false
         }
         return prompt == text || prompt.hasPrefix(text)
     }
-
+    
     private func removeTimelineEvent(id: String) {
         sessionState.timelineEvents.removeAll { $0.id == id }
     }
-
-    /// Appends one token. `message.part.delta` is the live stream; the later
-    /// `message.part.updated` replaces the bubble with the finished text.
+    
     private func appendAssistantDelta(partID: String, delta: String) {
         switch streamPartKinds[partID] {
         case "reasoning", "user":
@@ -659,7 +645,7 @@ public final class WorkbenchStore: ObservableObject {
         streamPartKinds[partID] = "assistant"
         upsertAssistantText(id: partID, text: delta)
     }
-
+    
     private func upsertAssistantText(id: String, text: String) {
         if let index = sessionState.timelineEvents.firstIndex(where: { $0.id == id }) {
             sessionState.timelineEvents[index].assistantText = text
@@ -669,7 +655,7 @@ public final class WorkbenchStore: ObservableObject {
         event.assistantText = text
         sessionState.addEvent(event)
     }
-
+    
     private func upsertUserPrompt(id: String, text: String) {
         if let index = sessionState.timelineEvents.firstIndex(where: { $0.id == id }) {
             sessionState.timelineEvents[index].promptText = text
@@ -679,14 +665,14 @@ public final class WorkbenchStore: ObservableObject {
         event.promptText = text
         sessionState.addEvent(event)
     }
-
+    
     private func upsertThinking(id: String) {
         if sessionState.timelineEvents.contains(where: { $0.id == id }) { return }
         var event = TimelineEvent(id: id, kind: .thinking, agentMode: sessionState.agentMode)
         event.statusLabel = "Thinking"
         sessionState.addEvent(event)
     }
-
+    
     private func upsertSystem(id: String, text: String) {
         if let index = sessionState.timelineEvents.firstIndex(where: { $0.id == id }) {
             sessionState.timelineEvents[index].assistantText = text

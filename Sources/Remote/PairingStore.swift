@@ -2,7 +2,7 @@ import Foundation
 
 public actor PairingStore {
     private let keychain = KeychainHelper.shared
-    private let pairingKey = "opencodenative_pairing"
+    private let pairingKey = "iyscodemovil_pairing"
 
     public init() {}
 

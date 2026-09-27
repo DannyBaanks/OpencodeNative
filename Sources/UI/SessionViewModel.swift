@@ -21,7 +21,7 @@ public struct TranscriptLine: Identifiable, Sendable, Hashable {
 /// Conecta el TUI al runtime nativo (harness) y al agente alternativo.
 ///
 /// El agente aquí es el **runtime nativo alternativo** de este proyecto,
-/// NO el OpenCode TUI. OpenCode TUI se procesa vía `OpenCodeBootAttempt`
+/// NO el IysCode TUI. IysCode TUI se procesa vía `OpenCodeBootAttempt`
 /// y se muestra como transcript de compatibilidad.
 @MainActor
 public final class SessionViewModel: ObservableObject {
@@ -47,7 +47,7 @@ public final class SessionViewModel: ObservableObject {
 
     /// Inicializa runtime + emite boot transcript.
     public func initialize() async {
-        emit(.system, "opencode-native — compatibility harness v\(Self.appVersion)")
+        emit(.system, "iyscodemovil — compatibility harness v\(Self.appVersion)")
         await runBootAttempt()
         await initRuntime()
     }
@@ -179,8 +179,8 @@ public final class SessionViewModel: ObservableObject {
 
     private func systemPromptText() -> String {
         """
-        Eres un asistente que opera dentro del runtime nativo alternativo de OpencodeNative en iOS.
-        No eres OpenCode: el TUI real de OpenCode NO puede arrancar en iOS (ver boot attempt).
+        Eres un asistente que opera dentro del runtime nativo alternativo de IysCodeMovil en iOS.
+        No eres IysCode: el TUI real de IysCode NO puede arrancar en iOS (ver boot attempt).
         Tienes 8 tools de filesystem restringidas al sandbox. Sin shell, sin git, sin compilar.
         Responde de forma concisa. Cuando el usuario pida algo imposible en iOS, explícalo.
         """

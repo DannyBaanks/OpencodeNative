@@ -371,8 +371,8 @@ public final class ActiveSessionState: ObservableObject {
 
 public extension Project {
     static let demoProjects: [Project] = [
-        Project(name: "OpencodeNative", path: "~/Development/ISyCo/OpencodeNative", avatarColor: .blue, sessionCount: 3),
-        Project(name: "opencode (upstream)", path: "~/Development/opencode", avatarColor: .green, sessionCount: 12),
+        Project(name: "IysCodeMovil", path: "~/Development/ISyCo Git/IysCodeMovil", avatarColor: .blue, sessionCount: 3),
+        Project(name: "iyscode (upstream)", path: "~/Development/iyscode", avatarColor: .green, sessionCount: 12),
         Project(name: "side-project", path: "~/Development/side-project", avatarColor: .orange, sessionCount: 1),
     ]
 }

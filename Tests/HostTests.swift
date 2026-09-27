@@ -1,5 +1,5 @@
 import XCTest
-@testable import OpencodeNativeCore
+@testable import IysCodeMovilCore
 
 final class CapabilityMatrixTests: XCTestCase {
     func testProbeOnNonIOSHostIsNotApplicable() {

@@ -156,7 +156,7 @@ public struct IOSCapabilityMatrix: Sendable, Codable {
     private static func asWritableSubpath() throws -> String {
         let fm = FileManager.default
         let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("OpencodeNative", isDirectory: true)
+            .appendingPathComponent("IysCodeMovil", isDirectory: true)
         try fm.createDirectory(at: base, withIntermediateDirectories: true)
         let name = "probe_\(UUID().uuidString)"
         let dir = base.appendingPathComponent(name, isDirectory: true)

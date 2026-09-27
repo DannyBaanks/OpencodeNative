@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { bestLanIPv4, childEnvironment, isPrivateRoutableIPv4, parseLinkOptions, resolvePairingHost, runtimeCommand } from "../bin/opencodenative.mjs";
+import { bestLanIPv4, childEnvironment, isPrivateRoutableIPv4, parseLinkOptions, resolvePairingHost, runtimeCommand } from "../bin/iyscodemovil.mjs";
 
 test("default runtime remains official opencode", () => {
   const options = parseLinkOptions(["link"], {});

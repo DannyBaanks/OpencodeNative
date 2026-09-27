@@ -16,10 +16,10 @@ public struct ConnectionView: View {
                 VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 36)
                 
-                Text("opencode")
+                Text("iyscode")
                     .font(.system(size: 30, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
-                Text("native / ios")
+                Text("movil / ios")
                     .font(.system(size: 13, weight: .regular, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.45))
                     .padding(.top, 4)
@@ -36,7 +36,7 @@ public struct ConnectionView: View {
                     label("LINK DESKTOP")
                     Spacer()
                     Button {
-                        UIPasteboard.general.string = "npx --yes github:DannyBaanks/OpencodeNative link"
+                        UIPasteboard.general.string = "npx --yes github:DannyBaanks/IysCodeMovil link"
                     } label: {
                         Text("copy")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -48,9 +48,9 @@ public struct ConnectionView: View {
                     .buttonStyle(.plain)
                     .padding(.bottom, 8)
                 }
-                commandBox("npx --yes github:DannyBaanks/OpencodeNative link")
+                commandBox("npx --yes github:DannyBaanks/IysCodeMovil link")
                 
-                Text("Run it in the project directory on the computer that already has OpenCode installed. Paste the pairing link printed by the command.")
+                Text("Run it in the project directory on the computer that already has IysCode installed. Paste the pairing link printed by the command.")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.42))
                     .fixedSize(horizontal: false, vertical: true)
@@ -76,7 +76,7 @@ public struct ConnectionView: View {
                     .buttonStyle(.plain)
                     .padding(.bottom, 8)
                 }
-                TextField("opencodenative://pair?...", text: $pairingLink, axis: .vertical)
+                TextField("iyscodemovil://pair?...", text: $pairingLink, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.system(size: 13, design: .monospaced))
@@ -148,7 +148,7 @@ public struct ConnectionView: View {
                 
                 Spacer()
                 
-                Text("link desktop = OpenCode on your computer. sandbox = Grok here, with this phone's files.")
+                Text("link desktop = IysCode on your computer. sandbox = Grok here, with this phone's files.")
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.28))
                     .padding(.bottom, 8)
@@ -289,7 +289,7 @@ struct ReconnectSheet: View {
                     label("LINK DESKTOP")
                     Spacer()
                     Button {
-                        UIPasteboard.general.string = "npx --yes github:DannyBaanks/OpencodeNative link"
+                        UIPasteboard.general.string = "npx --yes github:DannyBaanks/IysCodeMovil link"
                     } label: {
                         Text("copy")
                             .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -301,9 +301,9 @@ struct ReconnectSheet: View {
                     .buttonStyle(.plain)
                     .padding(.bottom, 8)
                 }
-                commandBox("npx --yes github:DannyBaanks/OpencodeNative link")
+                commandBox("npx --yes github:DannyBaanks/IysCodeMovil link")
                 
-                Text("Run it in the project directory on the computer that already has OpenCode installed. Paste the pairing link printed by the command.")
+                Text("Run it in the project directory on the computer that already has IysCode installed. Paste the pairing link printed by the command.")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.42))
                     .fixedSize(horizontal: false, vertical: true)
@@ -329,7 +329,7 @@ struct ReconnectSheet: View {
                     .buttonStyle(.plain)
                     .padding(.bottom, 8)
                 }
-                TextField("opencodenative://pair?...", text: $pairingLink, axis: .vertical)
+                TextField("iyscodemovil://pair?...", text: $pairingLink, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.system(size: 13, design: .monospaced))

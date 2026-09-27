@@ -1,6 +1,6 @@
-name: OpencodeNative
+name: IysCodeMovil
 options:
-  bundleIdPrefix: com.opencode
+  bundleIdPrefix: dev.iyscode
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -10,31 +10,31 @@ settings:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-    PRODUCT_NAME: OpencodeNative
+    PRODUCT_NAME: IysCodeMovil
     GENERATE_INFOPLIST_FILE: NO
     CURRENT_PROJECT_VERSION: "1"
     MARKETING_VERSION: "0.1.0"
 
 targets:
-  OpencodeNativeCore:
+  IysCodeMovilCore:
     type: framework.static
     platform: iOS
     sources:
       - path: Sources
         type: group
         excludes:
-          - OpencodeNativeApp.swift
+          - IysCodeMovilApp.swift
     settings:
       base:
-        PRODUCT_NAME: OpencodeNativeCore
-        PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native.core
+        PRODUCT_NAME: IysCodeMovilCore
+        PRODUCT_BUNDLE_IDENTIFIER: dev.iyscode.movil.core
         DEFINES_MODULE: YES
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         SKIP_INSTALL: YES
 
-  OpencodeNative:
+  IysCodeMovil:
     type: application
     platform: iOS
     sources:
@@ -46,49 +46,46 @@ targets:
       - path: LocalPacks
         type: folder
     dependencies:
-      - target: OpencodeNativeCore
+      - target: IysCodeMovilCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native
-        PRODUCT_NAME: OpencodeNative
+        PRODUCT_BUNDLE_IDENTIFIER: dev.iyscode.movil
+        PRODUCT_NAME: IysCodeMovil
         DEFINES_MODULE: NO
         CODE_SIGNING_ALLOWED: YES
         CODE_SIGNING_REQUIRED: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # Usar el Info.plist del repo tal cual. Con `info: path:` XcodeGen lo
-        # REGENERA en CI y se perdian UILaunchScreen, URL scheme y ATS:
-        # sin launch screen iOS corre la app en letterbox 320x480.
         INFOPLIST_FILE: Info.plist
 
-  OpencodeNativeTests:
+  IysCodeMovilTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: Tests
         type: group
     dependencies:
-      - target: OpencodeNativeCore
+      - target: IysCodeMovilCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.opencode.native.tests
-        PRODUCT_NAME: OpencodeNativeTests
+        PRODUCT_BUNDLE_IDENTIFIER: dev.iyscode.movil.tests
+        PRODUCT_NAME: IysCodeMovilTests
         DEFINES_MODULE: NO
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
 
 schemes:
-  OpencodeNative:
+  IysCodeMovil:
     build:
       targets:
-        OpencodeNativeCore: all
-        OpencodeNative: all
+        IysCodeMovilCore: all
+        IysCodeMovil: all
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - OpencodeNativeTests
+        - IysCodeMovilTests
     profile:
       config: Release
     analyze:
