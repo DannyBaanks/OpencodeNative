@@ -192,7 +192,7 @@ public enum NativeCapabilityCatalog {
     public static func current(hasExternalFolderGrant: Bool,
                                hasConfiguredShortcut: Bool = false,
                                notificationAuthorization: NativeAuthorizationState = .notRequested) -> [NativeCapabilityDescriptor] {
-        let implemented = [
+        let implemented: [NativeCapabilityDescriptor] = [
             .init(id: "files.sandbox", title: "Files sandbox", detail: "Private iSyCode workspace", availability: .available, authorization: .authorized, effectClass: .read),
             .init(id: "files.external-folder", title: "Selected folder", detail: hasExternalFolderGrant ? "User-selected folder grant" : "Choose a folder in Files to enable", availability: hasExternalFolderGrant ? .available : .needsSetup, authorization: hasExternalFolderGrant ? .authorized : .notRequested, effectClass: .write),
             .init(id: "keychain.app-secrets", title: "Keychain", detail: "App-owned credentials; values hidden from the model", availability: .available, authorization: .authorized, effectClass: .sensitiveWrite),
@@ -202,7 +202,7 @@ public enum NativeCapabilityCatalog {
 
         // Product-facing discovery candidates. They are deliberately non-executable
         // until an adapter, permission flow and focused approval policy exist.
-        let candidates = [
+        let candidates: [NativeCapabilityDescriptor] = [
             candidate("calendar.events", "Calendar", "Read or create events with EventKit", surface: .directFramework),
             candidate("reminders.items", "Reminders", "Read or create reminders with EventKit", surface: .directFramework),
             candidate("contacts.lookup", "Contacts", "Find only requested contact fields", surface: .directFramework),
