@@ -608,6 +608,7 @@ struct SandboxKeySheet: View {
         .presentationDetents([.large])
         .sheet(isPresented: $showProviderDirectory) { ProviderDirectoryView() }
         .onAppear {
+            store.sandboxSetupError = nil
             refreshProviderKeyState()
         }
         .onChange(of: selectedProviderID) { _ in refreshProviderKeyState() }

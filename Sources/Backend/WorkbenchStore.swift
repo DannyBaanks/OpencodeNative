@@ -223,6 +223,7 @@ public final class WorkbenchStore: ObservableObject {
                 : connectionStatus
             return false
         }
+        sandboxSetupError = nil
         return true
     }
     
@@ -268,6 +269,7 @@ public final class WorkbenchStore: ObservableObject {
             
             connectionStatus = await backend.connectionStatus
             connectionHealth = .connected
+            sandboxSetupError = nil
             sandboxUsesLiveModel = backend.usesLiveModel
             sessionState.clearTimeline()
             if let first = sessions.first {
