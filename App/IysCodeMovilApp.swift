@@ -6,7 +6,9 @@ import IysCodeMovilCore
 public struct IysCodeMovilApp: App {
     @StateObject private var store = WorkbenchStore()
 
-    public init() {}
+    public init() {
+        IysThemePreferences.applyPendingOnLaunch()
+    }
 
     public var body: some Scene {
         WindowGroup {

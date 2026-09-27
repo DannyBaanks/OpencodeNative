@@ -488,10 +488,59 @@ struct SettingsSheet: View {
     @EnvironmentObject private var store: WorkbenchStore
     @State private var hasStoredPairing = false
     @State private var showRemoteUnavailableNote = false
+    @State private var selectedTheme = IysThemePreferences.pending ?? IysThemePreferences.active
+    @State private var showThemeRestartNotice = false
     
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    VStack(alignment: .leading, spacing: OCSpacing.md) {
+                        ForEach(IysTheme.allCases) { theme in
+                            ThemeChoiceRow(
+                                theme: theme,
+                                isSelected: selectedTheme == theme,
+                                isActive: IysThemePreferences.active == theme
+                            ) {
+                                guard selectedTheme != theme else { return }
+                                selectedTheme = theme
+                                IysThemePreferences.pending = theme
+                                showThemeRestartNotice = true
+                            }
+                        }
+
+                        HStack(spacing: OCSpacing.md) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(OCColor.textFaint)
+                                .frame(width: 38, height: 38)
+                                .background(OCColor.bgLayer1)
+                                .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Próximamente")
+                                    .font(OCTypography.rowPrimary)
+                                    .foregroundColor(OCColor.textSecondary)
+                                Text("Más temas llegarán pronto")
+                                    .font(OCTypography.meta)
+                                    .foregroundColor(OCColor.textFaint)
+                            }
+                            Spacer()
+                            Image(systemName: "lock.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(OCColor.textFaint)
+                        }
+                        .padding(OCSpacing.md)
+                        .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(OCColor.borderMuted, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+                    }
+                    .padding(.vertical, OCSpacing.xs)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                } header: {
+                    Text("Tema de la app")
+                } footer: {
+                    Text("El tema se aplica al volver a abrir iSyCode.")
+                }
+
                 Section("Connection") {
                     if store.backendMode == .remote || store.backendMode == .native {
                         HStack {
@@ -569,6 +618,11 @@ struct SettingsSheet: View {
             .onAppear {
                 Task { hasStoredPairing = await store.hasStoredPairing() }
             }
+            .alert("Tema listo", isPresented: $showThemeRestartNotice) {
+                Button("Entendido", role: .cancel) { }
+            } message: {
+                Text("Cierra y vuelve a abrir iSyCode para aplicar el tema \(selectedTheme.title). iOS no permite que la app se reinicie por sí sola.")
+            }
         }
         .presentationDetents([.medium, .large])
     }
@@ -596,6 +650,57 @@ struct SettingsSheet: View {
         case .connecting: return OCColor.warning
         case .disconnected: return OCColor.danger
         }
+    }
+}
+
+private struct ThemeChoiceRow: View {
+    let theme: IysTheme
+    let isSelected: Bool
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: OCSpacing.md) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: OCRadius.r10)
+                        .fill(theme == .console ? Color(hex: "07100D") : Color(hex: "1B2230"))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Capsule().fill(theme.accent).frame(width: 22, height: 3)
+                        Capsule().fill(theme.accent.opacity(0.45)).frame(width: 32, height: 3)
+                        Capsule().fill(Color.white.opacity(0.18)).frame(width: 25, height: 3)
+                    }
+                }
+                .frame(width: 48, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(theme.title)
+                            .font(OCTypography.rowPrimary)
+                            .foregroundColor(OCColor.textPrimary)
+                        if isActive {
+                            Text("ACTUAL")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .tracking(0.5)
+                                .foregroundColor(theme.accent)
+                        }
+                    }
+                    Text(theme.subtitle)
+                        .font(OCTypography.meta)
+                        .foregroundColor(OCColor.textFaint)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .font(.system(size: 19))
+                    .foregroundColor(isSelected ? theme.accent : OCColor.iconMuted)
+            }
+            .padding(OCSpacing.md)
+            .background(isSelected ? theme.accent.opacity(0.08) : OCColor.bgBase)
+            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+            .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(isSelected ? theme.accent.opacity(0.55) : OCColor.borderMuted, lineWidth: 1))
+            .contentShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+        }
+        .buttonStyle(.plain)
     }
 }
 

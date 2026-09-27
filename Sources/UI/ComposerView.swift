@@ -143,11 +143,11 @@ public struct SendStopButton: View {
     }
 
     private var backgroundColor: Color {
-        isProcessing ? agentColor.opacity(0.9) : OCColor.textPrimary
+        isProcessing ? agentColor.opacity(0.9) : IysThemePreferences.active.accent
     }
 
     private var iconColor: Color {
-        isProcessing ? OCColor.bgDeep : OCColor.bgBase
+        OCColor.bgDeep
     }
 
     private var iconName: String {

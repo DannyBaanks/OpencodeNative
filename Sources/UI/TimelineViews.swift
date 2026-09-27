@@ -98,7 +98,7 @@ public struct UserPromptView: View {
             .padding(.horizontal, OCSpacing.xl)
             .padding(.vertical, OCSpacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(agentColor.opacity(0.12))
+            .background(IysThemePreferences.active.userSurface)
             .clipShape(RoundedRectangle(cornerRadius: OCRadius.r18))
             .overlay {
                 RoundedRectangle(cornerRadius: OCRadius.r18)
@@ -153,7 +153,7 @@ public struct AssistantTextView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, OCSpacing.xl)
         .padding(.vertical, OCSpacing.lg)
-        .background(OCColor.bgLayer1.opacity(0.58))
+        .background(IysThemePreferences.active.assistantSurface)
         .clipShape(RoundedRectangle(cornerRadius: OCRadius.r18))
         .overlay {
             RoundedRectangle(cornerRadius: OCRadius.r18)

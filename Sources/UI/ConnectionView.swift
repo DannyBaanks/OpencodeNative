@@ -11,14 +11,14 @@ public struct ConnectionView: View {
     
     public var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            OCColor.bgDeep.ignoresSafeArea()
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 36)
                 
                 Text("iyscode")
                     .font(.system(size: 30, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(OCColor.textPrimary)
                 Text("movil / ios")
                     .font(.system(size: 13, weight: .regular, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.45))
@@ -86,8 +86,8 @@ public struct ConnectionView: View {
                     .onSubmit { connect() }
                     .scrollDismissesKeyboard(.interactively)
                     .padding(12)
-                    .background(Color(red: 0.035, green: 0.035, blue: 0.035))
-                    .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 1))
+                    .background(OCColor.bgBase)
+                    .overlay(RoundedRectangle(cornerRadius: OCRadius.r10).stroke(OCColor.borderBase, lineWidth: 1))
                 
                 Button { connect() } label: {
                     HStack {
@@ -97,10 +97,11 @@ public struct ConnectionView: View {
                         Text("↵")
                             .font(.system(size: 14, design: .monospaced))
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(OCColor.bgDeep)
                     .padding(.horizontal, 12)
                     .frame(height: 44)
-                    .background(Color.white)
+                    .background(IysThemePreferences.active.accent)
+                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
                 }
                 .buttonStyle(.plain)
                 .disabled(store.isConnecting || pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -130,7 +131,7 @@ public struct ConnectionView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("use sandbox")
                                 .font(.system(size: 13, weight: .medium, design: .monospaced))
-                                .foregroundColor(.white)
+                            .foregroundColor(OCColor.textPrimary)
                             Text("Grok 4.7. Sin clave solo corre un guion que escribe notes.txt")
                                 .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(Color.white.opacity(0.38))
@@ -159,7 +160,7 @@ public struct ConnectionView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.ignoresSafeArea())
+        .background(OCColor.bgDeep.ignoresSafeArea())
         .contentShape(Rectangle())
         .onTapGesture { fieldFocused = false }
         .toolbar {
@@ -203,7 +204,7 @@ public struct ConnectionView: View {
         }
         .font(.system(size: 12.5, design: .monospaced))
         .padding(12)
-        .background(Color(red: 0.025, green: 0.025, blue: 0.025))
+        .background(OCColor.bgBase)
         .overlay(Rectangle().stroke(Color.white.opacity(0.14), lineWidth: 1))
     }
 }
@@ -230,15 +231,15 @@ struct StoredPairingSection: View {
                         Task { await store.reconnectStoredPairing() }
                     }
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(.black)
+                    .foregroundColor(OCColor.bgDeep)
                     .padding(.horizontal, 12)
                     .frame(height: 36)
-                    .background(Color.white)
+                    .background(IysThemePreferences.active.accent)
                     .cornerRadius(OCRadius.r8)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
-                .background(Color(red: 0.025, green: 0.025, blue: 0.025))
+                .background(OCColor.bgBase)
                 .overlay(Rectangle().stroke(Color.white.opacity(0.14), lineWidth: 1))
                 .clipShape(RoundedRectangle(cornerRadius: OCRadius.r8))
                 
@@ -339,7 +340,7 @@ struct ReconnectSheet: View {
                     .onSubmit { connect() }
                     .scrollDismissesKeyboard(.interactively)
                     .padding(12)
-                    .background(Color(red: 0.035, green: 0.035, blue: 0.035))
+                    .background(OCColor.bgBase)
                     .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 1))
                 
                 Button { connect() } label: {
@@ -350,10 +351,10 @@ struct ReconnectSheet: View {
                         Text("↵")
                             .font(.system(size: 14, design: .monospaced))
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(OCColor.bgDeep)
                     .padding(.horizontal, 12)
                     .frame(height: 44)
-                    .background(Color.white)
+                    .background(IysThemePreferences.active.accent)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.isConnecting || pairingLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -406,7 +407,7 @@ struct ReconnectSheet: View {
         }
         .font(.system(size: 12.5, design: .monospaced))
         .padding(12)
-        .background(Color(red: 0.025, green: 0.025, blue: 0.025))
+        .background(OCColor.bgBase)
         .overlay(Rectangle().stroke(Color.white.opacity(0.14), lineWidth: 1))
     }
 }
@@ -444,7 +445,7 @@ struct SandboxKeySheet: View {
                     .foregroundColor(.white)
                     .focused($fieldFocused)
                     .padding(12)
-                    .background(Color(red: 0.035, green: 0.035, blue: 0.035))
+                    .background(OCColor.bgBase)
                     .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 1))
 
                 Button {
@@ -462,10 +463,10 @@ struct SandboxKeySheet: View {
                         Text("↵")
                             .font(.system(size: 14, design: .monospaced))
                     }
-                    .foregroundColor(.black)
+                    .foregroundColor(OCColor.bgDeep)
                     .padding(.horizontal, 12)
                     .frame(height: 44)
-                    .background(Color.white)
+                    .background(IysThemePreferences.active.accent)
                 }
                 .buttonStyle(.plain)
                 .disabled(!hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -490,7 +491,7 @@ struct SandboxKeySheet: View {
             }
             .padding(.horizontal, 18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color.black.ignoresSafeArea())
+            .background(OCColor.bgDeep.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

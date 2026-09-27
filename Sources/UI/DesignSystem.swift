@@ -1,15 +1,122 @@
 import SwiftUI
 
+// MARK: - App Themes
+
+public enum IysTheme: String, CaseIterable, Identifiable {
+    case console
+    case premium
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .console: return "Consola"
+        case .premium: return "Premium"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .console: return "Enfoque total. Estilo terminal."
+        case .premium: return "Moderno. Elegante. Listo para todo."
+        }
+    }
+
+    public var accent: Color {
+        switch self {
+        case .console: return Color(hex: "00D7A5")
+        case .premium: return Color(hex: "4B8DFF")
+        }
+    }
+
+    public var userSurface: Color {
+        switch self {
+        case .console: return Color(hex: "00D7A5", opacity: 0.12)
+        case .premium: return Color(hex: "3978F6", opacity: 0.22)
+        }
+    }
+
+    public var assistantSurface: Color {
+        switch self {
+        case .console: return Color(hex: "0D1715")
+        case .premium: return Color(hex: "242B37")
+        }
+    }
+
+    public var background: Color {
+        switch self {
+        case .console: return Color(hex: "050807")
+        case .premium: return Color(hex: "101319")
+        }
+    }
+
+    public var base: Color {
+        switch self {
+        case .console: return Color(hex: "101412")
+        case .premium: return Color(hex: "1B2029")
+        }
+    }
+
+    public var layer: Color {
+        switch self {
+        case .console: return Color(hex: "151D1A")
+        case .premium: return Color(hex: "252C38")
+        }
+    }
+
+    public var secondaryLayer: Color {
+        switch self {
+        case .console: return Color(hex: "1B2521")
+        case .premium: return Color(hex: "303847")
+        }
+    }
+
+    public var border: Color {
+        switch self {
+        case .console: return Color(hex: "00D7A5", opacity: 0.18)
+        case .premium: return Color(hex: "A9B9D4", opacity: 0.16)
+        }
+    }
+
+    public var usesMonospacedBody: Bool { self == .console }
+}
+
+public enum IysThemePreferences {
+    private static let activeKey = "iyscode.theme.active"
+    public static let pendingKey = "iyscode.theme.pending"
+
+    public static var active: IysTheme {
+        get { UserDefaults.standard.string(forKey: activeKey).flatMap(IysTheme.init(rawValue:)) ?? .console }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: activeKey) }
+    }
+
+    public static var pending: IysTheme? {
+        get { UserDefaults.standard.string(forKey: pendingKey).flatMap(IysTheme.init(rawValue:)) }
+        set {
+            if let newValue { UserDefaults.standard.set(newValue.rawValue, forKey: pendingKey) }
+            else { UserDefaults.standard.removeObject(forKey: pendingKey) }
+        }
+    }
+
+    /// Applies a theme selected in a previous run. iOS does not allow apps to relaunch themselves.
+    public static func applyPendingOnLaunch() {
+        guard let pending else { return }
+        active = pending
+        self.pending = nil
+    }
+}
+
 // MARK: - Color Tokens (OpenCode v2 → iOS Dark Mode)
 
 public struct OCColor {
     // Core neutrals
-    public static let bgDeep       = Color(hex: "080808")
-    public static let bgBase       = Color(hex: "161616")
-    public static let bgLayer1     = Color(hex: "242424")
-    public static let bgLayer2     = Color(hex: "2E2E2E")
-    public static let borderMuted  = Color(hex: "FFFFFF", opacity: 0.08)
-    public static let borderBase   = Color(hex: "FFFFFF", opacity: 0.10)
+    private static var theme: IysTheme { IysThemePreferences.active }
+    public static var bgDeep: Color { theme.background }
+    public static var bgBase: Color { theme.base }
+    public static var bgLayer1: Color { theme.layer }
+    public static var bgLayer2: Color { theme.secondaryLayer }
+    public static var borderMuted: Color { theme.border }
+    public static var borderBase: Color { theme.border.opacity(0.75) }
     public static let borderStrong = Color(hex: "FFFFFF", opacity: 0.20)
     public static let textPrimary  = Color(hex: "F2F2F2")
     public static let textSecondary = Color(hex: "AEAEAE")
@@ -18,19 +125,19 @@ public struct OCColor {
     public static let iconMuted    = Color(hex: "808080")
 
     // Agent / Mode colors
-    public static let agentBuild   = Color(hex: "A2BCFF")
+    public static var agentBuild: Color { theme.accent }
     public static let agentPlan    = Color(hex: "F799C6")
     public static let agentExplore = Color(hex: "F3DA9B")
     public static let agentReview  = Color(hex: "96E3A6")
     public static let agentCustom  = Color(hex: "9E99F7")
 
-    public static let agentBuildSoft   = Color(hex: "A2BCFF", opacity: 0.08)
+    public static var agentBuildSoft: Color { theme.accent.opacity(0.10) }
     public static let agentPlanSoft    = Color(hex: "F799C6", opacity: 0.08)
     public static let agentExploreSoft = Color(hex: "F3DA9B", opacity: 0.08)
     public static let agentReviewSoft  = Color(hex: "96E3A6", opacity: 0.08)
     public static let agentCustomSoft  = Color(hex: "9E99F7", opacity: 0.08)
 
-    public static let agentBuildBorder   = Color(hex: "A2BCFF", opacity: 0.20)
+    public static var agentBuildBorder: Color { theme.accent.opacity(0.28) }
     public static let agentPlanBorder    = Color(hex: "F799C6", opacity: 0.30)
     public static let agentExploreBorder = Color(hex: "F3DA9B", opacity: 0.30)
     public static let agentReviewBorder  = Color(hex: "96E3A6", opacity: 0.30)
@@ -49,7 +156,7 @@ public struct OCColor {
     public static let diffAddBg      = Color(hex: "14361D", opacity: 0.60)
     public static let diffDeleteBg   = Color(hex: "461516", opacity: 0.60)
     public static let diffContextBg  = Color(hex: "161616")
-    public static let diffSelectedBg = Color(hex: "A2BCFF", opacity: 0.07)
+    public static var diffSelectedBg: Color { theme.accent.opacity(0.10) }
 
     // Semantic
     public static let success        = Color(hex: "4CD97B")
@@ -113,14 +220,15 @@ public struct OCSpacing {
 
 public struct OCRadius {
     public static let r4: CGFloat  = 4
-    public static let r8: CGFloat  = 8
-    public static let r10: CGFloat = 10
-    public static let r12: CGFloat = 12
-    public static let r14: CGFloat = 14
-    public static let r18: CGFloat = 18
-    public static let r22: CGFloat = 22
-    public static let r24: CGFloat = 24
-    public static let r28: CGFloat = 28
+    private static var premium: Bool { IysThemePreferences.active == .premium }
+    public static var r8: CGFloat  { premium ? 8 : 4 }
+    public static var r10: CGFloat { premium ? 10 : 5 }
+    public static var r12: CGFloat { premium ? 12 : 6 }
+    public static var r14: CGFloat { premium ? 14 : 7 }
+    public static var r18: CGFloat { premium ? 18 : 8 }
+    public static var r22: CGFloat { premium ? 22 : 10 }
+    public static var r24: CGFloat { premium ? 24 : 10 }
+    public static var r28: CGFloat { premium ? 28 : 12 }
 }
 
 // MARK: - Typography Tokens
@@ -129,21 +237,22 @@ public struct OCTypography {
     // Font families
     public static let ui = Font.system(.body, design: .default)
     public static let mono = Font.system(.body, design: .monospaced)
+    private static var bodyDesign: Font.Design { IysThemePreferences.active.usesMonospacedBody ? .monospaced : .default }
 
     // Style definitions
-    public static let navTitle       = Font.system(size: 15, weight: .semibold, design: .default)
+    public static var navTitle: Font { Font.system(size: 15, weight: .semibold, design: bodyDesign) }
     public static let navSubtitle    = Font.system(size: 10.5, weight: .regular, design: .monospaced)
-    public static let body           = Font.system(size: 15, weight: .regular, design: .default)
-    public static let bodyStrong     = Font.system(size: 15, weight: .semibold, design: .default)
-    public static let userPrompt     = Font.system(size: 15, weight: .medium, design: .default)
+    public static var body: Font { Font.system(size: 15, weight: .regular, design: IysThemePreferences.active.usesMonospacedBody ? .monospaced : .default) }
+    public static var bodyStrong: Font { Font.system(size: 15, weight: .semibold, design: bodyDesign) }
+    public static var userPrompt: Font { Font.system(size: 15, weight: .medium, design: IysThemePreferences.active.usesMonospacedBody ? .monospaced : .default) }
     public static let meta           = Font.system(size: 11, weight: .regular, design: .default)
     public static let metaMono       = Font.system(size: 10.5, weight: .regular, design: .monospaced)
-    public static let control        = Font.system(size: 12, weight: .medium, design: .default)
+    public static var control: Font { Font.system(size: 12, weight: .medium, design: bodyDesign) }
     public static let controlMono    = Font.system(size: 11, weight: .medium, design: .monospaced)
     public static let code           = Font.system(size: 12.5, weight: .regular, design: .monospaced)
     public static let codeSmall      = Font.system(size: 11.5, weight: .regular, design: .monospaced)
     public static let sectionLabel   = Font.system(size: 11, weight: .semibold, design: .default)
-    public static let rowPrimary     = Font.system(size: 14.5, weight: .semibold, design: .default)
+    public static var rowPrimary: Font { Font.system(size: 14.5, weight: .semibold, design: bodyDesign) }
     public static let rowSecondary   = Font.system(size: 10.5, weight: .regular, design: .monospaced)
     public static let pillLabel      = Font.system(size: 11, weight: .medium, design: .monospaced)
     public static let modelPillLabel = Font.system(size: 10.5, weight: .regular, design: .monospaced)
