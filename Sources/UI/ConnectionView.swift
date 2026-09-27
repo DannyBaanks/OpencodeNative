@@ -5,6 +5,7 @@ public struct ConnectionView: View {
     @State private var pairingLink = ""
     @State private var showReconnectSheet = false
     @State private var showSandboxSheet = false
+    @State private var showLegacyBridge = false
     @FocusState private var fieldFocused: Bool
     
     public init() {}
@@ -16,15 +17,50 @@ public struct ConnectionView: View {
                 VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 36)
                 
-                Text("iyscode")
-                    .font(.system(size: 30, weight: .semibold, design: .monospaced))
-                    .foregroundColor(OCColor.textPrimary)
-                Text("movil / ios")
-                    .font(.system(size: 13, weight: .regular, design: .monospaced))
-                    .foregroundColor(Color.white.opacity(0.45))
-                    .padding(.top, 4)
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(IysThemePreferences.active.accent.opacity(0.14))
+                        .overlay {
+                            Image(systemName: "terminal.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(IysThemePreferences.active.accent)
+                        }
+                        .frame(width: 44, height: 44)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("iSyCode Móvil")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundColor(OCColor.textPrimary)
+                        Text("Tu agente de desarrollo en el bolsillo")
+                            .font(.system(size: 11))
+                            .foregroundColor(OCColor.textFaint)
+                    }
+                }
                 
                 Spacer().frame(height: 42)
+
+                MobileHostPairingSection()
+                    .padding(.bottom, 24)
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { showLegacyBridge.toggle() }
+                } label: {
+                    HStack {
+                        Image(systemName: "point.3.connected.trianglepath.dotted")
+                        Text("Conectar con Bridge anterior")
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .rotationEffect(.degrees(showLegacyBridge ? 180 : 0))
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(OCColor.textSecondary)
+                    .padding(.vertical, 12)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                if showLegacyBridge {
+                    VStack(alignment: .leading, spacing: 0) {
                 
                 // Stored pairing section
                 if store.backendMode == .unconfigured {
@@ -114,6 +150,13 @@ public struct ConnectionView: View {
                         .foregroundColor(store.connectionStatus.lowercased().hasPrefix("error") ? .red : Color.white.opacity(0.5))
                         .padding(.top, 10)
                 }
+                    }
+                    .padding(14)
+                    .background(OCColor.bgBase.opacity(0.62))
+                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+                    .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(OCColor.borderMuted, lineWidth: 1))
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 
                 HStack(spacing: 12) {
                     Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1)
@@ -128,22 +171,26 @@ public struct ConnectionView: View {
                     showSandboxSheet = true
                 } label: {
                     HStack {
+                        RoundedRectangle(cornerRadius: 11)
+                            .fill(IysThemePreferences.active.accent.opacity(0.12))
+                            .overlay(Image(systemName: "cube.transparent").foregroundColor(IysThemePreferences.active.accent))
+                            .frame(width: 38, height: 38)
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("use sandbox")
-                                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundColor(OCColor.textPrimary)
-                            Text("Grok 4.7. Sin clave solo corre un guion que escribe notes.txt")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(Color.white.opacity(0.38))
+                            Text("Entorno de prueba")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(OCColor.textPrimary)
+                            Text("Explora iSyCode sin conectar un escritorio")
+                                .font(.system(size: 10))
+                                .foregroundColor(OCColor.textFaint)
                         }
                         Spacer()
-                        Text(">")
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(Color.white.opacity(0.5))
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(OCColor.textFaint)
                     }
-                    .padding(.horizontal, 12)
-                    .frame(height: 54)
-                    .overlay(Rectangle().stroke(Color.white.opacity(0.16), lineWidth: 1))
+                    .padding(12)
+                    .background(OCColor.bgBase)
+                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+                    .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(OCColor.borderMuted, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 

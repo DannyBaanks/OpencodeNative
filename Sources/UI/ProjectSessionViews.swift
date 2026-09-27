@@ -13,13 +13,13 @@ public struct ProjectRow: View {
     
     public var body: some View {
         Button(action: onTap) {
-            HStack(spacing: OCSpacing.base) {
+            HStack(spacing: OCSpacing.lg) {
                 ZStack {
                     RoundedRectangle(cornerRadius: OCRadius.r8)
-                        .fill(project.avatarColor?.opacity(0.3) ?? OCColor.bgLayer1)
-                        .frame(width: 32, height: 32)
+                        .fill((project.avatarColor ?? IysThemePreferences.active.accent).opacity(0.16))
+                        .frame(width: 46, height: 46)
                     Image(systemName: "folder.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(.system(size: 19, weight: .semibold))
                         .foregroundColor(project.avatarColor ?? OCColor.iconPrimary)
                 }
                 
@@ -34,21 +34,15 @@ public struct ProjectRow: View {
                         .foregroundColor(OCColor.textFaint)
                         .lineLimit(1)
                         .truncationMode(.middle)
+
+                    Text("\(project.sessionCount) \(project.sessionCount == 1 ? "sesión" : "sesiones")")
+                        .font(OCTypography.metaMono)
+                        .foregroundColor(IysThemePreferences.active.accent.opacity(0.85))
                 }
                 
                 Spacer()
                 
                 HStack(spacing: OCSpacing.sm) {
-                    if project.sessionCount > 0 {
-                        Text("\(project.sessionCount)")
-                            .font(OCTypography.metaMono)
-                            .foregroundColor(OCColor.textFaint)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(OCColor.bgLayer1)
-                            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r4))
-                    }
-                    
                     Image(systemName: "chevron.right")
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(OCColor.iconMuted)
@@ -56,20 +50,13 @@ public struct ProjectRow: View {
                         .contentShape(Rectangle())
                 }
             }
-            .padding(.horizontal, OCSpacing.contentMargin)
-            .padding(.vertical, OCSpacing.lg)
-            .background(
-                isSelected ? OCColor.bgLayer1.opacity(0.5) : Color.clear
-            )
+            .padding(OCSpacing.lg)
+            .background(isSelected ? IysThemePreferences.active.accent.opacity(0.09) : OCColor.bgBase)
+            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+            .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(isSelected ? IysThemePreferences.active.accent.opacity(0.55) : OCColor.borderMuted, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(OCColor.borderMuted),
-            alignment: .bottom
-        )
     }
 }
 
@@ -90,6 +77,15 @@ public struct ProjectListContent: View {
     @EnvironmentObject private var sessionState: ActiveSessionState
     @State private var selectedProject: Project?
     @State private var showSettings = false
+    @State private var searchText = ""
+
+    private var filteredProjects: [Project] {
+        guard !searchText.isEmpty else { return store.projects }
+        return store.projects.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+                || $0.path.localizedCaseInsensitiveContains(searchText)
+        }
+    }
     
     public init() {}
     
@@ -99,7 +95,7 @@ public struct ProjectListContent: View {
                 emptyState
             } else {
                 Section {
-                    ForEach(store.projects, content: projectRow)
+                    ForEach(filteredProjects, content: projectRow)
                 } header: {
                     Text("PROJECTS")
                         .font(OCTypography.sectionLabel)
@@ -114,7 +110,7 @@ public struct ProjectListContent: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(OCColor.bgDeep.ignoresSafeArea())
-        .navigationTitle("OpenCode")
+        .navigationTitle("iSyCode Móvil")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -127,6 +123,7 @@ public struct ProjectListContent: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Buscar proyectos")
         .sheet(isPresented: $showSettings) {
             SettingsSheet()
                 .environmentObject(store)
@@ -142,7 +139,7 @@ public struct ProjectListContent: View {
             isSelected: selectedProject?.id == project.id,
             onTap: { selectProject(project) }
         )
-        .listRowInsets(EdgeInsets())
+        .listRowInsets(EdgeInsets(top: 5, leading: OCSpacing.contentMargin, bottom: 5, trailing: OCSpacing.contentMargin))
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
     }
@@ -204,6 +201,15 @@ public struct SessionRow: View {
     public var body: some View {
         Button(action: onTap) {
             HStack(spacing: OCSpacing.base) {
+                RoundedRectangle(cornerRadius: OCRadius.r10)
+                    .fill(session.agentMode.color.opacity(0.14))
+                    .overlay {
+                        Image(systemName: "bubble.left.and.bubble.right.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(session.agentMode.color)
+                    }
+                    .frame(width: 42, height: 42)
+
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: OCSpacing.xs) {
                         Text(session.title)
@@ -245,12 +251,11 @@ public struct SessionRow: View {
                     }
                 }
             }
-            .padding(.horizontal, OCSpacing.contentMargin)
-            .padding(.vertical, OCSpacing.lg)
-            .frame(minHeight: 64)
-            .background(
-                isSelected ? OCColor.bgLayer1.opacity(0.5) : Color.clear
-            )
+            .padding(OCSpacing.md)
+            .frame(minHeight: 68)
+            .background(isSelected ? IysThemePreferences.active.accent.opacity(0.09) : OCColor.bgBase)
+            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+            .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(isSelected ? IysThemePreferences.active.accent.opacity(0.55) : OCColor.borderMuted, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -260,12 +265,6 @@ public struct SessionRow: View {
                 Button("Delete", role: .destructive, action: onDelete)
             }
         }
-        .overlay(
-            Rectangle()
-                .frame(height: 0.5)
-                .foregroundColor(OCColor.borderMuted),
-            alignment: .bottom
-        )
     }
 }
 
@@ -311,7 +310,7 @@ public struct SessionListView: View {
                         onRename: { sessionToRename = session; renameTitle = session.title },
                         onDelete: { sessionToDelete = session; showDeleteConfirm = true }
                     )
-                    .listRowInsets(EdgeInsets())
+                    .listRowInsets(EdgeInsets(top: 5, leading: OCSpacing.contentMargin, bottom: 5, trailing: OCSpacing.contentMargin))
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -371,6 +370,22 @@ public struct SessionListView: View {
             placement: .navigationBarDrawer(displayMode: .automatic),
             prompt: "Search sessions"
         )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button { showNewSessionSheet = true } label: {
+                Label("Nueva sesión", systemImage: "plus")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(OCColor.bgDeep)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(IysThemePreferences.active.accent.gradient)
+                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, OCSpacing.contentMargin)
+            .padding(.top, OCSpacing.sm)
+            .padding(.bottom, OCSpacing.sm)
+            .background(OCColor.bgDeep.opacity(0.96))
+        }
         .sheet(isPresented: $showNewSessionSheet) {
             NewSessionSheet(project: project) { title in
                 Task {
@@ -410,13 +425,6 @@ public struct SessionListView: View {
                     .multilineTextAlignment(.center)
             }
             
-            Button("New Session") { showNewSessionSheet = true }
-                .font(OCTypography.control)
-                .padding(.horizontal, OCSpacing.xl)
-                .padding(.vertical, OCSpacing.base)
-                .background(OCColor.agentBuild)
-                .foregroundColor(OCColor.bgDeep)
-                .clipShape(RoundedRectangle(cornerRadius: OCRadius.r24))
         }
         .padding(OCSpacing.huge)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -493,6 +501,7 @@ private struct RenameSessionSheet: View {
 struct SettingsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: WorkbenchStore
+    @EnvironmentObject private var hostStore: MobileHostStore
     @State private var hasStoredPairing = false
     @State private var showRemoteUnavailableNote = false
     @State private var selectedTheme = IysThemePreferences.pending ?? IysThemePreferences.active
@@ -503,41 +512,22 @@ struct SettingsSheet: View {
             List {
                 Section {
                     VStack(alignment: .leading, spacing: OCSpacing.md) {
-                        ForEach(IysTheme.allCases) { theme in
-                            ThemeChoiceRow(
-                                theme: theme,
-                                isSelected: selectedTheme == theme,
-                                isActive: IysThemePreferences.active == theme
-                            ) {
-                                guard selectedTheme != theme else { return }
-                                selectedTheme = theme
-                                IysThemePreferences.pending = theme
-                                showThemeRestartNotice = true
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            ForEach(IysTheme.allCases) { theme in
+                                ThemeChoiceRow(
+                                    theme: theme,
+                                    isSelected: selectedTheme == theme,
+                                    isActive: IysThemePreferences.active == theme
+                                ) {
+                                    guard selectedTheme != theme else { return }
+                                    selectedTheme = theme
+                                    IysThemePreferences.pending = theme
+                                    showThemeRestartNotice = true
+                                }
                             }
-                        }
 
-                        HStack(spacing: OCSpacing.md) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 17, weight: .medium))
-                                .foregroundColor(OCColor.textFaint)
-                                .frame(width: 38, height: 38)
-                                .background(OCColor.bgLayer1)
-                                .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Próximamente")
-                                    .font(OCTypography.rowPrimary)
-                                    .foregroundColor(OCColor.textSecondary)
-                                Text("Más temas llegarán pronto")
-                                    .font(OCTypography.meta)
-                                    .foregroundColor(OCColor.textFaint)
-                            }
-                            Spacer()
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(OCColor.textFaint)
+                            ComingSoonThemeCard()
                         }
-                        .padding(OCSpacing.md)
-                        .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(OCColor.borderMuted, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
                     }
                     .padding(.vertical, OCSpacing.xs)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -548,10 +538,17 @@ struct SettingsSheet: View {
                     Text("El tema se aplica al volver a abrir iSyCode.")
                 }
 
-                Section("Connection") {
+                Section("ISyCode Host API") {
+                    MobileHostPairingSection()
+                        .environmentObject(hostStore)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                        .listRowBackground(Color.clear)
+                }
+
+                Section("Legacy Bridge") {
                     if store.backendMode == .remote || store.backendMode == .native {
                         HStack {
-                            Text("Status")
+                            Text("Backend")
                             Spacer()
                             Text(store.connectionStatus)
                                 .font(OCTypography.metaMono)
@@ -560,20 +557,19 @@ struct SettingsSheet: View {
                                 .multilineTextAlignment(.trailing)
                         }
                         HStack {
-                            Text("Health")
+                            Text("Connection")
                             Spacer()
                             Text(store.connectionHealth.rawValue.capitalized)
                                 .font(OCTypography.metaMono)
-                                .foregroundColor(healthColor)
+                                .foregroundColor(healthColor(for: store.connectionHealth))
                         }
                         if store.backendMode == .remote {
-                            Button("Forget Connection") {
+                            Button("Forget Connection", role: .destructive) {
                                 Task {
                                     await store.forgetPairing()
                                     await store.disconnect()
                                 }
                             }
-                            .foregroundColor(OCColor.danger)
                         }
                     } else {
                         Text("Not connected")
@@ -651,8 +647,8 @@ struct SettingsSheet: View {
         )
     }
     
-    private var healthColor: Color {
-        switch store.connectionHealth {
+    private func healthColor(for health: ConnectionHealth) -> Color {
+        switch health {
         case .connected: return OCColor.success
         case .connecting: return OCColor.warning
         case .disconnected: return OCColor.danger
@@ -668,46 +664,87 @@ private struct ThemeChoiceRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: OCSpacing.md) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: OCRadius.r10)
-                        .fill(theme == .console ? Color(hex: "07100D") : Color(hex: "1B2230"))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Capsule().fill(theme.accent).frame(width: 22, height: 3)
-                        Capsule().fill(theme.accent.opacity(0.45)).frame(width: 32, height: 3)
-                        Capsule().fill(Color.white.opacity(0.18)).frame(width: 25, height: 3)
-                    }
-                }
-                .frame(width: 48, height: 42)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(theme.title)
-                            .font(OCTypography.rowPrimary)
-                            .foregroundColor(OCColor.textPrimary)
-                        if isActive {
-                            Text("ACTUAL")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .tracking(0.5)
-                                .foregroundColor(theme.accent)
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 4) {
+                            Circle().fill(theme.accent).frame(width: 5, height: 5)
+                            Capsule().fill(Color.white.opacity(0.22)).frame(width: 27, height: 3)
                         }
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(theme.accent.opacity(0.14))
+                            .frame(height: 12)
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(theme.accent).frame(width: 31, height: 3).padding(.leading, 5)
+                            }
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.white.opacity(0.07))
+                            .frame(height: 12)
+                            .overlay(alignment: .leading) {
+                                Capsule().fill(Color.white.opacity(0.22)).frame(width: 24, height: 3).padding(.leading, 5)
+                            }
                     }
-                    Text(theme.subtitle)
-                        .font(OCTypography.meta)
-                        .foregroundColor(OCColor.textFaint)
+                    .padding(7)
+                    .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 54)
+                    .background(theme == .console ? Color(hex: "07100D") : Color(hex: "151C29"))
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(theme.accent)
+                            .background(Circle().fill(OCColor.bgDeep).padding(1))
+                            .padding(4)
+                    }
                 }
-                Spacer(minLength: 4)
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .font(.system(size: 19))
-                    .foregroundColor(isSelected ? theme.accent : OCColor.iconMuted)
+
+                Text(theme.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(OCColor.textPrimary)
+                    .lineLimit(1)
+                Text(theme == .console ? "Enfoque total. Estilo terminal." : "Moderno. Elegante. Listo para todo.")
+                    .font(.system(size: 9))
+                    .foregroundColor(OCColor.textFaint)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, minHeight: 26, alignment: .topLeading)
             }
-            .padding(OCSpacing.md)
+            .padding(8)
             .background(isSelected ? theme.accent.opacity(0.08) : OCColor.bgBase)
             .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
             .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(isSelected ? theme.accent.opacity(0.55) : OCColor.borderMuted, lineWidth: 1))
             .contentShape(RoundedRectangle(cornerRadius: OCRadius.r14))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ComingSoonThemeCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(Color.white.opacity(0.035))
+                Image(systemName: "plus")
+                    .font(.system(size: 18, weight: .light))
+                    .foregroundColor(OCColor.textFaint)
+            }
+            .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 54)
+
+            Text("Próximamente")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(OCColor.textSecondary)
+                .lineLimit(1)
+            Text("Más temas llegarán pronto")
+                .font(.system(size: 9))
+                .foregroundColor(OCColor.textFaint)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, minHeight: 26, alignment: .topLeading)
+        }
+        .padding(8)
+        .background(OCColor.bgBase.opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+        .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(OCColor.borderMuted, style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -70,12 +70,26 @@ public struct UserPromptView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .trailing, spacing: OCSpacing.xs) {
-            Text("TÚ")
-                .font(OCTypography.metaMono)
-                .foregroundColor(agentColor)
+        HStack(alignment: .top, spacing: 10) {
+            Text("T")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(OCColor.bgDeep)
+                .frame(width: 27, height: 27)
+                .background(agentColor.gradient)
+                .clipShape(Circle())
+                .accessibilityLabel("Tú")
 
             VStack(alignment: .leading, spacing: OCSpacing.md) {
+                HStack {
+                    Text("Tú")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(agentColor)
+                    Spacer()
+                    Text(event.timestamp.formatted(date: .omitted, time: .shortened))
+                        .font(OCTypography.metaMono)
+                        .foregroundColor(OCColor.textFaint)
+                }
+
                 if let text = event.promptText {
                     MarkdownText(content: text, emphasisColor: agentColor)
                         .font(OCTypography.userPrompt)
@@ -95,8 +109,8 @@ public struct UserPromptView: View {
                     }
                 }
             }
-            .padding(.horizontal, OCSpacing.xl)
-            .padding(.vertical, OCSpacing.lg)
+            .padding(.horizontal, OCSpacing.lg)
+            .padding(.vertical, OCSpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(IysThemePreferences.active.userSurface)
             .clipShape(RoundedRectangle(cornerRadius: OCRadius.r18))
@@ -104,10 +118,9 @@ public struct UserPromptView: View {
                 RoundedRectangle(cornerRadius: OCRadius.r18)
                     .stroke(agentColor.opacity(0.28), lineWidth: 1)
             }
-            .frame(maxWidth: 360, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(.vertical, OCSpacing.sm)
+        .padding(.vertical, OCSpacing.xs)
     }
 }
 
@@ -134,11 +147,18 @@ public struct AssistantTextView: View {
         VStack(alignment: .leading, spacing: OCSpacing.sm) {
             let text = event.assistantText ?? ""
             if !text.isEmpty || isLiveTail {
-                HStack(spacing: OCSpacing.xs) {
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 10, weight: .semibold))
+                HStack(spacing: 8) {
+                    Image(systemName: sessionState.selectedModel?.route == "codex" ? "chevron.left.forwardslash.chevron.right" : "sparkle")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(OCColor.agentBuild)
+                        .frame(width: 28, height: 28)
+                        .background(OCColor.agentBuildSoft)
+                        .clipShape(RoundedRectangle(cornerRadius: OCRadius.r8))
                     Text(speakerLabel)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(OCColor.agentBuild)
+                    Spacer()
+                    Text(event.timestamp.formatted(date: .omitted, time: .shortened))
                         .font(OCTypography.metaMono)
                         .foregroundColor(OCColor.textFaint)
                 }
@@ -151,8 +171,8 @@ public struct AssistantTextView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, OCSpacing.xl)
-        .padding(.vertical, OCSpacing.lg)
+        .padding(.horizontal, OCSpacing.lg)
+        .padding(.vertical, OCSpacing.md)
         .background(IysThemePreferences.active.assistantSurface)
         .clipShape(RoundedRectangle(cornerRadius: OCRadius.r18))
         .overlay {
@@ -456,6 +476,10 @@ public struct ToolCallView: View {
                 agentColor: agentColor,
                 onExpand: { sessionState.toggleToolExpansion(id: event.id) }
             )
+            .padding(.horizontal, OCSpacing.md)
+            .background(OCColor.bgBase)
+            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
+            .overlay(RoundedRectangle(cornerRadius: OCRadius.r10).stroke(OCColor.borderMuted, lineWidth: 1))
 
             if event.isExpanded {
                 ToolCallExpandedView(event: event, agentColor: agentColor)
@@ -466,6 +490,7 @@ public struct ToolCallView: View {
                     ))
             }
         }
+        .padding(.vertical, OCSpacing.xs)
         .animation(.easeInOut(duration: 0.18), value: event.isExpanded)
     }
 }

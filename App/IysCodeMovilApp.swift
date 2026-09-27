@@ -5,6 +5,7 @@ import IysCodeMovilCore
 @main
 public struct IysCodeMovilApp: App {
     @StateObject private var store = WorkbenchStore()
+    @StateObject private var hostStore = MobileHostStore()
 
     public init() {
         IysThemePreferences.applyPendingOnLaunch()
@@ -14,6 +15,7 @@ public struct IysCodeMovilApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(store)
+                .environmentObject(hostStore)
                 .environmentObject(store.sessionState)
                 .preferredColorScheme(.dark)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -26,6 +28,7 @@ public struct IysCodeMovilApp: App {
 
 struct RootView: View {
     @EnvironmentObject private var store: WorkbenchStore
+    @EnvironmentObject private var hostStore: MobileHostStore
     @EnvironmentObject private var sessionState: ActiveSessionState
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
@@ -44,11 +47,16 @@ struct RootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OCColor.bgDeep.ignoresSafeArea())
+        .task {
+            await hostStore.restore()
+            await hostStore.setAppActive(scenePhase == .active)
+        }
         .onOpenURL { url in
             guard url.scheme == "iyscodemovil" else { return }
             Task { await store.connectRemote(url.absoluteString) }
         }
         .onChange(of: scenePhase) { phase in
+            Task { await hostStore.setAppActive(phase == .active) }
             if phase == .background {
                 enteredBackground = true
             } else if phase == .active, enteredBackground {

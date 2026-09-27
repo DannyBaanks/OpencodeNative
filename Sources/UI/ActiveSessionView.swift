@@ -54,6 +54,16 @@ public struct ActiveSessionView: View {
                     .padding(OCSpacing.base)
                     .background(OCColor.bgBase)
             }
+
+            if sessionState.activeSurface == .files || sessionState.activeSurface == .review {
+                let reviewSurfaces = availableSurfaces.filter { $0 == .files || $0 == .review }
+                if reviewSurfaces.count > 1 {
+                    WorkSurfaceSwitcher(selectedSurface: $sessionState.activeSurface, surfaces: reviewSurfaces)
+                        .padding(.horizontal, OCSpacing.contentMargin)
+                        .padding(.top, OCSpacing.sm)
+                        .padding(.bottom, OCSpacing.xs)
+                }
+            }
             
             surfaceContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -64,16 +74,34 @@ public struct ActiveSessionView: View {
                     .padding(.horizontal, OCSpacing.contentMargin)
                     .padding(.bottom, OCSpacing.sm)
             }
-            if availableSurfaces.count > 1 {
-                WorkSurfaceSwitcher(
-                    selectedSurface: $sessionState.activeSurface,
-                    surfaces: availableSurfaces
-                )
+            if sessionState.activeSurface == .files, !store.diffFiles.isEmpty, availableSurfaces.contains(.review) {
+                Button { sessionState.activeSurface = .review } label: {
+                    HStack {
+                        Label("\(store.diffFiles.count) archivos modificados", systemImage: "doc.text.magnifyingglass")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(OCColor.textSecondary)
+                        Spacer()
+                        Label("Revisar cambios", systemImage: "arrow.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(OCColor.bgDeep)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(IysThemePreferences.active.accent.gradient)
+                            .clipShape(RoundedRectangle(cornerRadius: OCRadius.r8))
+                    }
+                    .padding(10)
+                    .background(OCColor.bgBase)
+                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r12))
+                    .overlay(RoundedRectangle(cornerRadius: OCRadius.r12).stroke(OCColor.borderMuted, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
                 .padding(.horizontal, OCSpacing.contentMargin)
                 .padding(.vertical, OCSpacing.xs)
             }
 
-            ComposerView()
+            if sessionState.activeSurface == .chat {
+                ComposerView()
+            }
         }
         .background(OCColor.bgDeep.ignoresSafeArea())
         .navigationTitle(sessionState.currentSession?.title ?? "Session")
@@ -106,6 +134,19 @@ public struct ActiveSessionView: View {
             
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: OCSpacing.xs) {
+                    Menu {
+                        ForEach(availableSurfaces) { surface in
+                            Button {
+                                sessionState.activeSurface = surface
+                            } label: {
+                                Label(surface.rawValue, systemImage: surface.icon)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+
                     if sessionState.activeSurface == .files && !isCodexRemote {
                         Button { Task { await store.loadFiles(path: store.filesPath) } } label: {
                             Image(systemName: "arrow.clockwise")
@@ -821,12 +862,39 @@ struct TerminalSurfaceView: View {
     @State private var command = ""
     @FocusState private var isFocused: Bool
     @State private var output: [TerminalOutput] = []
+    @State private var showSettings = false
     
     var body: some View {
         ZStack {
             OCColor.bgDeep.ignoresSafeArea()
             
             VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(OCColor.success)
+                        .frame(width: 7, height: 7)
+                    Text("bash")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(OCColor.agentBuild)
+                    Text("·")
+                        .foregroundColor(OCColor.textFaint)
+                    Text(sessionState.currentProject?.path ?? "workspace")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(OCColor.textFaint)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(OCColor.textFaint)
+                }
+                .padding(.horizontal, OCSpacing.contentMargin)
+                .frame(height: 38)
+                .background(OCColor.bgBase)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(OCColor.borderMuted).frame(height: 1)
+                }
+
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 0) {
@@ -851,8 +919,8 @@ struct TerminalSurfaceView: View {
                 
                 HStack(spacing: OCSpacing.base) {
                     Text("$")
-                        .font(OCTypography.code)
-                        .foregroundColor(OCColor.iconMuted)
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(OCColor.agentBuild)
                     
                     TextField("command", text: $command)
                         .font(OCTypography.code)
@@ -863,14 +931,11 @@ struct TerminalSurfaceView: View {
                         .onSubmit { executeCommand() }
                 }
                 .padding(.horizontal, OCSpacing.lg)
-                .padding(.vertical, OCSpacing.base)
+                .padding(.vertical, OCSpacing.md)
                 .background(OCColor.bgBase)
-                .overlay(
-                    Rectangle()
-                        .frame(height: 0.5)
-                        .foregroundColor(OCColor.borderBase),
-                    alignment: .top
-                )
+                .clipShape(RoundedRectangle(cornerRadius: OCRadius.r12))
+                .overlay(RoundedRectangle(cornerRadius: OCRadius.r12).stroke(OCColor.borderBase, lineWidth: 1))
+                .padding(OCSpacing.sm)
             }
         }
         .navigationTitle("Terminal")
@@ -879,7 +944,14 @@ struct TerminalSurfaceView: View {
         .toolbarBackground(OCColor.bgDeep, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItemGroup(placement: .navigationBarTrailing) {
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 15))
+                        .foregroundColor(OCColor.iconMuted)
+                }
                 Button {
                     output.removeAll()
                 } label: {
@@ -898,6 +970,10 @@ struct TerminalSurfaceView: View {
                 output.append(TerminalOutput(text: "Type a command and press Enter", color: OCColor.textFaint))
                 output.append(TerminalOutput(text: "", color: OCColor.textPrimary))
             }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsSheet()
+                .environmentObject(store)
         }
     }
     

@@ -187,6 +187,20 @@ public struct ComposerControlRow: View {
 
     public var body: some View {
         HStack(spacing: OCSpacing.base) {
+            // Attach remains available for Codex sessions too; the old layout
+            // hid it whenever the Codex-specific controls were shown.
+            Button(action: onAttachTap) {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(OCColor.iconPrimary)
+                    .frame(width: 40, height: 40)
+                    .background(OCColor.bgLayer1)
+                    .clipShape(RoundedRectangle(cornerRadius: OCRadius.r10))
+                    .overlay(RoundedRectangle(cornerRadius: OCRadius.r10).stroke(OCColor.borderMuted, lineWidth: 1))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
             if codexMode {
                 Label("Codex · App Server", systemImage: "terminal")
                     .font(OCTypography.control)
@@ -197,18 +211,7 @@ public struct ComposerControlRow: View {
                     ModelPillPlaceholder(onTap: onModelTap)
                 }
             } else {
-            // Attach button
-            Button(action: onAttachTap) {
-                Image(systemName: "paperclip")
-                    .font(.system(size: 17, weight: .medium))
-                    .foregroundColor(OCColor.iconPrimary)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            // Agent pill
-            AgentPill(mode: agentMode, onTap: onAgentTap)
+                AgentPill(mode: agentMode, onTap: onAgentTap)
 
             // Model pill
             if let model = selectedModel {
@@ -508,56 +511,29 @@ public struct ModelPickerSheet: View {
 
     public var body: some View {
         NavigationStack {
-            List {
-                if models.isEmpty || models.allSatisfy({ $0.apiModelId == nil }) {
-                    Section {
-                        Label(
-                            "El servidor está usando su modelo predeterminado. No publicó una lista de modelos para seleccionar.",
-                            systemImage: "info.circle"
-                        )
-                        .font(OCTypography.meta)
-                        .foregroundColor(OCColor.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .listRowBackground(OCColor.bgBase)
-                    }
-                }
-
-                ForEach(groupedModels.keys.sorted(), id: \.self) { provider in
-                    Section(header: ProviderHeader(provider: provider)) {
-                        ForEach(groupedModels[provider] ?? []) { model in
-                            ModelPickerRow(
-                                model: model,
-                                isSelected: selectedModel?.id == model.id
-                            ) {
-                                selectedModel = model
-                                dismiss()
+            Group {
+                if filteredModels.isEmpty {
+                    modelEmptyState
+                } else {
+                    List {
+                        ForEach(groupedModels.keys.sorted(), id: \.self) { provider in
+                            Section(header: ProviderHeader(provider: provider)) {
+                                ForEach(groupedModels[provider] ?? []) { model in
+                                    ModelPickerRow(
+                                        model: model,
+                                        isSelected: selectedModel?.id == model.id
+                                    ) {
+                                        selectedModel = model
+                                        dismiss()
+                                    }
+                                }
                             }
                         }
                     }
-                }
-
-                if filteredModels.isEmpty {
-                    VStack(spacing: OCSpacing.sm) {
-                        Image(systemName: searchText.isEmpty ? "cpu" : "magnifyingglass")
-                            .font(.system(size: 24))
-                            .foregroundColor(OCColor.iconMuted)
-                        Text(searchText.isEmpty ? "No hay modelos disponibles" : "Sin resultados")
-                            .font(OCTypography.bodyStrong)
-                            .foregroundColor(OCColor.textPrimary)
-                        Text(searchText.isEmpty
-                            ? "Este servidor no proporcionó modelos seleccionables."
-                            : "Prueba con otro nombre de modelo o proveedor.")
-                            .font(OCTypography.meta)
-                            .foregroundColor(OCColor.textFaint)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, OCSpacing.huge)
-                    .listRowBackground(Color.clear)
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
                 }
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
             .background(OCColor.bgDeep)
             .navigationTitle("Model")
             .navigationBarTitleDisplayMode(.inline)
@@ -571,13 +547,48 @@ public struct ModelPickerSheet: View {
         .presentationDetents([.medium, .large])
     }
 
+    private var modelEmptyState: some View {
+        VStack(spacing: OCSpacing.lg) {
+            Image(systemName: searchText.isEmpty ? "cpu" : "magnifyingglass")
+                .font(.system(size: 25, weight: .medium))
+                .foregroundColor(IysThemePreferences.active.accent)
+                .frame(width: 54, height: 54)
+                .background(IysThemePreferences.active.accent.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+
+            VStack(spacing: OCSpacing.xs) {
+                Text(searchText.isEmpty ? "Modelo del servidor" : "Sin resultados")
+                    .font(OCTypography.bodyStrong)
+                    .foregroundColor(OCColor.textPrimary)
+                Text(searchText.isEmpty
+                    ? "El host mantiene su modelo predeterminado y no publicó modelos seleccionables."
+                    : "Prueba con otro nombre de modelo o proveedor.")
+                    .font(OCTypography.meta)
+                    .foregroundColor(OCColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: 280)
+
+            if searchText.isEmpty {
+                Label("La sesión seguirá usando la configuración del host", systemImage: "info.circle")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(OCColor.textFaint)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(OCSpacing.huge)
+        .background(OCColor.bgDeep)
+    }
+
     private var groupedModels: [String: [ModelInfo]] {
         Dictionary(grouping: filteredModels, by: { $0.provider })
     }
 
     private var filteredModels: [ModelInfo] {
-        var candidates = models
-        if let selectedModel, !candidates.contains(where: { $0.id == selectedModel.id }) {
+        var candidates = models.filter { $0.apiModelId != nil }
+        if let selectedModel, selectedModel.apiModelId != nil, !candidates.contains(where: { $0.id == selectedModel.id }) {
             candidates.insert(selectedModel, at: 0)
         }
         if searchText.isEmpty { return candidates }
