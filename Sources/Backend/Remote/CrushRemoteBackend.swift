@@ -257,16 +257,16 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
     public func selectSession(_ sessionID: String) async throws { throw Self.unsupported }
     public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws { throw Self.unsupported }
     public func abort() async throws { throw Self.unsupported }
-    public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async tries { throw Self.unsupported }
-    public func loadHistory(sessionID: String) async tries -> [TimelineEvent] { throw Self.unsupported }
-    public func startEventStream() async tries { throw Self.unsupported }
+    public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws { throw Self.unsupported }
+    public func loadHistory(sessionID: String) async throws -> [TimelineEvent] { throw Self.unsupported }
+    public func startEventStream() async throws { throw Self.unsupported }
     public func stopEventStream() async {}
-    public func listFiles(path: String) async tries -> [WorkbenchFileNode] { throw Self.unsupported }
-    public func fileContent(path: String) async tries -> WorkbenchFileContent { throw Self.unsupported }
-    public func sessionDiff(sessionID: String) async tries -> [SessionDiffFile] { throw Self.unsupported }
-    public func runShell(command: String, agent: String?) async tries -> ShellResult { throw Self.unsupported }
-    public func availableProviders() async tries -> ProviderListResult { throw Self.unsupported }
-    public func config() async tries -> ConfigInfo { throw Self.unsupported }
-    public func availableCommands() async tries -> [CommandInfo] { throw Self.unsupported }
+    public func listFiles(path: String) async throws -> [WorkbenchFileNode] { throw Self.unsupported }
+    public func fileContent(path: String) async throws -> WorkbenchFileContent { throw Self.unsupported }
+    public func sessionDiff(sessionID: String) async throws -> [SessionDiffFile] { throw Self.unsupported }
+    public func runShell(command: String, agent: String?) async throws -> ShellResult { throw Self.unsupported }
+    public func availableProviders() async throws -> ProviderListResult { throw Self.unsupported }
+    public func config() async throws -> ConfigInfo { throw Self.unsupported }
+    public func availableCommands() async throws -> [CommandInfo] { throw Self.unsupported }
     public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
 }
