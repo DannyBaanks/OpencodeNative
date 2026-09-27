@@ -586,7 +586,7 @@ struct SettingsSheet: View {
                     }
                     
                     if store.backendMode == .native {
-                        NavigationLink("API Keys") {
+                        NavigationLink("Proveedores y API keys") {
                             APIKeysView()
                         }
                     }
@@ -827,43 +827,70 @@ private struct ComingSoonThemeCard: View {
 struct APIKeysView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var store: WorkbenchStore
-    @State private var xaiKey = ""
-    @State private var openAIKey = ""
+    @State private var keys: [String: String] = [:]
+    @State private var configuredProviderIDs = Set<String>()
+    @State private var selectedProviderID = "nvidia"
+    @State private var showProviderDirectory = false
     
     var body: some View {
         Form {
             Section {
-                SecureField("xai-…", text: $xaiKey)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                Picker("Proveedor predeterminado", selection: $selectedProviderID) {
+                    ForEach(SandboxModelProvider.all) { provider in
+                        Text(provider.name).tag(provider.id)
+                    }
+                }
+                ForEach(SandboxModelProvider.all) { provider in
+                    VStack(alignment: .leading, spacing: 6) {
+                        SecureField(provider.keyPlaceholder, text: binding(for: provider.id))
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        if configuredProviderIDs.contains(provider.id) && (keys[provider.id] ?? "").isEmpty {
+                            Label("Ya configurada · valor oculto en Keychain", systemImage: "key.fill")
+                                .font(OCTypography.meta)
+                                .foregroundStyle(IysThemePreferences.active.accent)
+                        }
+                    }
+                }
             } header: {
-                Text("SpaceXAI")
+                Text("API keys · sandbox del iPhone")
             } footer: {
-                Text("This key calls Grok 4.7 at api.x.ai. It stays in the keychain and powers the sandbox. Without it, the sandbox is the offline demo.")
-            }
-            Section {
-                SecureField("sk-…", text: $openAIKey)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-            } header: {
-                Text("OpenAI, optional")
-            } footer: {
-                Text("Used only when no SpaceXAI key is saved. Link Desktop ignores both and uses the model on your computer.")
+                Text("Las claves se guardan en Keychain. El proveedor predeterminado se intenta primero; después se usan otras claves configuradas.")
             }
         }
-        .navigationTitle("API Keys")
+        .navigationTitle("Proveedores")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button { showProviderDirectory = true } label: {
+                    Image(systemName: "questionmark.circle")
+                }
+                .accessibilityLabel("Ayuda de proveedores y MCP")
+            }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
+                Button("Guardar") {
                     Task {
-                        await store.saveAPIKeys(xai: xaiKey, openAI: openAIKey)
-                        xaiKey = ""
-                        openAIKey = ""
+                        await store.saveAPIKeys(values: keys, selectedProviderID: selectedProviderID)
+                        keys = [:]
                         dismiss()
                     }
                 }
-                .disabled(xaiKey.isEmpty && openAIKey.isEmpty)
+                .disabled(keys.values.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } && !configuredProviderIDs.contains(selectedProviderID))
+            }
+        }
+        .sheet(isPresented: $showProviderDirectory) { ProviderDirectoryView() }
+        .task { await loadConfiguredProviders() }
+    }
+
+    private func binding(for providerID: String) -> Binding<String> {
+        Binding(get: { keys[providerID] ?? "" }, set: { keys[providerID] = $0 })
+    }
+
+    private func loadConfiguredProviders() async {
+        guard let persistence = try? IOSPersistence() else { return }
+        for provider in SandboxModelProvider.all {
+            if let key = try? await persistence.loadAPIKey(provider: provider.id), !key.isEmpty {
+                configuredProviderIDs.insert(provider.id)
             }
         }
     }

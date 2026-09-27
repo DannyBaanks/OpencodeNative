@@ -464,6 +464,8 @@ struct SandboxKeySheet: View {
     @EnvironmentObject private var store: WorkbenchStore
     @State private var key = ""
     @State private var hasKey = false
+    @State private var selectedProviderID = "nvidia"
+    @State private var showProviderDirectory = false
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
@@ -473,19 +475,43 @@ struct SandboxKeySheet: View {
                 Text("sandbox")
                     .font(.system(size: 24, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
-                Text("Sin una clave de SpaceXAI esto no llama a Grok. Corre un guion fijo: crea notes.txt, lo relee y se despide.")
+                Text("Elige un proveedor para el modelo del sandbox. Las claves se guardan en el llavero de iOS.")
                     .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.55))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
 
                 Spacer().frame(height: 24)
-                Text("CLAVE SPACEXAI")
+                HStack {
+                    Text("PROVEEDOR")
+                    Spacer()
+                    Button { showProviderDirectory = true } label: {
+                        Image(systemName: "questionmark.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(IysThemePreferences.active.accent)
+                    }
+                    .accessibilityLabel("Ver proveedores compatibles")
+                }
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .tracking(1.2)
                     .foregroundColor(Color.white.opacity(0.42))
                     .padding(.bottom, 8)
-                SecureField(hasKey ? "ya hay una clave. pega otra para cambiarla" : "xai-…", text: $key)
+
+                Picker("Proveedor", selection: $selectedProviderID) {
+                    ForEach(SandboxModelProvider.all) { provider in
+                        Text(provider.name).tag(provider.id)
+                    }
+                }
+                .tint(IysThemePreferences.active.accent)
+                .padding(.bottom, 12)
+
+                if let provider = SandboxModelProvider.provider(id: selectedProviderID) {
+                    Text(provider.description)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(Color.white.opacity(0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 10)
+                    SecureField(hasKey ? "clave guardada; pega otra para reemplazarla" : provider.keyPlaceholder, text: $key)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.system(size: 13, design: .monospaced))
@@ -495,16 +521,24 @@ struct SandboxKeySheet: View {
                     .background(OCColor.bgBase)
                     .overlay(Rectangle().stroke(Color.white.opacity(0.18), lineWidth: 1))
 
+                    Link(destination: provider.apiKeyURL) {
+                        Label("Obtener clave de \(provider.name)", systemImage: "arrow.up.right.square")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(IysThemePreferences.active.accent)
+                            .padding(.top, 10)
+                    }
+                }
+
                 Button {
                     fieldFocused = false
                     let typed = key.trimmingCharacters(in: .whitespacesAndNewlines)
                     Task {
-                        await store.startSandbox(xaiKey: typed.isEmpty ? nil : typed)
+                        await store.startSandbox(providerID: selectedProviderID, apiKey: typed.isEmpty ? nil : typed)
                         dismiss()
                     }
                 } label: {
                     HStack {
-                        Text(hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "entrar con la clave guardada" : "entrar con Grok")
+                        Text(hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "entrar con la clave guardada" : "guardar y entrar")
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
                         Spacer()
                         Text("↵")
@@ -548,12 +582,18 @@ struct SandboxKeySheet: View {
             }
         }
         .presentationDetents([.large])
+        .sheet(isPresented: $showProviderDirectory) { ProviderDirectoryView() }
         .onAppear {
-            Task {
-                if let persistence = try? IOSPersistence() {
-                    let saved = try? await persistence.loadAPIKey(provider: "xai")
-                    hasKey = !(saved ?? "").isEmpty
-                }
+            refreshProviderKeyState()
+        }
+        .onChange(of: selectedProviderID) { _ in refreshProviderKeyState() }
+    }
+
+    private func refreshProviderKeyState() {
+        Task {
+            if let persistence = try? IOSPersistence() {
+                let saved = try? await persistence.loadAPIKey(provider: selectedProviderID)
+                hasKey = !(saved ?? "").isEmpty
             }
         }
     }

@@ -85,31 +85,20 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         }
     }
 
-    /// Picks the model the saved key can actually call. SpaceXAI (xAI) is the
-    /// sandbox default. An OpenAI key is the other compatible option. No key
-    /// keeps the offline script so the app still opens.
+    /// Loads the selected provider when its key exists, then falls back to any
+    /// configured supported provider. No key keeps the offline demo available.
     public func reloadSandboxModel() async throws {
         guard let ps = persistence else { throw WorkbenchError.notConnected }
-        if let key = try await ps.loadAPIKey(provider: "xai"), !key.isEmpty {
-            try await installRemoteProvider(
-                id: "xai",
-                display: "SpaceXAI",
-                key: key,
-                baseURL: "https://api.x.ai/v1",
-                preferred: ["grok-4.7", "grok-4.6", "grok-4.5", "grok-4"],
-                fallback: "grok-4.7"
-            )
-            return
-        }
-        if let key = try await ps.loadAPIKey(provider: "openai"), !key.isEmpty {
-            try await installRemoteProvider(
-                id: "openai",
-                display: "OpenAI",
-                key: key,
-                baseURL: "https://api.openai.com/v1",
-                preferred: ["gpt-4o", "gpt-4o-mini"],
-                fallback: "gpt-4o"
-            )
+        let configuration = try await ps.loadConfiguration()
+        let preference = configuration?.defaultModelProvider ?? "nvidia"
+        var order = [preference]
+        let fallbackOrder = SandboxModelProvider.all.map(\.id).filter { !order.contains($0) }
+        order.append(contentsOf: fallbackOrder)
+        for providerID in order {
+            guard let provider = SandboxModelProvider.provider(id: providerID),
+                  let key = try await ps.loadAPIKey(provider: provider.id), !key.isEmpty else { continue }
+            try await installRemoteProvider(id: provider.id, display: provider.name, key: key,
+                baseURL: provider.baseURL, preferred: provider.preferredModels, fallback: provider.fallbackModel)
             return
         }
         let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
@@ -120,7 +109,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         providerModelIDs = provider.availableModels
         agentLoop = nil
         boundSessionID = nil
-        connectionStatusStorage = "sandbox · offline demo. Add a SpaceXAI key in Settings."
+        connectionStatusStorage = "sandbox · offline demo. Choose a provider and add its API key in Settings."
     }
 
     private func installRemoteProvider(

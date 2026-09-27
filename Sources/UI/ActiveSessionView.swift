@@ -46,7 +46,7 @@ public struct ActiveSessionView: View {
                 )
             }
             if store.backendMode == .native && !store.sandboxUsesLiveModel {
-                Text("Esto es el guion de demo, no Grok. Crea notes.txt y lo lee. Sal y entra al sandbox con una clave de SpaceXAI.")
+                Text("Esto es el guion de demo, no un modelo remoto. Puedes elegir NVIDIA, xAI, OpenAI, Gemini u OpenRouter desde Proveedores.")
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(OCColor.warning)
                     .fixedSize(horizontal: false, vertical: true)

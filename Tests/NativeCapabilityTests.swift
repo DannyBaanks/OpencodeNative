@@ -113,6 +113,15 @@ final class NativeCapabilityBrokerTests: XCTestCase {
         XCTAssertNil(ShortcutRegistry.loadConfiguredShortcut(from: defaults))
     }
 
+    func testSandboxProviderDirectoryContainsOnlyConfiguredOpenAICompatibleAdapters() {
+        XCTAssertEqual(SandboxModelProvider.all.map(\.id), ["nvidia", "xai", "openai", "gemini", "openrouter"])
+        XCTAssertEqual(SandboxModelProvider.provider(id: "nvidia")?.baseURL, "https://integrate.api.nvidia.com/v1")
+        XCTAssertEqual(SandboxModelProvider.provider(id: "gemini")?.baseURL,
+                       "https://generativelanguage.googleapis.com/v1beta/openai")
+        XCTAssertTrue(SandboxModelProvider.provider(id: "gemini")?.supportsGoogleOAuth == true)
+        XCTAssertNil(SandboxModelProvider.provider(id: "anthropic"))
+    }
+
     func testRegistryProjectsOnlyTaskRelevantRegisteredCapabilities() async {
         let files = capability()
         let share = NativeCapabilityDescriptor(id: "system.share", title: "Share", detail: "Share sheet",

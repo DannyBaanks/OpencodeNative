@@ -189,9 +189,22 @@ public final class WorkbenchStore: ObservableObject {
     }
 
     public func startSandbox(xaiKey: String?) async {
-        let trimmed = xaiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmed.isEmpty, let persistence = try? IOSPersistence() {
-            try? await persistence.saveAPIKey(provider: "xai", key: trimmed)
+        await startSandbox(providerID: "xai", apiKey: xaiKey)
+    }
+
+    public func startSandbox(providerID: String, apiKey: String?) async {
+        let trimmed = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard let provider = SandboxModelProvider.provider(id: providerID) else { return }
+        if let persistence = try? IOSPersistence() {
+            do {
+                if !trimmed.isEmpty { try await persistence.saveAPIKey(provider: provider.id, key: trimmed) }
+                var configuration = try await persistence.loadConfiguration() ?? Configuration()
+                configuration.defaultModelProvider = provider.id
+                try await persistence.saveConfiguration(configuration)
+            } catch {
+                addErrorEvent("Could not save provider settings: \(error.localizedDescription)")
+                return
+            }
         }
         await useNativeRuntime()
     }
@@ -881,17 +894,26 @@ public final class WorkbenchStore: ObservableObject {
     }
     
     public func saveAPIKeys(xai: String, openAI: String) async {
+        await saveAPIKeys(values: ["xai": xai, "openai": openAI], selectedProviderID: "xai")
+    }
+
+    public func saveAPIKeys(values: [String: String], selectedProviderID: String) async {
         guard let backend = currentBackend as? NativeSwiftBackend else {
             addErrorEvent("Start the sandbox before saving a key.")
             return
         }
         do {
-            if !xai.isEmpty {
-                try await backend.persistence?.saveAPIKey(provider: "xai", key: xai)
+            guard let persistence = backend.persistence,
+                  SandboxModelProvider.provider(id: selectedProviderID) != nil else {
+                throw ModelProviderError.invalidRequest("Unknown sandbox provider")
             }
-            if !openAI.isEmpty {
-                try await backend.persistence?.saveAPIKey(provider: "openai", key: openAI)
+            for (providerID, value) in values {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { try await persistence.saveAPIKey(provider: providerID, key: trimmed) }
             }
+            var configuration = try await persistence.loadConfiguration() ?? Configuration()
+            configuration.defaultModelProvider = selectedProviderID
+            try await persistence.saveConfiguration(configuration)
             try await backend.reloadSandboxModel()
             connectionStatus = await backend.connectionStatus
             sandboxUsesLiveModel = backend.usesLiveModel
