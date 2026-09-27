@@ -24,9 +24,11 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
     public let eventStream: AsyncStream<WorkbenchEvent>
     private let workspaceBookmark: Data?
+    private let forceOfflineDemo: Bool
     
-    public init(workspaceBookmark: Data? = nil) {
+    public init(workspaceBookmark: Data? = nil, forceOfflineDemo: Bool = false) {
         self.workspaceBookmark = workspaceBookmark
+        self.forceOfflineDemo = forceOfflineDemo
         var cont: AsyncStream<WorkbenchEvent>.Continuation?
         self.eventStream = AsyncStream { cont = $0 }
         self.eventContinuation = cont
@@ -89,6 +91,10 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     /// configured supported provider. No key keeps the offline demo available.
     public func reloadSandboxModel() async throws {
         guard let ps = persistence else { throw WorkbenchError.notConnected }
+        if forceOfflineDemo {
+            installOfflineDemo()
+            return
+        }
         let configuration = try await ps.loadConfiguration()
         let preference = configuration?.defaultModelProvider ?? "nvidia"
         var order = [preference]
@@ -101,6 +107,10 @@ public final class NativeSwiftBackend: WorkbenchBackend {
                 baseURL: provider.baseURL, preferred: provider.preferredModels, fallback: provider.fallbackModel)
             return
         }
+        installOfflineDemo()
+    }
+
+    private func installOfflineDemo() {
         let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
         modelProvider = provider
         activeModelName = provider.availableModels.first
@@ -109,7 +119,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         providerModelIDs = provider.availableModels
         agentLoop = nil
         boundSessionID = nil
-        connectionStatusStorage = "sandbox · offline demo. Choose a provider and add its API key in Settings."
+        connectionStatusStorage = "sandbox · offline demo. No API key or network required."
     }
 
     private func installRemoteProvider(

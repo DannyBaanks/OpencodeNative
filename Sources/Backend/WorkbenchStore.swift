@@ -227,16 +227,32 @@ public final class WorkbenchStore: ObservableObject {
     }
     
     public func useNativeRuntime() async {
+        await startNativeRuntime(forceOfflineDemo: false)
+    }
+
+    /// Starts the scripted demo in iSyCode's private app workspace. This path
+    /// intentionally ignores a previously selected Files folder and provider keys.
+    public func useNativeDemoRuntime() async {
+        await startNativeRuntime(forceOfflineDemo: true)
+    }
+
+    private func startNativeRuntime(forceOfflineDemo: Bool) async {
         do {
             await currentBackend?.stopEventStream()
             await currentBackend?.disconnect()
-            let bookmarkText = try await KeychainHelper.shared.load(key: "sandbox.authorizedFolderBookmark")
+            let bookmarkText: String?
+            if forceOfflineDemo {
+                bookmarkText = nil
+            } else {
+                bookmarkText = try await KeychainHelper.shared.load(key: "sandbox.authorizedFolderBookmark")
+            }
             let bookmark = bookmarkText.flatMap { Data(base64Encoded: $0) }
             if bookmarkText != nil && bookmark == nil {
                 throw WorkspaceError.permissionDenied("The saved Files permission could not be read. Choose the folder again.")
             }
             let backend = WorkbenchBackendFactory.makeNativeBackend(
-                workspaceBookmark: bookmark
+                workspaceBookmark: bookmark,
+                forceOfflineDemo: forceOfflineDemo
             )
             currentBackend = backend
             backendMode = .native

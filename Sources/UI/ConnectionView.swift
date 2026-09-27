@@ -573,7 +573,7 @@ struct SandboxKeySheet: View {
                     isStarting = true
                     store.sandboxSetupError = nil
                     Task {
-                        await store.useNativeRuntime()
+                        await store.useNativeDemoRuntime()
                         isStarting = false
                         if store.backendMode == .native, store.connectionHealth == .connected {
                             dismiss()

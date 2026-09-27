@@ -56,14 +56,14 @@ public enum WorkbenchBackendFactory {
     
     /// Crea un backend nativo (sandbox local)
     @MainActor
-    public static func makeNativeBackend(workspaceBookmark: Data? = nil) -> WorkbenchBackend {
-        NativeSwiftBackend(workspaceBookmark: workspaceBookmark)
+    public static func makeNativeBackend(workspaceBookmark: Data? = nil, forceOfflineDemo: Bool = false) -> WorkbenchBackend {
+        NativeSwiftBackend(workspaceBookmark: workspaceBookmark, forceOfflineDemo: forceOfflineDemo)
     }
     
     /// Crea un backend demo/fixture para testing
     @MainActor
     public static func makeDemoBackend() -> WorkbenchBackend {
-        NativeSwiftBackend() // usa sandbox local
+        NativeSwiftBackend(forceOfflineDemo: true) // demo aislado, sin claves ni permisos de Files
     }
     
     /// Parsea una URL sin mezclar credenciales Codex con auth Basic de OpenCode.
