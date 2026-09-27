@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  SCHEME: OpencodeNative
+  SCHEME: IysCodeMovil
 
 jobs:
   build:
@@ -49,7 +49,7 @@ jobs:
             -scheme ${{ env.SCHEME }} \
             -configuration Release \
             -sdk iphoneos \
-            -derivedDataPath /tmp/opencodenative_dd \
+            -derivedDataPath /tmp/iyscodemovil_dd \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGN_IDENTITY= \
             CODE_SIGNING_REQUIRED=NO \
@@ -65,29 +65,29 @@ jobs:
       
       - name: Verify .app structure
         run: |
-          APP_PATH=$(find /tmp/opencodenative_dd -name "OpencodeNative.app" -type d | head -1)
+          APP_PATH=$(find /tmp/iyscodemovil_dd -name "IysCodeMovil.app" -type d | head -1)
           echo "App path: $APP_PATH"
           ls -la "$APP_PATH/"
           echo "---"
-          file "$APP_PATH/OpencodeNative" || echo "Executable not found"
+          file "$APP_PATH/IysCodeMovil" || echo "Executable not found"
       
       - name: Find .app
         id: find_app
         run: |
-          APP_PATH=$(find /tmp/opencodenative_dd -name "OpencodeNative.app" -type d | head -1)
+          APP_PATH=$(find /tmp/iyscodemovil_dd -name "IysCodeMovil.app" -type d | head -1)
           echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
       
       - name: Create unsigned IPA
         run: |
           mkdir -p Payload
           cp -R "${{ steps.find_app.outputs.app_path }}" Payload/
-          zip -r OpencodeNative-unsigned.ipa Payload
+          zip -r IysCodeMovil-unsigned.ipa Payload
       
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: OpencodeNative-unsigned
-          path: OpencodeNative-unsigned.ipa
+          name: IysCodeMovil-unsigned
+          path: IysCodeMovil-unsigned.ipa
           retention-days: 30
 
   test:
@@ -144,12 +144,12 @@ jobs:
           echo "Resolved simulator UDID: $UDID"
 
           # Clean derived data before testing to avoid "Multiple commands produce" errors
-          rm -rf /tmp/opencodenative_dd_test
+          rm -rf /tmp/iyscodemovil_dd_test
 
           xcodebuild test \
-            -scheme OpencodeNative \
+            -scheme IysCodeMovil \
             -destination "id=$UDID" \
-            -derivedDataPath /tmp/opencodenative_dd_test \
+            -derivedDataPath /tmp/iyscodemovil_dd_test \
             -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -181,7 +181,7 @@ jobs:
       - name: Generate capability matrix
         run: |
           cat << 'EOF' | sed 's/^          //' > CAPABILITY_MATRIX.md
-          # Capability Matrix — OpencodeNative iOS
+          # Capability Matrix — IysCodeMovil iOS
 
           > Generada por CI. Para evidencia completa ver `docs/OPENCODE_COMPAT.md`.
 
@@ -226,7 +226,7 @@ jobs:
 
           ## Atribución
 
-          OpenCode © anomalyco, MIT. OpencodeNative NO es OpenCode y no está afiliado.
+          OpenCode © anomalyco, MIT. IysCodeMovil NO es OpenCode y no está afiliado.
           EOF
       
       - name: Upload capability report
@@ -250,7 +250,7 @@ jobs:
       - name: Download unsigned IPA
         uses: actions/download-artifact@v4
         with:
-          name: OpencodeNative-unsigned
+          name: IysCodeMovil-unsigned
           path: ipa
 
       - name: Set up Python
@@ -273,12 +273,12 @@ jobs:
           python -m iloader sign \
             --apple-id "$APPLE_ID" \
             --team-id "$TEAM_ID" \
-            ipa/OpencodeNative-unsigned.ipa \
-            -o OpencodeNative-signed.ipa
+            ipa/IysCodeMovil-unsigned.ipa \
+            -o IysCodeMovil-signed.ipa
 
       - name: Upload signed IPA
         uses: actions/upload-artifact@v4
         with:
-          name: OpencodeNative-signed
-          path: OpencodeNative-signed.ipa
+          name: IysCodeMovil-signed
+          path: IysCodeMovil-signed.ipa
           retention-days: 30
