@@ -17,6 +17,7 @@ public final class CodexRemoteBackend: WorkbenchBackend, RemoteBackend {
     private var selectedSessionID: String?
     private var activeTurn = false
     private var pendingApprovals: [String: (CodexAppServerRequestID, String, [String])] = [:]
+    private var commandOutput: [String: String] = [:]
 
     public init() {
         var c: AsyncStream<WorkbenchEvent>.Continuation?
@@ -129,6 +130,10 @@ public final class CodexRemoteBackend: WorkbenchBackend, RemoteBackend {
                     var event = TimelineEvent(id: itemID, kind: .assistantText, agentMode: .build)
                     event.assistantText = text
                     events.append(event)
+                } else if type == "commandExecution" {
+                    events.append(Self.commandEvent(item, id: itemID, fallbackState: "completed"))
+                } else if type == "fileChange" {
+                    events.append(Self.fileChangeEvent(item, id: itemID))
                 }
             }
         }
@@ -152,6 +157,27 @@ public final class CodexRemoteBackend: WorkbenchBackend, RemoteBackend {
             let p = params.object ?? [:]
             if method == "item/agentMessage/delta", let itemID = p["itemId"]?.string, let delta = p["delta"]?.string {
                 continuation?.yield(.partDelta(partID: itemID, delta: delta))
+            } else if method == "item/started", let item = p["item"]?.object,
+                      item["type"]?.string == "commandExecution" {
+                let id = item["id"]?.string ?? UUID().uuidString
+                commandOutput[id] = ""
+                let event = Self.commandEvent(item, id: id, fallbackState: "running")
+                continuation?.yield(.partUpdated(partID: id, kind: "tool", text: nil, tool: event.toolName, callID: id, status: "running", input: event.toolArguments ?? [:], output: nil, error: nil))
+            } else if method == "item/completed", let item = p["item"]?.object {
+                let id = item["id"]?.string ?? UUID().uuidString
+                if item["type"]?.string == "commandExecution" {
+                    let event = Self.commandEvent(item, id: id, fallbackState: "completed")
+                    continuation?.yield(.partUpdated(partID: id, kind: "tool", text: nil, tool: event.toolName, callID: id, status: event.toolState == .failed ? "error" : "completed", input: event.toolArguments ?? [:], output: event.toolOutput, error: nil))
+                    commandOutput.removeValue(forKey: id)
+                } else if item["type"]?.string == "fileChange" {
+                    let event = Self.fileChangeEvent(item, id: id)
+                    continuation?.yield(.partUpdated(partID: id, kind: "tool", text: nil, tool: event.toolName, callID: id, status: "completed", input: event.toolArguments ?? [:], output: event.toolOutput, error: nil))
+                }
+            } else if method == "item/commandExecution/outputDelta",
+                      let itemID = p["itemId"]?.string, let delta = p["delta"]?.string {
+                let accumulated = (commandOutput[itemID] ?? "") + delta
+                commandOutput[itemID] = accumulated
+                continuation?.yield(.partUpdated(partID: itemID, kind: "tool", text: nil, tool: "bash", callID: itemID, status: "running", input: [:], output: accumulated, error: nil))
             } else if method == "turn/completed" {
                 activeTurn = false
                 if let id = p["threadId"]?.string {
@@ -217,6 +243,32 @@ public final class CodexRemoteBackend: WorkbenchBackend, RemoteBackend {
     }
 
     private var projectID: String { "codex:\(pairing?.host ?? ""):\(pairing?.port ?? 0)" }
+
+    private static func commandEvent(_ item: [String: CodexJSONValue], id: String, fallbackState: String) -> TimelineEvent {
+        let command = item["command"]?.string ?? ""
+        let cwd = item["cwd"]?.string ?? ""
+        let rawStatus = item["status"]?.string ?? fallbackState
+        let state: ToolCallState = rawStatus == "inProgress" || rawStatus == "running" ? .running : (rawStatus == "failed" ? .failed : .success)
+        var event = TimelineEvent.toolCall(id: id, name: "bash", arguments: ["command": command, "cwd": cwd], state: state, agentMode: .build)
+        event.toolOutput = item["aggregatedOutput"]?.string
+        event.toolDuration = item["durationMs"]?.integer.map { Double($0) / 1_000 }
+        return event
+    }
+
+    private static func fileChangeEvent(_ item: [String: CodexJSONValue], id: String) -> TimelineEvent {
+        let changes = item["changes"]?.array ?? []
+        let paths = changes.compactMap { $0.object?["path"]?.string }
+        let diff = changes.compactMap { change -> String? in
+            guard let object = change.object else { return nil }
+            let path = object["path"]?.string ?? "file"
+            let body = object["diff"]?.string ?? ""
+            return body.isEmpty ? nil : "--- \(path)\n\(body)"
+        }.joined(separator: "\n")
+        var event = TimelineEvent.toolCall(id: id, name: "file_change", arguments: ["files": paths.joined(separator: ", ")], state: .success, agentMode: .build)
+        event.toolOutput = diff.isEmpty ? "Updated \(paths.joined(separator: ", "))" : diff
+        return event
+    }
+
     private func requestKey(_ id: CodexAppServerRequestID) -> String {
         switch id { case .string(let value): return value; case .integer(let value): return String(value) }
     }
