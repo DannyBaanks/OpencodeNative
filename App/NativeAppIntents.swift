@@ -26,6 +26,7 @@ struct OpenSandboxIntent: AppIntent {
 @available(iOS 16.0, *)
 struct ISyCodeAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        [
         AppShortcut(
             intent: OpenISyCodeIntent(),
             phrases: ["Open \(.applicationName)", "Open my workspace in \(.applicationName)"],
@@ -38,5 +39,6 @@ struct ISyCodeAppShortcuts: AppShortcutsProvider {
             shortTitle: "Open Sandbox",
             systemImageName: "iphone"
         )
+        ]
     }
 }
