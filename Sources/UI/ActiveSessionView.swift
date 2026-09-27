@@ -12,7 +12,7 @@ public struct ActiveSessionView: View {
     }
 
     private var availableSurfaces: [WorkSurface] {
-        isCodexRemote ? [.chat] : WorkSurface.allCases
+        isCodexRemote ? [.chat, .files] : WorkSurface.allCases
     }
     
     // El switch vive en un @ViewBuilder propio: `Group { switch ... }` choca
@@ -23,7 +23,11 @@ public struct ActiveSessionView: View {
         case .chat:
             ChatSurfaceView()
         case .files:
-            FilesSurfaceView()
+            if isCodexRemote {
+                CodexWorkspaceFoldersUnavailableView(path: sessionState.currentProject?.path ?? "")
+            } else {
+                FilesSurfaceView()
+            }
         case .review:
             ReviewSurfaceView()
         case .terminal:
@@ -102,7 +106,7 @@ public struct ActiveSessionView: View {
             
             ToolbarItem(placement: .navigationBarTrailing) {
                 HStack(spacing: OCSpacing.xs) {
-                    if sessionState.activeSurface == .files {
+                    if sessionState.activeSurface == .files && !isCodexRemote {
                         Button { Task { await store.loadFiles(path: store.filesPath) } } label: {
                             Image(systemName: "arrow.clockwise")
                                 .font(.system(size: 17))
@@ -165,7 +169,7 @@ public struct ActiveSessionView: View {
             store.cancelCurrentRun()
         }
         .onChange(of: sessionState.activeSurface) { newSurface in
-            if newSurface == .files {
+            if newSurface == .files && !isCodexRemote {
                 Task { await store.loadFiles() }
             } else if newSurface == .review, let sessionID = sessionState.currentSession?.id {
                 Task { await store.loadDiff(sessionID: sessionID) }
@@ -200,6 +204,57 @@ public struct ActiveSessionView: View {
             return store.availableAgents.compactMap { AgentMode(rawValue: $0) }
         }
         return AgentMode.allCases
+    }
+}
+
+private struct CodexWorkspaceFoldersUnavailableView: View {
+    let path: String
+    @State private var pathCopied = false
+
+    var body: some View {
+        VStack(spacing: OCSpacing.xl) {
+            Image(systemName: "folder.badge.questionmark")
+                .font(.system(size: 42, weight: .light))
+                .foregroundColor(OCColor.agentBuild)
+
+            VStack(spacing: OCSpacing.sm) {
+                Text("Workspace de Codex")
+                    .font(OCTypography.bodyStrong)
+                    .foregroundColor(OCColor.textPrimary)
+                Text("La sesión está conectada a esta carpeta del PC:")
+                    .font(OCTypography.meta)
+                    .foregroundColor(OCColor.textSecondary)
+                    .multilineTextAlignment(.center)
+                Text(path.isEmpty ? "Ruta no disponible" : path)
+                    .font(OCTypography.codeSmall)
+                    .foregroundColor(OCColor.textFaint)
+                    .multilineTextAlignment(.center)
+                    .textSelection(.enabled)
+            }
+
+            Text("Este puente de Codex todavía no puede listar ni abrir sus carpetas. La vista no mostrará archivos hasta que se implemente esa capacidad en el escritorio.")
+                .font(OCTypography.meta)
+                .foregroundColor(OCColor.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(OCSpacing.lg)
+                .frame(maxWidth: 340)
+                .background(OCColor.bgBase)
+                .clipShape(RoundedRectangle(cornerRadius: OCRadius.r14))
+                .overlay(RoundedRectangle(cornerRadius: OCRadius.r14).stroke(OCColor.borderMuted, lineWidth: 1))
+
+            Button {
+                UIPasteboard.general.string = path
+                pathCopied = true
+            } label: {
+                Label(pathCopied ? "Ruta copiada" : "Copiar ruta", systemImage: pathCopied ? "checkmark" : "doc.on.doc")
+                    .font(OCTypography.control)
+                    .foregroundColor(OCColor.agentBuild)
+            }
+            .disabled(path.isEmpty)
+        }
+        .padding(OCSpacing.huge)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(OCColor.bgDeep)
     }
 }
 

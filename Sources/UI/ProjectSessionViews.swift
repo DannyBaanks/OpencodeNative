@@ -190,10 +190,12 @@ public struct SessionRow: View {
     let onTap: () -> Void
     let onRename: () -> Void
     let onDelete: () -> Void
+    let showsManagementActions: Bool
     
-    public init(session: Session, isSelected: Bool = false, onTap: @escaping () -> Void, onRename: @escaping () -> Void, onDelete: @escaping () -> Void) {
+    public init(session: Session, isSelected: Bool = false, showsManagementActions: Bool = true, onTap: @escaping () -> Void, onRename: @escaping () -> Void, onDelete: @escaping () -> Void) {
         self.session = session
         self.isSelected = isSelected
+        self.showsManagementActions = showsManagementActions
         self.onTap = onTap
         self.onRename = onRename
         self.onDelete = onDelete
@@ -253,8 +255,10 @@ public struct SessionRow: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
-            Button("Rename", action: onRename)
-            Button("Delete", role: .destructive, action: onDelete)
+            if showsManagementActions {
+                Button("Rename", action: onRename)
+                Button("Delete", role: .destructive, action: onDelete)
+            }
         }
         .overlay(
             Rectangle()
@@ -296,6 +300,7 @@ public struct SessionListView: View {
                     SessionRow(
                         session: session,
                         isSelected: selectedSession?.id == session.id,
+                        showsManagementActions: store.supportsSessionManagement,
                         onTap: {
                             // Seleccion directa (no onChange): re-tocar la misma
                             // sesion tras volver atras tambien debe re-entrar.
@@ -310,11 +315,13 @@ public struct SessionListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            sessionToDelete = session
-                            showDeleteConfirm = true
-                        } label: {
-                            Label("Delete", systemImage: "trash")
+                        if store.supportsSessionManagement {
+                            Button(role: .destructive) {
+                                sessionToDelete = session
+                                showDeleteConfirm = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                 }
@@ -382,7 +389,7 @@ public struct SessionListView: View {
             }
             Button("Cancel", role: .cancel) { sessionToDelete = nil }
         } message: { session in
-            Text("Delete \"\(session.title)\"? This action cannot be undone.")
+            Text("Delete this conversation? This action cannot be undone.")
         }
     }
     

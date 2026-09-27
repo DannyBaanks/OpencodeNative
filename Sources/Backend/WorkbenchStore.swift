@@ -26,6 +26,11 @@ public final class WorkbenchStore: ObservableObject {
     @Published public private(set) var filesPath: String = ""
     @Published public var diffFiles: [SessionDiffFile] = []
     @Published public var shellHistory: [(command: String, result: ShellResult?)] = []
+
+    /// Codex App Server v1 deliberately does not implement rename/delete.
+    public var supportsSessionManagement: Bool {
+        backendMode != .remote || activeRemoteBackendType != .codex
+    }
     
     private var currentProjectID: String?
     private var currentSessionID: String?
@@ -578,7 +583,11 @@ public final class WorkbenchStore: ObservableObject {
                 }
             }
             if models.isEmpty {
-                models.append(ModelInfo(name: "OpenCode server default", provider: "OpenCode", providerIcon: "terminal", isLocal: false, route: "opencode-server"))
+                if backend is CodexRemoteBackend {
+                    models.append(ModelInfo(name: "Codex server default", provider: "Codex", providerIcon: "terminal", isLocal: false, route: "codex"))
+                } else {
+                    models.append(ModelInfo(name: "OpenCode server default", provider: "OpenCode", providerIcon: "terminal", isLocal: false, route: "opencode-server"))
+                }
             }
             availableModels = models
 
@@ -599,6 +608,19 @@ public final class WorkbenchStore: ObservableObject {
             availableCommands = cmds
             
         } catch {
+            if backend is CodexRemoteBackend {
+                let defaultModel = ModelInfo(
+                    name: "Codex server default",
+                    provider: "Codex",
+                    providerIcon: "terminal",
+                    isLocal: false,
+                    route: "codex"
+                )
+                availableModels = [defaultModel]
+                if sessionState.selectedModel == nil {
+                    sessionState.selectedModel = defaultModel
+                }
+            }
             addErrorEvent("Failed to load models/agents: \(error.localizedDescription)")
         }
     }

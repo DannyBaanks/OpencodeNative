@@ -61,12 +61,26 @@ public final class CodexRemoteBackend: WorkbenchBackend, RemoteBackend {
         guard let data = response.object?["data"]?.array else { throw CodexAppServerError.invalidMessage }
         sessions = data.compactMap { value in
             guard let obj = value.object, let id = obj["id"]?.string else { return nil }
-            let title = obj["name"]?.string ?? obj["preview"]?.string ?? "Codex session"
+            let title = Self.displayTitle(name: obj["name"]?.string, preview: obj["preview"]?.string)
             let timestamp = Date(timeIntervalSince1970: Double(obj["updatedAt"]?.integer ?? obj["createdAt"]?.integer ?? 0))
             return Session(id: id, projectId: projectID, title: title, lastEventSummary: obj["preview"]?.string, timestamp: timestamp)
         }
         return sessions
     }
+
+    /// Codex may return the first user prompt as `preview` when a thread has no
+    /// generated name. Keep that useful context, but never use an entire prompt
+    /// as a navigation title or confirmation-dialog message.
+    private static func displayTitle(name: String?, preview: String?) -> String {
+        let candidate = [name, preview]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? "Codex session"
+        let firstLine = candidate.components(separatedBy: .newlines).first ?? candidate
+        let compact = firstLine.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard compact.count > 64 else { return compact }
+        return String(compact.prefix(61)) + "…"
+    }
+
     public func createSession(projectID: String, title: String) async throws -> Session {
         guard let client, let pairing, pairing.profile.threadStart else { throw Self.unsupported }
         let result = try await client.request(method: "thread/start", params: .object(["cwd": .string(pairing.directory)]))

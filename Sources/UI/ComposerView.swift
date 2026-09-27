@@ -509,6 +509,19 @@ public struct ModelPickerSheet: View {
     public var body: some View {
         NavigationStack {
             List {
+                if models.isEmpty || models.allSatisfy({ $0.apiModelId == nil }) {
+                    Section {
+                        Label(
+                            "El servidor está usando su modelo predeterminado. No publicó una lista de modelos para seleccionar.",
+                            systemImage: "info.circle"
+                        )
+                        .font(OCTypography.meta)
+                        .foregroundColor(OCColor.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .listRowBackground(OCColor.bgBase)
+                    }
+                }
+
                 ForEach(groupedModels.keys.sorted(), id: \.self) { provider in
                     Section(header: ProviderHeader(provider: provider)) {
                         ForEach(groupedModels[provider] ?? []) { model in
@@ -521,6 +534,26 @@ public struct ModelPickerSheet: View {
                             }
                         }
                     }
+                }
+
+                if filteredModels.isEmpty {
+                    VStack(spacing: OCSpacing.sm) {
+                        Image(systemName: searchText.isEmpty ? "cpu" : "magnifyingglass")
+                            .font(.system(size: 24))
+                            .foregroundColor(OCColor.iconMuted)
+                        Text(searchText.isEmpty ? "No hay modelos disponibles" : "Sin resultados")
+                            .font(OCTypography.bodyStrong)
+                            .foregroundColor(OCColor.textPrimary)
+                        Text(searchText.isEmpty
+                            ? "Este servidor no proporcionó modelos seleccionables."
+                            : "Prueba con otro nombre de modelo o proveedor.")
+                            .font(OCTypography.meta)
+                            .foregroundColor(OCColor.textFaint)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, OCSpacing.huge)
+                    .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.insetGrouped)
@@ -543,8 +576,12 @@ public struct ModelPickerSheet: View {
     }
 
     private var filteredModels: [ModelInfo] {
-        if searchText.isEmpty { return models }
-        return models.filter { model in
+        var candidates = models
+        if let selectedModel, !candidates.contains(where: { $0.id == selectedModel.id }) {
+            candidates.insert(selectedModel, at: 0)
+        }
+        if searchText.isEmpty { return candidates }
+        return candidates.filter { model in
             model.name.localizedCaseInsensitiveContains(searchText) ||
             model.provider.localizedCaseInsensitiveContains(searchText)
         }
