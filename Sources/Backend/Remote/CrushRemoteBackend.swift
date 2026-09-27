@@ -4,7 +4,6 @@ import Foundation
 /// Track: https://github.com/charmbracelet/crush
 @MainActor
 public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
-    public var mode: BackendMode { .remote }
     public let remoteType: RemoteBackendType = .crush
     public var baseURL: URL { URL(string: "http://localhost:4096")! }
     public var authHeaders: [String: String] { [:] }
@@ -76,5 +75,198 @@ public final class CrushRemoteBackend: WorkbenchBackend, RemoteBackend {
     public func availableProviders() async throws -> ProviderListResult { throw Self.unsupported }
     public func config() async throws -> ConfigInfo { throw Self.unsupported }
     public func availableCommands() async throws -> [CommandInfo] { throw Self.unsupported }
+    public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
+
+    // MARK: - Protocol conformance (types from RemoteBackend/WorkbenchBackend)
+
+    public var mode: BackendMode { .remote }
+    public let remoteType: RemoteBackendType = .crush
+    public var baseURL: URL { URL(string: "http://localhost:4096")! }
+    public var authHeaders: [String: String] { [:] }
+
+    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
+    public let eventStream: AsyncStream<WorkbenchEvent>
+
+    public init() {
+        var continuation: AsyncStream<WorkbenchEvent>.Continuation?
+        self.eventStream = AsyncStream { continuation = $0 }
+        self.eventContinuation = continuation
+    }
+
+    public var connectionStatus: String { get async { "not implemented" } }
+    public var currentSessionID: String? { get async { nil } }
+
+    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func disconnect() async {}
+    public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
+    public func listProjects() async throws -> [Project] { throw Self.unsupported }
+    public func listSessions(projectID: String) async throws -> [Session] { throw Self.unsupported }
+    public func createSession(projectID: String, title: String) async throws -> Session { throw Self.unsupported }
+    public func renameSession(sessionID: String, title: String) async throws { throw Self.unsupported }
+    public func deleteSession(sessionID: String) async throws { throw Self.unsupported }
+    public func selectSession(_ sessionID: String) async throws { throw Self.unsupported }
+    public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws { throw Self.unsupported }
+    public func abort() async throws { throw Self.unsupported }
+    public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws { throw Self.unsupported }
+    public func loadHistory(sessionID: String) async throws -> [TimelineEvent] { throw Self.unsupported }
+    public func startEventStream() async throws { throw Self.unsupported }
+    public func stopEventStream() async {}
+    public func listFiles(path: String) async throws -> [WorkbenchFileNode] { throw Self.unsupported }
+    public func fileContent(path: String) async throws -> WorkbenchFileContent { throw Self.unsupported }
+    public func sessionDiff(sessionID: String) async throws -> [SessionDiffFile] { throw Self.unsupported }
+    public func runShell(command: String, agent: String?) async throws -> ShellResult { throw Self.unsupported }
+    public func availableProviders() async throws -> ProviderListResult { throw Self.unsupported }
+    public func config() async throws -> ConfigInfo { throw Self.unsupported }
+    public func availableCommands() async throws -> [CommandInfo] { throw Self.unsupported }
+    public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
+
+    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
+    public let eventStream: AsyncStream<WorkbenchEvent>
+
+    public var connectionStatus: String { get async { "not implemented" } }
+    public var currentSessionID: String? { get async { nil } }
+
+    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func disconnect() async {}
+    public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
+    public func listProjects() async throws -> [Project] { throw Self.unsupported }
+    public func listSessions(projectID: String) async throws -> [Session] { throw Self.unsupported }
+    public func createSession(projectID: String, title: String) async throws -> Session { throw Self.unsupported }
+    public func renameSession(sessionID: String, title: String) async throws { throw Self.unsupported }
+    public func deleteSession(sessionID: String) async throws { throw Self.unsupported }
+    public func selectSession(_ sessionID: String) async throws { throw Self.unsupported }
+    public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws { throw Self.unsupported }
+    public func abort() async throws { throw Self.unsupported }
+    public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws { throw Self.unsupported }
+    public func loadHistory(sessionID: String) async throws -> [TimelineEvent] { throw Self.unsupported }
+    public func startEventStream() async throws { throw Self.unsupported }
+    public func stopEventStream() async {}
+    public func listFiles(path: String) async throws -> [WorkbenchFileNode] { throw Self.unsupported }
+    public func fileContent(path: String) async throws -> WorkbenchFileContent { throw Self.unsupported }
+    public func sessionDiff(sessionID: String) async throws -> [SessionDiffFile] { throw Self.unsupported }
+    public func runShell(command: String, agent: String?) async throws -> ShellResult { throw Self.unsupported }
+    public func availableProviders() async throws -> ProviderListResult { throw Self.unsupported }
+    public func config() async throws -> ConfigInfo { throw Self.unsupported }
+    public func availableCommands() async throws -> [CommandInfo] { throw Self.unsupported }
+    public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
+
+    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
+    public let eventStream: AsyncStream<WorkbenchEvent>
+
+    public var connectionStatus: String { get async { "not implemented" } }
+    public var currentSessionID: String? { get async { nil } }
+
+    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func disconnect() async {}
+    public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
+    public func listProjects() async throws -> [Project] { throw Self.unsupported }
+    public func listSessions(projectID: String) async throws -> [Session] { throw Self.unsupported }
+    public func createSession(projectID: String, title: String) async throws -> Session { throw Self.unsupported }
+    public func renameSession(sessionID: String, title: String) async throws { throw Self.unsupported }
+    public func deleteSession(sessionID: String) async throws { throw Self.unsupported }
+    public func selectSession(_ sessionID: String) async throws { throw Self.unsupported }
+    public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws { throw Self.unsupported }
+    public func abort() async throws { throw Self.unsupported }
+    public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws { throw Self.unsupported }
+    public func loadHistory(sessionID: String) async throws -> [TimelineEvent] { throw Self.unsupported }
+    public func startEventStream() async throws { throw Self.unsupported }
+    public func stopEventStream() async {}
+    public func listFiles(path: String) async throws -> [WorkbenchFileNode] { throw Self.unsupported }
+    public func fileContent(path: String) async throws -> WorkbenchFileContent { throw Self.unsupported }
+    public func sessionDiff(sessionID: String) async throws -> [SessionDiffFile] { throw Self.unsupported }
+    public func runShell(command: String, agent: String?) async throws -> ShellResult { throw Self.unsupported }
+    public func availableProviders() async throws -> ProviderListResult { throw Self.unsupported }
+    public func config() async throws -> ConfigInfo { throw Self.unsupported }
+    public func availableCommands() async throws -> [CommandInfo] { throw Self.unsupported }
+    public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
+
+    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
+    public let eventStream: AsyncStream<WorkbenchEvent>
+
+    public var connectionStatus: String { get async { "not implemented" } }
+    public var currentSessionID: String? { get async { nil } }
+
+    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func disconnect() async {}
+    public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
+    public func listProjects() async throws -> [Project] { throw Self.unsupported }
+    public func listSessions(projectID: String) async throws -> [Session] { throw Self.unsupported }
+    public func createSession(projectID: String, title: String) async throws -> Session { throw Self.unsupported }
+    public func renameSession(sessionID: String, title: String) async throws { throw Self.unsupported }
+    public func deleteSession(sessionID: String) async throws { throw Self.unsupported }
+    public func selectSession(_ sessionID: String) async throws { throw Self.unsupported }
+    public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws { throw Self.unsupported }
+    public func abort() async throws { throw Self.unsupported }
+    public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws { throw Self.unsupported }
+    public func loadHistory(sessionID: String) async throws -> [TimelineEvent] { throw Self.unsupported }
+    public func startEventStream() async throws { throw Self.unsupported }
+    public func stopEventStream() async {}
+    public func listFiles(path: String) async throws -> [WorkbenchFileNode] { throw Self.unsupported }
+    public func fileContent(path: String) async throws -> WorkbenchFileContent { throw Self.unsupported }
+    public func sessionDiff(sessionID: String) async throws -> [SessionDiffFile] { throw Self.unsupported }
+    public func runShell(command: String, agent: String?) async throws -> ShellResult { throw Self.unsupported }
+    public func availableProviders() async throws -> ProviderListResult { throw Self.unsupported }
+    public func config() async throws -> ConfigInfo { throw Self.unsupported }
+    public func availableCommands() async throws -> [CommandInfo] { throw Self.unsupported }
+    public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
+
+    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
+    public let eventStream: AsyncStream<WorkbenchEvent>
+
+    public var connectionStatus: String { get async { "not implemented" } }
+    public var currentSessionID: String? { get async { nil } }
+
+    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func disconnect() async {}
+    public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
+    public func listProjects() async throws -> [Project] { throw Self.unsupported }
+    public func listSessions(projectID: String) async throws -> [Session] { throw Self.unsupported }
+    public func createSession(projectID: String, title: String) async throws -> Session { throw Self.unsupported }
+    public func renameSession(sessionID: String, title: String) async throws { throw Self.unsupported }
+    public func deleteSession(sessionID: String) async throws { throw Self.unsupported }
+    public func selectSession(_ sessionID: String) async throws { throw Self.unsupported }
+    public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws { throw Self.unsupported }
+    public func abort() async throws { throw Self.unsupported }
+    public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws { throw Self.unsupported }
+    public func loadHistory(sessionID: String) async throws -> [TimelineEvent] { throw Self.unsupported }
+    public func startEventStream() async throws { throw Self.unsupported }
+    public func stopEventStream() async {}
+    public func listFiles(path: String) async throws -> [WorkbenchFileNode] { throw Self.unsupported }
+    public func fileContent(path: String) async throws -> WorkbenchFileContent { throw Self.unsupported }
+    public func sessionDiff(sessionID: String) async throws -> [SessionDiffFile] { throw Self.unsupported }
+    public func runShell(command: String, agent: String?) async throws -> ShellResult { throw Self.unsupported }
+    public func availableProviders() async throws -> ProviderListResult { throw Self.unsupported }
+    public func config() async throws -> ConfigInfo { throw Self.unsupported }
+    public func availableCommands() async throws -> [CommandInfo] { throw Self.unsupported }
+    public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
+
+    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
+    public let eventStream: AsyncStream<WorkbenchEvent>
+
+    public var connectionStatus: String { get async { "not implemented" } }
+    public var currentSessionID: String? { get async { nil } }
+
+    public func connectRemote(pairing: RemotePairing) async throws { throw Self.unsupported }
+    public func disconnect() async {}
+    public func useNativeRuntime() async throws { throw WorkbenchError.unsupportedFeature("Native mode requires different backend") }
+    public func listProjects() async throws -> [Project] { throw Self.unsupported }
+    public func listSessions(projectID: String) async throws -> [Session] { throw Self.unsupported }
+    public func createSession(projectID: String, title: String) async throws -> Session { throw Self.unsupported }
+    public func renameSession(sessionID: String, title: String) async throws { throw Self.unsupported }
+    public func deleteSession(sessionID: String) async throws { throw Self.unsupported }
+    public func selectSession(_ sessionID: String) async throws { throw Self.unsupported }
+    public func sendPrompt(_ text: String, agent: String?, model: ModelInfo?) async throws { throw Self.unsupported }
+    public func abort() async throws { throw Self.unsupported }
+    public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async tries { throw Self.unsupported }
+    public func loadHistory(sessionID: String) async tries -> [TimelineEvent] { throw Self.unsupported }
+    public func startEventStream() async tries { throw Self.unsupported }
+    public func stopEventStream() async {}
+    public func listFiles(path: String) async tries -> [WorkbenchFileNode] { throw Self.unsupported }
+    public func fileContent(path: String) async tries -> WorkbenchFileContent { throw Self.unsupported }
+    public func sessionDiff(sessionID: String) async tries -> [SessionDiffFile] { throw Self.unsupported }
+    public func runShell(command: String, agent: String?) async tries -> ShellResult { throw Self.unsupported }
+    public func availableProviders() async tries -> ProviderListResult { throw Self.unsupported }
+    public func config() async tries -> ConfigInfo { throw Self.unsupported }
+    public func availableCommands() async tries -> [CommandInfo] { throw Self.unsupported }
     public func sendWorkbenchEvent(_ event: WorkbenchEvent) {}
 }
