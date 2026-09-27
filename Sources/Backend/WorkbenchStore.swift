@@ -32,6 +32,8 @@ public final class WorkbenchStore: ObservableObject {
     var currentBackend: (any WorkbenchBackend)?
     private var pairingStore = PairingStore()
     private var codexPairingStore = CodexPairingStore()
+    private var activeRemotePairing: BackendPairing?
+    private var activeRemoteBackendType: RemoteBackendType?
     private var backendEventTask: Task<Void, Never>?
     private var isProcessingRemote = false
     /// part id → "assistant" | "reasoning" | "user". Deltas have no type of their own.
@@ -51,12 +53,21 @@ public final class WorkbenchStore: ObservableObject {
         }
     }
 
-    private func connectRemote(pairing: BackendPairing, backendType: RemoteBackendType) async {
+    private func connectRemote(
+        pairing: BackendPairing,
+        backendType: RemoteBackendType,
+        preservingSessionID: String? = nil
+    ) async {
         guard !isConnecting else { return }
+        backendEventTask?.cancel()
+        backendEventTask = nil
         await currentBackend?.stopEventStream()
+        await currentBackend?.disconnect()
         isConnecting = true
         connectionHealth = .connecting
         connectionStatus = "connecting..."
+        activeRemotePairing = pairing
+        activeRemoteBackendType = backendType
 
         do {
             let backend = try WorkbenchBackendFactory.makeBackend(from: pairing)
@@ -95,8 +106,9 @@ public final class WorkbenchStore: ObservableObject {
 
             sessionState.clearTimeline()
             sessions = try await backend.listSessions(projectID: project.id)
-            if let first = sessions.first {
-                await selectSession(first)
+            let sessionToRestore = preservingSessionID.flatMap { id in sessions.first(where: { $0.id == id }) } ?? sessions.first
+            if let sessionToRestore {
+                await selectSession(sessionToRestore)
             }
 
             sessionState.selectedModel = ModelInfo(
@@ -135,14 +147,20 @@ public final class WorkbenchStore: ObservableObject {
         } catch {
             isConnecting = false
             connectionHealth = .disconnected
-            backendMode = .unconfigured
             connectionStatus = "error: \(error.localizedDescription)"
+            if preservingSessionID == nil {
+                backendMode = .unconfigured
+            }
         }
     }
 
     public func disconnect() async {
+        backendEventTask?.cancel()
+        backendEventTask = nil
         await currentBackend?.disconnect()
         currentBackend = nil
+        activeRemotePairing = nil
+        activeRemoteBackendType = nil
         backendMode = .unconfigured
         connectionStatus = ""
         isConnecting = false
@@ -212,6 +230,10 @@ public final class WorkbenchStore: ObservableObject {
     }
     
     public func reconnectStoredPairing() async {
+        if let pairing = activeRemotePairing, let backendType = activeRemoteBackendType {
+            await connectRemote(pairing: pairing, backendType: backendType, preservingSessionID: currentSessionID)
+            return
+        }
         if let codex = try? await codexPairingStore.load() {
             await connectRemote(pairing: .codex(codex), backendType: .codex)
             return
@@ -226,6 +248,15 @@ public final class WorkbenchStore: ObservableObject {
             )
             await connectRemote(pairing: .openCode(pairing), backendType: .opencode)
         }
+    }
+
+    /// Re-establish the remote stream after iOS has suspended the app, then
+    /// reload the selected thread so messages produced while away are restored.
+    public func resumeRemoteSessionAfterBackground() async {
+        guard backendMode == .remote,
+              let pairing = activeRemotePairing,
+              let backendType = activeRemoteBackendType else { return }
+        await connectRemote(pairing: pairing, backendType: backendType, preservingSessionID: currentSessionID)
     }
     
     public func reconnect() async {

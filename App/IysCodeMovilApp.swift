@@ -26,6 +26,8 @@ struct RootView: View {
     @EnvironmentObject private var store: WorkbenchStore
     @EnvironmentObject private var sessionState: ActiveSessionState
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var enteredBackground = false
 
     var body: some View {
         Group {
@@ -43,6 +45,14 @@ struct RootView: View {
         .onOpenURL { url in
             guard url.scheme == "iyscodemovil" else { return }
             Task { await store.connectRemote(url.absoluteString) }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .background {
+                enteredBackground = true
+            } else if phase == .active, enteredBackground {
+                enteredBackground = false
+                Task { await store.resumeRemoteSessionAfterBackground() }
+            }
         }
     }
 

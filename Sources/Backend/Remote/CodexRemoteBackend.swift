@@ -30,6 +30,9 @@ public final class CodexRemoteBackend: WorkbenchBackend, RemoteBackend {
 
     public func connectRemote(pairing: BackendPairing) async throws {
         guard case .codex(let value) = pairing else { throw Self.unsupported }
+        eventTask?.cancel()
+        eventTask = nil
+        await client?.disconnect(reason: "reconnecting")
         let client = try CodexAppServerClient(pairing: value)
         try await client.connect()
         self.pairing = value
