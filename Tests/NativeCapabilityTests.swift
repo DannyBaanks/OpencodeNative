@@ -73,9 +73,26 @@ final class NativeCapabilityBrokerTests: XCTestCase {
         XCTAssertNil(ShortcutURLBuilder.runURL(shortcut: ConfiguredShortcut(name: "  ")))
     }
 
+    func testRegistryProjectsOnlyTaskRelevantRegisteredCapabilities() async {
+        let files = capability()
+        let share = NativeCapabilityDescriptor(id: "system.share", title: "Share", detail: "Share sheet",
+            availability: .available, authorization: .notApplicable, effectClass: .presentUI,
+            implementationSurface: .systemUI)
+        let registry = NativeCapabilityRegistry(modules: [FixtureCapabilityModule(descriptors: [files, share])])
+        let result = await registry.snapshot(relevantCapabilityIDs: ["system.share"])
+        XCTAssertEqual(result.map(\.id), ["system.share"])
+        XCTAssertEqual(result.first?.implementationSurface, .systemUI)
+    }
+
     private func capability(authorization: NativeAuthorizationState = .authorized,
                             effect: NativeEffectClass = .read) -> NativeCapabilityDescriptor {
         .init(id: "test.capability", title: "Test", detail: "Test", availability: .available,
               authorization: authorization, effectClass: effect)
     }
+}
+
+private struct FixtureCapabilityModule: NativeCapabilityModule {
+    let descriptors: [NativeCapabilityDescriptor]
+    var moduleID: String { "tests.fixture" }
+    func discoverCapabilities() async -> [NativeCapabilityDescriptor] { descriptors }
 }

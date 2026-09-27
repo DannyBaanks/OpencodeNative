@@ -4,7 +4,7 @@
 
 **Goal:** Evolve the native iPhone sandbox into a typed capability broker while keeping inference on the OpenCode host and all native execution on iPhone.
 
-**Architecture:** Add a shared capability registry/state model, effect-based broker/policy, privacy-safe receipts, and context-scoped native tool adapters. Retain the current local workspace and Keychain. App Intents/Shortcuts are typed seams; the Shortcuts URL launches only a user-configured shortcut. Notifications use UserNotifications after contextual authorization. The host remains inference-only; no host repo or legacy Bridge edits.
+**Architecture:** Discover useful outcomes through modular reporters, classify each by its official Apple implementation surface (direct framework, App Intent/configured Shortcut, system UI, URL/deep link, unavailable), then register only working adapters in an effect-based broker. Keep future/unbuilt capabilities non-executable. Retain the current local workspace and Keychain. Notifications use UserNotifications after contextual authorization. The host remains inference-only; no host repo or legacy Bridge edits.
 
 **Tech Stack:** Swift 5, SwiftUI, AppIntents (iOS 16+), UserNotifications, Security/Keychain, XCTest, XcodeGen.
 
@@ -25,7 +25,7 @@
 
 **Files:** `Sources/NativeCapabilities/NativeCapability.swift` (new), `Tests/NativeCapabilityTests.swift` (new).
 
-**Interfaces:** `NativeCapabilityDescriptor`, `NativeCapabilityAvailability`, `NativeAuthorizationState`, `NativeEffectClass`, `NativeCapabilityProposal`, `NativeCapabilityReceipt`, `NativeCapabilityBroker`, `NativeCapabilityPolicy`. Broker accepts an explicit current-state provider and approval decision; it rejects unsupported, unauthorized, unapproved, or fabricated state. Receipt safe metadata is allowlisted and cannot carry arbitrary secret/content fields.
+**Interfaces:** `NativeCapabilityModule`, `NativeCapabilityRegistry`, `NativeImplementationSurface`, `NativeCapabilityDescriptor`, `NativeCapabilityAvailability`, `NativeAuthorizationState`, `NativeEffectClass`, `NativeCapabilityProposal`, `NativeCapabilityReceipt`, `NativeCapabilityBroker`. Modules report implementation and real state; registry composes them and projects only relevant IDs. Broker rejects unavailable, unauthorized, malformed, unapproved, or fabricated proposals. Receipt metadata is allowlisted and sensitive values are dropped.
 
 **Steps:**
 1. Add tests for discovery != authorization, model approval != OS permission, denied state rejection, external side effects fail closed, and receipt metadata allowlist.
@@ -33,13 +33,13 @@
 3. Implement the minimal model and broker.
 4. Re-run focused and full XCTest suite.
 
-**Expected:** broker decisions are deterministic and no native operation can execute based only on catalog discovery.
+**Expected:** broker decisions are deterministic and no native operation can execute based only on catalog discovery. Capability inventory describes user outcomes and official surfaces, not a hardcoded framework wish list.
 
 ## Task 2: Native action and Shortcuts seams
 
 **Files:** `App/NativeAppIntents.swift` (new), `App/IysCodeMovilApp.swift`, `Info.plist`, `Sources/NativeCapabilities/ShortcutRegistry.swift` (new), tests.
 
-**Interfaces:** typed App Intent actions for opening the sandbox/current project and showing the active run only where an existing operation is available. `ShortcutRegistry` stores only user-configured name/opaque local ID references, never enumerates the full Shortcuts collection. `shortcut.run` accepts only an allowlisted reference and launches Apple’s documented URL scheme; it reports that system UI may appear and does not claim shortcut completion/delivery.
+**Interfaces:** typed App Intent actions for opening the app and local sandbox. For iOS 16, record a one-shot typed launch request because the `OpenURLIntent` route is not available until later iOS. `ShortcutRegistry` stores only user-configured name/opaque local ID references, never enumerates the full Shortcuts collection. A confirmed Settings action launches Apple’s supported URL scheme; it reports that system UI may appear and does not claim shortcut completion/delivery. Model invocation remains disabled until the broker can bind proposals to the configured reference and the normal per-action approval UI.
 
 **Steps:** write tests for unconfigured/denied shortcut, configured shortcut URI encoding, and no arbitrary URL scheme; run RED; implement; run GREEN; add App Shortcuts; build app.
 

@@ -50,6 +50,7 @@ struct RootView: View {
         .task {
             await hostStore.restore()
             await hostStore.setAppActive(scenePhase == .active)
+            consumePendingAppIntent()
         }
         .onOpenURL { url in
             guard url.scheme == "iyscodemovil" else { return }
@@ -61,6 +62,7 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { phase in
             Task { await hostStore.setAppActive(phase == .active) }
+            if phase == .active { consumePendingAppIntent() }
             if phase == .background {
                 enteredBackground = true
             } else if phase == .active, enteredBackground {
@@ -68,6 +70,12 @@ struct RootView: View {
                 Task { await store.resumeRemoteSessionAfterBackground() }
             }
         }
+    }
+
+    private func consumePendingAppIntent() {
+        guard UserDefaults.standard.bool(forKey: "native.openSandboxOnLaunch") else { return }
+        UserDefaults.standard.removeObject(forKey: "native.openSandboxOnLaunch")
+        Task { await store.useNativeRuntime() }
     }
 
     // Flujo iPhone: navegacion por estado dentro de un NavigationStack.

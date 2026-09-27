@@ -18,6 +18,14 @@ public enum NativeEffectClass: String, Codable, Sendable, CaseIterable {
     case externalSideEffect = "EXTERNAL_SIDE_EFFECT"
 }
 
+public enum NativeImplementationSurface: String, Codable, Sendable, CaseIterable {
+    case directFramework
+    case appIntentOrShortcut
+    case systemUI
+    case urlDeepLink
+    case unavailable
+}
+
 public struct NativeCapabilityDescriptor: Codable, Sendable, Identifiable, Equatable {
     public let id: String
     public let title: String
@@ -30,11 +38,13 @@ public struct NativeCapabilityDescriptor: Codable, Sendable, Identifiable, Equat
     public let inputSchema: [String: String]
     public let requiredInput: [String]
     public let outputSchema: [String: String]
+    public let implementationSurface: NativeImplementationSurface
 
     public init(id: String, title: String, detail: String, availability: NativeCapabilityAvailability,
                 authorization: NativeAuthorizationState, entitlementRequired: Bool = false,
                 userPresenceRequired: Bool = false, effectClass: NativeEffectClass,
-                inputSchema: [String: String] = [:], requiredInput: [String] = [], outputSchema: [String: String] = [:]) {
+                inputSchema: [String: String] = [:], requiredInput: [String] = [], outputSchema: [String: String] = [:],
+                implementationSurface: NativeImplementationSurface = .directFramework) {
         self.id = id
         self.title = title
         self.detail = detail
@@ -46,6 +56,7 @@ public struct NativeCapabilityDescriptor: Codable, Sendable, Identifiable, Equat
         self.inputSchema = inputSchema
         self.requiredInput = requiredInput
         self.outputSchema = outputSchema
+        self.implementationSurface = implementationSurface
     }
 
     public var displayState: String {
@@ -60,6 +71,31 @@ public struct NativeCapabilityDescriptor: Codable, Sendable, Identifiable, Equat
             case .notRequested: return "Available · not requested"
             }
         }
+    }
+}
+
+/// A module reports capabilities it can actually implement on this device/configuration.
+public protocol NativeCapabilityModule: Sendable {
+    var moduleID: String { get }
+    func discoverCapabilities() async -> [NativeCapabilityDescriptor]
+}
+
+public actor NativeCapabilityRegistry {
+    private let modules: [any NativeCapabilityModule]
+
+    public init(modules: [any NativeCapabilityModule]) {
+        self.modules = modules
+    }
+
+    public func snapshot(relevantCapabilityIDs: Set<String>? = nil) async -> [NativeCapabilityDescriptor] {
+        var descriptors = [NativeCapabilityDescriptor]()
+        for module in modules {
+            descriptors.append(contentsOf: await module.discoverCapabilities())
+        }
+        let unique = Dictionary(descriptors.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let ordered = unique.values.sorted { $0.id < $1.id }
+        guard let relevantCapabilityIDs else { return ordered }
+        return ordered.filter { relevantCapabilityIDs.contains($0.id) }
     }
 }
 
@@ -160,7 +196,7 @@ public enum NativeCapabilityCatalog {
             .init(id: "files.sandbox", title: "Files sandbox", detail: "Private iSyCode workspace", availability: .available, authorization: .authorized, effectClass: .read),
             .init(id: "files.external-folder", title: "Selected folder", detail: hasExternalFolderGrant ? "User-selected folder grant" : "Choose a folder in Files to enable", availability: hasExternalFolderGrant ? .available : .needsSetup, authorization: hasExternalFolderGrant ? .authorized : .notRequested, effectClass: .write),
             .init(id: "keychain.app-secrets", title: "Keychain", detail: "App-owned credentials; values hidden from the model", availability: .available, authorization: .authorized, effectClass: .sensitiveWrite),
-            .init(id: "shortcuts.configured", title: "Apple Shortcuts", detail: "Only shortcuts explicitly configured by you", availability: hasConfiguredShortcut ? .available : .needsSetup, authorization: .notApplicable, userPresenceRequired: true, effectClass: .externalSideEffect, inputSchema: ["shortcut_id": "string"], requiredInput: ["shortcut_id"]),
+            .init(id: "shortcuts.configured", title: "Apple Shortcuts", detail: "Only shortcuts explicitly configured by you", availability: hasConfiguredShortcut ? .available : .needsSetup, authorization: .notApplicable, userPresenceRequired: true, effectClass: .externalSideEffect, inputSchema: ["shortcut_id": "string"], requiredInput: ["shortcut_id"], implementationSurface: .appIntentOrShortcut),
             .init(id: "notifications.local", title: "Notifications", detail: "Local task and approval notifications", availability: .available, authorization: notificationAuthorization, userPresenceRequired: true, effectClass: .deviceAction, inputSchema: ["title": "string", "body": "string", "delay_seconds": "string"], requiredInput: ["title", "body", "delay_seconds"])
         ]
     }

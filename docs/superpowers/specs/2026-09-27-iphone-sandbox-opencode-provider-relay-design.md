@@ -149,11 +149,13 @@ The replacement design:
 - Provider/model context is sent off-device. The UI disclosure must appear before first use and remain accessible from provider settings.
 
 
-## Native iOS Capability Fabric
+## Native iOS Capability Discovery and Fabric
 
 The phone is the authority boundary for Apple-device capabilities. Model output is data: it can create a typed proposal, but it cannot directly access UIKit, Foundation file URLs, Keychain, or Apple frameworks. Native operations pass through `NativeCapabilityBroker`, which checks capability availability, entitlement/setup, the current OS authorization state, effect policy, and any required explicit approval before calling a native adapter. The adapter returns a bounded result and a privacy-safe receipt. Host/OpenCode relay remains inference-only and cannot invoke this broker.
 
-The shared descriptor records a stable capability ID, availability, authorization state, entitlement/setup requirement, user-presence requirement, effect class, and input/output schema. Effect classes are `READ`, `WRITE`, `PRESENT_UI`, `SENSITIVE_READ`, `SENSITIVE_WRITE`, `DEVICE_ACTION`, and `EXTERNAL_SIDE_EFFECT`. Discovery is not authorization; authorization is not model permission; model permission never suppresses an Apple system prompt. Only context-relevant tools are projected into a model turn.
+Design the inventory around user-useful capabilities, then resolve each operation through the narrowest official Apple surface. Classify the implementation as direct framework/API, App Intent or configured Shortcut, system UI/picker/composer, URL/deep link, or unavailable to third-party apps. Never infer that an app has a public API because it exists on iOS; e.g. Notes may need a supported Shortcut/system surface rather than a nonexistent public CRUD framework. Do not use private APIs. Modules report what they can actually implement on this device/configuration; `NativeCapabilityRegistry` composes those module results instead of treating a wishlist as operational tools.
+
+The shared descriptor records a stable capability ID, implementation surface, availability, authorization state, entitlement/setup requirement, user-presence requirement, effect class, and input/output schema. Effect classes are `READ`, `WRITE`, `PRESENT_UI`, `SENSITIVE_READ`, `SENSITIVE_WRITE`, `DEVICE_ACTION`, and `EXTERNAL_SIDE_EFFECT`. Discovery is not authorization; authorization is not model permission; model permission never suppresses an Apple system prompt. Only context-relevant tools are projected into a model turn.
 
 ### First vertical slice
 
@@ -162,6 +164,8 @@ The shared descriptor records a stable capability ID, availability, authorizatio
 - **Files:** retain the app sandbox and current user-picked folder bookmark. Any additional files or folders require the system picker and security-scoped URLs, minimal supported bookmark persistence, and coordinated access. The Files app does not grant broad Files access.
 - **Notifications:** request authorization in context, then schedule/cancel local notifications for app-defined semantic events. The model may suggest wording but cannot choose policy or bypass authorization.
 - **Settings catalog:** report `available`, `authorized`, `denied`, `restricted`, `needs setup`, or `unsupported` separately. “Available” never means “granted.”
+
+The product inventory remains capability-first. Each entry names its user outcome, official mechanism, state probe, entitlement/usage-description requirements, approval class, and limitations. An unimplemented but officially possible operation is `needs setup` or absent from the executable tool projection; reserve `unsupported` for surfaces unavailable to this app/platform, not merely work that has not been built. Discovery can show future/research candidates as non-executable and must never expose them as tools.
 
 The first slice does not request Calendar, Contacts, Photos library, Camera, Microphone, Speech, Location, HealthKit, HomeKit, Bluetooth, or motion permissions on launch. Later modules use the same typed broker: EventKit operations request only needed access; Contacts fetch only necessary fields; Photos prefers the system picker; camera/audio require visible invocation and current Apple permissions; location requests foreground access in context; share/open URL/compose use system UI and policy validation. HomeKit, Bluetooth, HealthKit, motion and other entitlement-gated APIs remain opt-in until a concrete use case and privacy review exist. BackgroundTasks are a supported opportunity, not an unrestricted daemon guarantee; durable run IDs and reconciliation are required for future long work.
 
