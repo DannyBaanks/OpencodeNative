@@ -1,24 +1,11 @@
 import Foundation
 
-/// OpenCode remote backend implementation
-/// Conforma al protocolo RemoteBackend para interoperabilidad con futuros backends
+/// OpenCode remote backend implementation.
+/// Conforma al protocolo RemoteBackend para interoperabilidad con futuros backends.
 @MainActor
 public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
     public var mode: BackendMode { .remote }
     public let remoteType: RemoteBackendType = .opencode
-    
-    private let client: OpenCodeRemoteClient
-    private let pairing: OpenCodePairing
-    private var eventTask: Task<Void, Never>?
-    private var streamGeneration = 0
-    private var messageRoles: [String: String] = [:]
-    private var currentSessionIDStorage: String?
-    private var connectionStatusStorage = "connected"
-    
-    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
-    public let eventStream: AsyncStream<WorkbenchEvent>
-    
-    private let eventQueue: AsyncStream<WorkbenchEvent>
     
     // MARK: - RemoteBackend protocol
     
@@ -30,10 +17,7 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
         pairing.authHeaders
     }
     
-    public var remoteType: RemoteBackendType { .opencode }
-    
     public func configure(with pairing: RemotePairing) async throws {
-        // Para OpenCode, convertimos RemotePairing a OpenCodePairing
         let opencodePairing = OpenCodePairing(
             scheme: pairing.scheme,
             host: pairing.host,
@@ -42,47 +26,7 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
             password: pairing.password,
             directory: pairing.directory
         )
-        // Re-inicializaría el cliente con el nuevo pairing
-        // Por ahora solo actualizamos el pairing almacenado
-    }
-    
-    public func healthCheck() async throws -> RemoteHealth {
-        let health = try await client.health()
-        return RemoteHealth(healthy: health.healthy, version: health.version, backendType: .opencode)
-    }
-    
-    public var baseURL: URL { pairing.baseURL }
-    public var authHeaders: [String: String] { pairing.authHeaders }
-    
-    // MARK: - Init
-    
-    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
-    public let eventStream: AsyncStream<WorkbenchEvent>
-    private let eventQueue: AsyncStream<WorkbenchEvent>
-    
-    public init(pairing: OpenCodePairing) {
-        self.pairing = pairing
-        self.client = OpenCodeRemoteClient(pairing: pairing)
-        
-        var continuation: AsyncStream<WorkbenchEvent>.Continuation?
-        self.eventStream = AsyncStream { continuation = $0 }
-        self.eventContinuation = continuation
-        self.eventQueue = eventStream
-    }
-    
-    // MARK: - RemoteBackend protocol implementation
-    
-    public func configure(with pairing: RemotePairing) async throws {
-        // Recrear cliente con nuevo pairing si es diferente
-        let newPairing = OpenCodePairing(
-            scheme: pairing.scheme,
-            host: pairing.host,
-            port: pairing.port,
-            username: pairing.username,
-            password: pairing.password,
-            directory: pairing.directory
-        )
-        // Nota: en producción se recrearía el cliente
+        // Nota: en producción se recrearía el cliente con el nuevo pairing
     }
     
     public func healthCheck() async throws -> RemoteHealth {
@@ -147,7 +91,7 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
                 RemotePart(
                     id: part.id,
                     messageID: part.messageID,
-                    kind: RemotePart.Kind(rawValue: part.kind.rawValue) ?? .other,
+                    kind: Self.mapPartKind(part.kind),
                     text: part.text,
                     tool: part.tool,
                     callID: part.callID,
@@ -161,32 +105,63 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
     }
     
     public func events() -> AsyncThrowingStream<RemoteEvent, Error> {
-        client.events().map { event in
-            switch event {
-            case .connected: return .connected
-            case .disconnected(let msg): return .disconnected(msg)
-            case .part(let part): return .part(RemotePart(
-                id: part.id,
-                messageID: part.messageID,
-                kind: RemotePart.Kind(rawValue: part.kind.rawValue) ?? .other,
-                text: part.text,
-                tool: part.tool,
-                callID: part.callID,
-                status: part.status,
-                input: part.input,
-                output: part.output,
-                error: part.error
-            ))
-            case .partDelta(let sessionID, let partID, let field, let delta):
-                return .partDelta(partID: partID, delta: delta)
-            case .permission(let perm): return .permission(RemotePermission(
-                id: perm.id, sessionID: perm.sessionID, title: perm.title,
-                type: perm.type, metadata: perm.metadata
-            ))
-            case .sessionIdle(let id): return .sessionIdle(id)
-            case .sessionError(let msg): return .sessionError(msg)
-            default: return .other($0)
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let stream = await client.events()
+                    for try await event in stream {
+                        let mapped: RemoteEvent
+                        switch event {
+                        case .connected:
+                            mapped = .connected
+                        case .part(let part):
+                            mapped = .part(RemotePart(
+                                id: part.id,
+                                messageID: part.messageID,
+                                kind: Self.mapPartKind(part.kind),
+                                text: part.text,
+                                tool: part.tool,
+                                callID: part.callID,
+                                status: part.status,
+                                input: part.input,
+                                output: part.output,
+                                error: part.error
+                            ))
+                        case .partDelta(let sessionID, let partID, let field, let delta):
+                            mapped = .partDelta(partID: partID, delta: delta)
+                        case .messageRole(let messageID, let role):
+                            mapped = .messageRole(messageID: messageID, role: role)
+                        case .permission(let perm):
+                            mapped = .permission(RemotePermission(
+                                id: perm.id, sessionID: perm.sessionID, title: perm.title,
+                                type: perm.type, metadata: perm.metadata
+                            ))
+                        case .sessionIdle(let id):
+                            mapped = .sessionIdle(id)
+                        case .sessionError(let msg):
+                            mapped = .sessionError(msg)
+                        case .other(let type):
+                            mapped = .other(type)
+                        }
+                        continuation.yield(mapped)
+                    }
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
             }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+    
+    private nonisolated static func mapPartKind(_ kind: OpenCodeRemotePart.Kind) -> RemotePart.Kind {
+        switch kind {
+        case .text: return .text
+        case .reasoning: return .reasoning
+        case .tool: return .tool
+        case .other: return .other
         }
     }
     
@@ -207,7 +182,237 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
             messageID: result.messageID,
             parts: result.parts.map { RemotePart(
                 id: $0.id, messageID: $0.messageID,
-                kind: RemotePart.Kind(rawValue: $0.kind.rawValue) ?? .other,
+                kind: Self.mapPartKind($0.kind),
+                text: $0.text, tool: $0.tool, callID: $0.callID,
+                status: $0.status, input: $0.input, output: $0.output, error: $0.error
+            )}
+        )
+    }
+    
+    public func sessionDiff(sessionID: String) async throws -> [SessionDiff] {
+        let diffs = try await client.sessionDiff(sessionID: sessionID)
+        return diffs.map { SessionDiff(file: $0.file, additions: $0.additions, deletions: $0.deletions, before: $0.before, after: $0.after) }
+    }
+    
+    public func providers() async throws -> ProviderListResult {
+        let result = try await client.providers()
+        return ProviderListResult(
+            all: result.all.map { ProviderInfo(id: $0.id, name: $0.name, models: $0.models) },
+            connected: result.connected,
+            defaultProvider: result.default
+        )
+    }
+    
+    public func config() async throws -> ConfigInfo {
+        let remote = try await client.config()
+        return ConfigInfo(agents: remote.agents, provider: remote.provider)
+    }
+    
+    public func commands() async throws -> [CommandInfo] {
+        let cmds = try await client.commands()
+        return cmds.map { CommandInfo(name: $0.name, description: $0.description) }
+    }
+    
+    public func getPath() async throws -> String {
+        try await client.getPath()
+    }
+    
+    // MARK: - Init
+    
+    private let client: OpenCodeRemoteClient
+    private let pairing: OpenCodePairing
+    private var eventTask: Task<Void, Never>?
+    private var streamGeneration = 0
+    private var messageRoles: [String: String] = [:]
+    private var currentSessionIDStorage: String?
+    private var connectionStatusStorage = "connected"
+    
+    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
+    public let eventStream: AsyncStream<WorkbenchEvent>
+    private let eventQueue: AsyncStream<WorkbenchEvent>
+    
+    public init(pairing: OpenCodePairing) {
+        self.pairing = pairing
+        self.client = OpenCodeRemoteClient(pairing: pairing)
+        
+        var continuation: AsyncStream<WorkbenchEvent>.Continuation?
+        self.eventStream = AsyncStream { continuation = $0 }
+        self.eventContinuation = continuation
+        self.eventQueue = eventStream
+    }
+    
+    // MARK: - RemoteBackend protocol implementation
+    
+    public var remoteType: RemoteBackendType { .opencode }
+    
+    public var baseURL: URL { pairing.baseURL }
+    public var authHeaders: [String: String] { pairing.authHeaders }
+    
+    public func configure(with pairing: RemotePairing) async throws {
+        let newPairing = OpenCodePairing(
+            scheme: pairing.scheme,
+            host: pairing.host,
+            port: pairing.port,
+            username: pairing.username,
+            password: pairing.password,
+            directory: pairing.directory
+        )
+    }
+    
+    public func healthCheck() async throws -> RemoteHealth {
+        let health = try await client.health()
+        return RemoteHealth(healthy: health.healthy, version: health.version, backendType: .opencode)
+    }
+    
+    public func listSessions() async throws -> [RemoteSession] {
+        let sessions = try await client.listSessions()
+        return sessions.map { RemoteSession(id: $0.id, title: $0.title, directory: $0.directory, updatedAt: $0.updatedAt, backendType: .opencode) }
+    }
+    
+    public func createSession(title: String) async throws -> RemoteSession {
+        let remote = try await client.createSession(title: title)
+        return RemoteSession(id: remote.id, title: remote.title, directory: remote.directory, updatedAt: remote.updatedAt, backendType: .opencode)
+    }
+    
+    public func deleteSession(sessionID: String) async throws {
+        try await client.deleteSession(sessionID: sessionID)
+    }
+    
+    public func renameSession(sessionID: String, title: String) async throws {
+        try await client.renameSession(sessionID: sessionID, title: title)
+    }
+    
+    public func sendPrompt(sessionID: String, text: String, agent: String?, modelProvider: String?, modelID: String?) async throws {
+        let provider = modelProvider
+        var modelID = modelID
+        if let provider, let raw = modelID, raw.hasPrefix("\(provider)/") {
+            modelID = String(raw.dropFirst(provider.count + 1))
+        }
+        
+        if let provider, let modelID {
+            try await client.sendPromptAsyncWithModel(
+                sessionID: currentSessionIDStorage!,
+                text: text,
+                agent: agent,
+                modelProvider: provider,
+                modelID: modelID
+            )
+        } else {
+            try await client.sendPromptAsync(
+                sessionID: currentSessionIDStorage!,
+                text: text,
+                agent: agent
+            )
+        }
+    }
+    
+    public func abort(sessionID: String) async throws {
+        try await client.abort(sessionID: sessionID)
+    }
+    
+    public func replyPermission(sessionID: String, permissionID: String, response: String) async throws {
+        try await client.replyPermission(sessionID: sessionID, permissionID: permissionID, response: response)
+    }
+    
+    public func messages(sessionID: String) async throws -> [RemoteMessage] {
+        let messages = try await client.messages(sessionID: sessionID)
+        return messages.map { msg in
+            RemoteMessage(role: msg.role, id: msg.id, parts: msg.parts.map { part in
+                RemotePart(
+                    id: part.id,
+                    messageID: part.messageID,
+                    kind: Self.mapPartKind(part.kind),
+                    text: part.text,
+                    tool: part.tool,
+                    callID: part.callID,
+                    status: part.status,
+                    input: part.input,
+                    output: part.output,
+                    error: part.error
+                )
+            })
+        }
+    }
+    
+    public func events() -> AsyncThrowingStream<RemoteEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let stream = await client.events()
+                    for try await event in stream {
+                        let mapped: RemoteEvent
+                        switch event {
+                        case .connected:
+                            mapped = .connected
+                        case .part(let part):
+                            mapped = .part(RemotePart(
+                                id: part.id,
+                                messageID: part.messageID,
+                                kind: Self.mapPartKind(part.kind),
+                                text: part.text,
+                                tool: part.tool,
+                                callID: part.callID,
+                                status: part.status,
+                                input: part.input,
+                                output: part.output,
+                                error: part.error
+                            ))
+                        case .partDelta(let sessionID, let partID, let field, let delta):
+                            mapped = .partDelta(partID: partID, delta: delta)
+                        case .messageRole(let messageID, let role):
+                            mapped = .messageRole(messageID: messageID, role: role)
+                        case .permission(let perm):
+                            mapped = .permission(RemotePermission(
+                                id: perm.id, sessionID: perm.sessionID, title: perm.title,
+                                type: perm.type, metadata: perm.metadata
+                            ))
+                        case .sessionIdle(let id):
+                            mapped = .sessionIdle(id)
+                        case .sessionError(let msg):
+                            mapped = .sessionError(msg)
+                        case .other(let type):
+                            mapped = .other(type)
+                        }
+                        continuation.yield(mapped)
+                    }
+                    continuation.finish()
+                } catch is CancellationError {
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+    
+    private nonisolated static func mapPartKind(_ kind: OpenCodeRemotePart.Kind) -> RemotePart.Kind {
+        switch kind {
+        case .text: return .text
+        case .reasoning: return .reasoning
+        case .tool: return .tool
+        case .other: return .other
+        }
+    }
+    
+    public func listFiles(path: String) async throws -> [RemoteFileNode] {
+        let files = try await client.listFiles(path: path)
+        return files.map { RemoteFileNode(name: $0.name, path: $0.path, absolutePath: $0.absolutePath, isDirectory: $0.isDirectory, type: $0.type, ignored: $0.ignored) }
+    }
+    
+    public func fileContent(path: String) async throws -> RemoteFileContent {
+        let content = try await client.fileContent(path: path)
+        return RemoteFileContent(path: content.path, type: content.type, content: content.content, mimeType: content.mimeType, encoding: content.encoding)
+    }
+    
+    public func runShell(sessionID: String, command: String, agent: String?, workdir: String?) async throws -> ShellResult {
+        let result = try await client.runShell(sessionID: sessionID, command: command, agent: agent)
+        return ShellResult(
+            sessionID: result.sessionID,
+            messageID: result.messageID,
+            parts: result.parts.map { RemotePart(
+                id: $0.id, messageID: $0.messageID,
+                kind: Self.mapPartKind($0.kind),
                 text: $0.text, tool: $0.tool, callID: $0.callID,
                 status: $0.status, input: $0.input, output: $0.output, error: $0.error
             )}
@@ -254,19 +459,7 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
     private var currentSessionIDStorage: String?
     private var connectionStatusStorage = "connected"
     
-    private var eventContinuation: AsyncStream<WorkbenchEvent>.Continuation?
-    public let eventStream: AsyncStream<WorkbenchEvent>
-    private let eventQueue: AsyncStream<WorkbenchEvent>
-    
-    public init(pairing: OpenCodePairing) {
-        self.pairing = pairing
-        self.client = OpenCodeRemoteClient(pairing: pairing)
-        
-        var continuation: AsyncStream<WorkbenchEvent>.Continuation?
-        self.eventStream = AsyncStream { continuation = $0 }
-        self.eventContinuation = continuation
-        self.eventQueue = eventStream
-    }
+    // MARK: - WorkbenchBackend protocol
     
     public var connectionStatus: String {
         get async { connectionStatusStorage }
@@ -608,12 +801,12 @@ public final class OpenCodeRemoteBackend: WorkbenchBackend, RemoteBackend {
         eventContinuation?.yield(.disconnected(error.localizedDescription))
         eventContinuation?.yield(.sessionError(error.localizedDescription))
     }
-
+    
     private func handleStreamEnded() async {
         connectionStatusStorage = "disconnected"
         eventContinuation?.yield(.disconnected("Event stream ended"))
     }
-
+    
     private func partKind(_ part: OpenCodeRemotePart, role: String?) -> String {
         switch part.kind {
         case .text:
