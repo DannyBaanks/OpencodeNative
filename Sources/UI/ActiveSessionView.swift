@@ -6,6 +6,14 @@ public struct ActiveSessionView: View {
     @State private var showDisconnectConfirm = false
     
     public init() {}
+
+    private var isCodexRemote: Bool {
+        store.backendMode == .remote && sessionState.selectedModel?.route == "codex"
+    }
+
+    private var availableSurfaces: [WorkSurface] {
+        isCodexRemote ? [.chat] : WorkSurface.allCases
+    }
     
     // El switch vive en un @ViewBuilder propio: `Group { switch ... }` choca
     // con el overload `Group.init<R, C>(@TableColumnBuilder)` del iOS 26 SDK,
@@ -47,19 +55,19 @@ public struct ActiveSessionView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .animation(.easeInOut(duration: 0.18), value: sessionState.activeSurface)
 
-            if store.backendMode == .remote && sessionState.selectedModel?.route == "codex" {
-                Text("Experimental · Tailscale/VPN · chat and approvals only")
-                    .font(OCTypography.metaMono)
-                    .foregroundColor(OCColor.warning)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            if isCodexRemote {
+                CodexCapabilityNotice()
                     .padding(.horizontal, OCSpacing.contentMargin)
+                    .padding(.bottom, OCSpacing.sm)
             }
-            WorkSurfaceSwitcher(
-                selectedSurface: $sessionState.activeSurface,
-                surfaces: store.backendMode == .remote && sessionState.selectedModel?.route == "codex" ? [.chat] : WorkSurface.allCases
-            )
+            if availableSurfaces.count > 1 {
+                WorkSurfaceSwitcher(
+                    selectedSurface: $sessionState.activeSurface,
+                    surfaces: availableSurfaces
+                )
                 .padding(.horizontal, OCSpacing.contentMargin)
                 .padding(.vertical, OCSpacing.xs)
+            }
 
             ComposerView()
         }
@@ -925,5 +933,40 @@ struct WorkSurfaceSwitcher: View {
                 .contentShape(Rectangle())
             }
         }
+    }
+}
+
+private struct CodexCapabilityNotice: View {
+    var body: some View {
+        HStack(spacing: OCSpacing.sm) {
+            Image(systemName: "sparkle")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(OCColor.warning)
+
+            Text("EXPERIMENTAL")
+                .font(OCTypography.controlMono)
+                .foregroundColor(OCColor.warning)
+
+            Text("·")
+                .foregroundColor(OCColor.textFaint)
+
+            Text("Chat + approvals only")
+                .font(OCTypography.metaMono)
+                .foregroundColor(OCColor.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, OCSpacing.md)
+        .padding(.vertical, OCSpacing.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            Capsule()
+                .fill(OCColor.bgBase)
+                .overlay(Capsule().stroke(OCColor.warning.opacity(0.18), lineWidth: 1))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Experimental Codex connection. Chat and approvals only.")
     }
 }

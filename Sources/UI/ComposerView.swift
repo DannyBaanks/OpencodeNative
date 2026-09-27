@@ -25,7 +25,7 @@ public struct ComposerView: View {
                 // Input text
                 ZStack(alignment: .topLeading) {
                     if sessionState.composerText.isEmpty {
-                        Text(sessionState.isProcessing ? "" : "Ask OpenCode…")
+                        Text(sessionState.isProcessing ? "" : composerPlaceholder)
                             .font(OCTypography.body)
                             .foregroundColor(OCColor.textFaint)
                             .padding(.horizontal, OCSpacing.base)
@@ -100,6 +100,10 @@ public struct ComposerView: View {
 
     private var canSend: Bool {
         !sessionState.composerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var composerPlaceholder: String {
+        sessionState.selectedModel?.route == "codex" ? "Message Codex…" : "Ask OpenCode…"
     }
 }
 
