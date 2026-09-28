@@ -48,6 +48,48 @@ public final class WorkbenchStore: ObservableObject {
     private var streamPartKinds: [String: String] = [:]
     
     public init() {}
+
+    #if targetEnvironment(simulator)
+    /// Deterministic, non-personal UI data for screenshots captured by CI.
+    /// Production builds and normal Simulator launches never enter this path.
+    public func prepareReadmeScreenshot(_ scene: String) {
+        guard ["projects", "sessions", "chat"].contains(scene) else { return }
+        let project = Project(
+            id: "readme-project",
+            name: "mi-web-app · ejemplo",
+            path: "Ejemplo / mi-web-app",
+            avatarColor: IysThemePreferences.active.accent,
+            sessionCount: 3
+        )
+        let examples = [
+            Session(id: "readme-session-1", projectId: project.id, title: "Crear tarjeta de producto",
+                    lastEventSummary: "Componente SwiftUI y archivo nuevo", agentMode: .build),
+            Session(id: "readme-session-2", projectId: project.id, title: "Revisar cambios",
+                    lastEventSummary: "Comparar y aprobar edición", agentMode: .build),
+            Session(id: "readme-session-3", projectId: project.id, title: "Explorar el proyecto",
+                    lastEventSummary: "Archivos y estructura", agentMode: .build)
+        ]
+        projects = [project]
+        sessions = examples
+        backendMode = .native
+        connectionHealth = .connected
+        connectionStatus = "Vista de ejemplo para README"
+        sandboxUsesLiveModel = true
+        sessionState.currentProject = scene == "projects" ? nil : project
+        sessionState.currentSession = scene == "chat" ? examples[0] : nil
+        sessionState.activeSurface = .chat
+        sessionState.clearTimeline()
+        if scene == "chat" {
+            sessionState.timelineEvents = [
+                .userPrompt("Crea una tarjeta de producto en SwiftUI y guarda el archivo.", agentMode: .build),
+                .assistantText("Preparé el componente y dejé el archivo listo para revisar.", agentMode: .build),
+                .toolCall(name: "write_file", arguments: ["path": "ProductCard.swift"], state: .success, agentMode: .build),
+                .codeBlock(language: "swift", content: "struct ProductCard: View {\n    var body: some View {\n        Text(\"Nuevo producto\")\n    }\n}", fileName: "ProductCard.swift", agentMode: .build),
+                .assistantText("Puedes abrir Archivos para ver el resultado.", agentMode: .build)
+            ]
+        }
+    }
+    #endif
     
     public func connectRemote(_ rawPairingLink: String) async {
         do {

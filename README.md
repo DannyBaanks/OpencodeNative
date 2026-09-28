@@ -1,49 +1,67 @@
-# iSyCode Móvil para iPhone
+# iSyCode Móvil
 
-### Tu entorno de desarrollo y tus agentes, en el bolsillo.
+### Tus proyectos y tus agentes, contigo en el iPhone.
 
-iSyCode Móvil es una app nativa para iPhone que se conecta a herramientas de desarrollo que ya corren en tu computadora. También incluye un sandbox Swift para probar agentes y trabajar con archivos que tú le concedas desde **Archivos**.
+**iSyCode Móvil forma parte de la familia iSyCode.** La TUI de iSyCode para computadora, que estamos preparando para publicar en estos días, será el centro de ejecución: iniciará el host, descubrirá los runtimes instalados y gestionará sesiones y permisos. Esta app es su compañero nativo para iPhone: conecta, muestra conversaciones y te permite responder desde donde estés.
 
-> **En corto:** el iPhone muestra el chat, el streaming y las aprobaciones; el runtime conectado ejecuta el trabajo. El sandbox local es otra opción para experimentar directamente en el teléfono.
+Hoy también puedes usar el **sandbox del iPhone** para explorar la interfaz sin computadora, o conectarte mediante los puentes disponibles de OpenCode y Codex. El host integrado de la futura TUI ya tiene emparejamiento v1; las sesiones remotas mediante ese host siguen en desarrollo.
 
 [![iOS Build](https://github.com/DannyBaanks/iSyCodeMovil/actions/workflows/ios-build.yml/badge.svg?branch=main)](https://github.com/DannyBaanks/iSyCodeMovil/actions/workflows/ios-build.yml)
-[Descargar para iPhone](#instalar-en-tu-iphone) · [Conectar OpenCode](#conectar-opencode) · [Qué puede hacer](#qué-puedes-hacer)
+[Instalar en iPhone](#instalar-en-iphone) · [Ver la app](#la-app-por-dentro) · [Conectar una computadora](#conectar-una-computadora) · [La familia iSyCode](#la-familia-isycode)
 
 ---
 
-## Así se ve
+## La app por dentro
 
-Esta pantalla de inicio se captura automáticamente en un **iPhone Simulator de GitHub Actions** con datos limpios; no es una captura de un dispositivo personal. Desde aquí puedes conectar un host o abrir la tarjeta **Entorno de prueba** para entrar al sandbox.
+Estas pantallas salen de la app compilada en el **iPhone Simulator de GitHub Actions**. Las vistas de proyectos, sesiones y chat usan datos de ejemplo creados solo para las capturas. No contienen conversaciones ni claves de un teléfono personal.
 
-![Pantalla de conexión y acceso al sandbox, generada por CI](docs/screenshots/connect.png)
+| Conectar | Proyectos |
+| :---: | :---: |
+| <img src="docs/screenshots/connect.png" alt="Pantalla de conexión de iSyCode Móvil" width="320"> | <img src="docs/screenshots/projects.png" alt="Lista de proyectos de ejemplo" width="320"> |
+| **Empareja tu entorno o abre el sandbox.** | **Encuentra tu espacio de trabajo.** |
 
-El workflow genera la captura y la publica como el artefacto **IysCodeMovil-ci-screenshots**.
+| Sesiones | Conversación |
+| :---: | :---: |
+| <img src="docs/screenshots/sessions.png" alt="Sesiones de ejemplo" width="320"> | <img src="docs/screenshots/chat.png" alt="Chat de ejemplo con acción de archivo" width="320"> |
+| **Retoma cada tarea donde quedó.** | **Distingue mensajes, acciones y resultados.** |
+
+El workflow también publica las cuatro imágenes como artefacto **IysCodeMovil-ci-screenshots**.
 
 ---
 
-## Empieza en tres pasos
+## Instalar en iPhone
 
-### 1. Descarga la app
+La app todavía se distribuye desde GitHub Actions mientras preparamos una forma de instalación más sencilla:
 
 1. Abre [Actions → iOS Build](https://github.com/DannyBaanks/iSyCodeMovil/actions/workflows/ios-build.yml).
 2. Entra a la última corrida verde de `main`.
-3. En **Artifacts**, descarga `IysCodeMovil-unsigned` y extrae el `.ipa`.
+3. En **Artifacts**, descarga **IysCodeMovil-unsigned** y extrae el archivo IPA.
+4. Fírmalo e instálalo con tu Apple ID mediante [iloader](https://iloader.app/), [SideStore](https://sidestore.io/) o [AltStore](https://altstore.io/).
 
-El CI compila una app sin firmar. Para instalarla en un iPhone, fírmala con tu Apple ID usando [iloader](https://iloader.app/), [SideStore](https://sidestore.io/) o [AltStore](https://altstore.io/). Con una cuenta Apple gratuita, la firma suele caducar a los siete días; vuelve a firmar la app cuando iOS lo pida.
+El CI entrega una **IPA sin firmar**. Con una cuenta Apple gratuita, la firma suele caducar a los siete días; vuelve a firmar la app cuando iOS lo pida.
 
-### 2. Elige cómo conectarte
+## Elige cómo empezar
 
-- **Una computadora con OpenCode:** usa el Bridge de abajo y pega en la app el enlace `iyscodemovil://...` que imprime.
-- **Una computadora con Codex:** usa el modo experimental de Codex por Tailscale; revisa sus límites en [Conectar Codex](docs/REMOTE.md#experimental-codex-app-server).
-- **Probar en el iPhone:** en la pantalla de conexión elige **Usar sandbox**. No requiere emparejamiento ni una clave para abrir el demo offline.
+| Quiero… | Empiezo por… |
+| --- | --- |
+| Conocer la app sin computadora | **Entorno de prueba → ver el guion de demo**. Es una sesión offline y no requiere clave. |
+| Trabajar con OpenCode en mi computadora | Ejecutar el Bridge y pegar el enlace que muestra. |
+| Conversar con Codex desde el móvil | Usar la conexión experimental por Tailscale, con las funciones descritas en la [guía remota](docs/REMOTE.md#experimental-codex-app-server). |
+| Emparejar con el host de iSyCode | Usar la dirección del host y el PIN de seis dígitos. Hoy permite conexión e inventario; la ejecución de sesiones llegará con la TUI. |
 
-### 3. Empieza a trabajar
+En el chat puedes seguir la conversación, distinguir las acciones del agente y responder a solicitudes de permiso. En el sandbox local, el agente empieza en el espacio privado de la app; tú decides si además le concedes una carpeta desde Archivos.
 
-Abre una sesión, escribe un mensaje y sigue la respuesta en el chat. En los runtimes remotos, los comandos, cambios de archivos y permisos los administra el runtime de la computadora. En el sandbox, el acceso empieza dentro del contenedor de iOS; puedes conceder una carpeta desde Archivos.
+## La familia iSyCode
+
+**iSyCode** es la experiencia de escritorio y el sustrato que estamos preparando para publicar en estos días. Su TUI arranca el host, detecta las herramientas instaladas en la computadora y aplica los permisos del usuario. **iSyCode Móvil** es la vista de bolsillo de ese ecosistema: empareja el iPhone, presenta sesiones y transmite tus decisiones al host.
+
+El trabajo para unirlos avanza por etapas. El contrato **Host v1** ya contempla estado, PIN temporal, credencial guardada en el llavero e inventario de runtimes. La creación de sesiones, el streaming y las aprobaciones a través de ese host todavía están pendientes. Mientras tanto, el Bridge de OpenCode y la conexión experimental de Codex siguen disponibles.
 
 ---
 
-## Conectar OpenCode
+## Conectar una computadora
+
+### OpenCode, disponible hoy
 
 Necesitas Node.js 18 o posterior, OpenCode instalado en la computadora y el iPhone en una red que pueda alcanzar esa computadora.
 
@@ -53,15 +71,11 @@ En una terminal, entra a la carpeta del proyecto que quieres abrir y ejecuta:
 npx --yes github:DannyBaanks/IysCodeMovil#main link
 ```
 
-El Bridge inicia `opencode serve`, genera una credencial temporal y muestra un enlace de emparejamiento. Copia el enlace completo y pégalo en iSyCode Móvil. Mantén el proceso del Bridge abierto mientras uses la sesión.
+El Bridge inicia `opencode serve`, genera una credencial temporal y muestra un enlace de emparejamiento. Copia el enlace completo, abre **Conectar con Bridge anterior** en la app y pégalo allí. Mantén el proceso abierto mientras uses la sesión.
 
-Para conectar OpenISy en vez de OpenCode:
+### Codex, experimental
 
-```bash
-npx --yes github:DannyBaanks/IysCodeMovil#main link \
-  --runtime openisy \
-  --openisy-root "/ruta/a/OpenISy"
-```
+Codex App Server permite chat y aprobaciones desde el iPhone dentro de un perfil experimental. La [guía de conexión remota](docs/REMOTE.md#experimental-codex-app-server) explica el emparejamiento, el transporte por Tailscale y sus límites actuales.
 
 ### ¿Estás fuera de casa?
 
@@ -91,23 +105,20 @@ Para empezar, abre **Proveedores** en el selector del sandbox, elige un proveedo
 
 ---
 
-## Qué está listo y qué sigue experimental
+## Qué puedes hacer hoy
 
-| Conexión | Estado | Qué ofrece |
+| Experiencia | Estado | Incluye |
 | --- | --- | --- |
-| Sandbox local | Disponible | Agente Swift, archivos dentro del contenedor o una carpeta concedida, catálogo de API providers y permisos por operación. |
-| OpenCode remoto | Disponible | Sesiones reales, streaming, historial, ejecución remota y solicitudes de permiso de OpenCode. |
-| OpenISy remoto | Disponible mediante Bridge | Usa el contrato compatible con el servidor headless de OpenCode. |
-| Codex App Server | Experimental | Chat, streaming, continuidad de thread e interrupt; solo cubre el perfil descrito en la guía. |
-| Crush, Claude Code, Gemini CLI | No disponibles como runtimes remotos | Hay nombres/adaptadores planificados, pero no se deben tratar como conectores funcionales todavía. |
-| Host móvil `/v1` | Emparejamiento y estado básicos | El contrato actual cubre health, pairing, heartbeat e inventario; todavía no ofrece sesiones remotas ni MCP. |
-| Servidor MCP de ChatGPT | No disponible aún | Requiere un endpoint remoto y un contrato del host; la app iOS no puede instalarlo por sí sola. |
+| **Sandbox en el iPhone** | Disponible | Demo sin conexión, agente Swift, modelos con clave API, archivos privados o carpeta elegida en Archivos y aprobación de cambios. |
+| **OpenCode en tu computadora** | Disponible mediante Bridge | Conversaciones, historial, streaming, acciones y permisos del runtime de escritorio. |
+| **Codex en tu computadora** | Experimental | Chat, streaming e interrupción dentro del perfil de [Codex App Server](docs/REMOTE.md#experimental-codex-app-server). |
+| **Host de la TUI iSyCode** | En desarrollo | El emparejamiento y el inventario v1 ya existen; sesiones y streaming por este host llegarán con la integración de escritorio. |
 
-### Límites de iOS
+La compatibilidad con más runtimes, las acciones nativas del iPhone y la integración MCP avanzan por hitos. Puedes seguir el [roadmap de herramientas](docs/ROADMAP_CLIS.md) y la [propuesta de MCP](docs/CHATGPT_MCP.md).
 
-El TUI real de OpenCode no corre dentro del iPhone: iOS no ofrece el PTY/TTY, `spawn/exec` ni Bun que necesita. La app es una interfaz nativa para runtimes que corren en una computadora, además de un runtime Swift propio para el sandbox local. No puede leer los datos privados de otras apps ni automatizar libremente sus pantallas.
+### ¿Puede el agente usar todo mi iPhone?
 
-Más detalle con evidencia: [compatibilidad de OpenCode en iOS](docs/OPENCODE_COMPAT.md) · [limitaciones de iOS](docs/IOS_LIMITATIONS.md).
+El sandbox empieza en los archivos privados de iSyCode Móvil. Solo ve una carpeta externa si la eliges en Archivos. Las demás funciones del teléfono dependen de los permisos y superficies oficiales de iOS; la app no puede leer datos privados de otras apps ni controlar libremente sus pantallas. [Ver límites de iOS](docs/IOS_LIMITATIONS.md).
 
 ---
 
@@ -119,12 +130,15 @@ Más detalle con evidencia: [compatibilidad de OpenCode en iOS](docs/OPENCODE_CO
 | El enlace no abre la app | Copia el enlace completo `iyscodemovil://...`; si hace falta, pégalo en la pantalla de conexión. |
 | `Rate limited` | El proveedor rechazó temporalmente llamadas por cuota o frecuencia. Espera el tiempo indicado, revisa la cuota de esa API y evita reenviar el mismo mensaje varias veces. |
 | La app no instala | Revisa que el IPA esté firmado y que confiaste en tu Apple ID en Ajustes → General → VPN y administración de dispositivos. |
-| El sandbox no ve mi carpeta | Selecciónala desde el picker de Archivos dentro de la app. iOS no permite navegar libremente por todas las carpetas del teléfono. |
+| El sandbox no ve mi carpeta | Selecciónala desde Archivos dentro de la app. Si iOS revocó un permiso anterior, el sandbox abre su espacio privado y te pide volver a elegir la carpeta en Ajustes. |
 | Codex muestra `initialize` o desconecta | Asegúrate de usar una versión de Codex compatible con el perfil del Bridge. Detalles y límites: [guía experimental de Codex](docs/REMOTE.md#experimental-codex-app-server). |
 
 ---
 
-## Compilar desde el código
+<details>
+<summary>Para desarrolladores: compilar desde el código</summary>
+
+<br>
 
 Necesitas macOS, Xcode y [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
@@ -144,13 +158,13 @@ xcodebuild -scheme IysCodeMovil \
 
 Cada push a `main` compila la app, corre las pruebas en iOS Simulator y genera capturas de las pantallas para este README.
 
----
+</details>
 
-## Para contribuir
+## Documentación y comunidad
 
 - [Roadmap de runtimes CLI](docs/ROADMAP_CLIS.md)
 - [Uso detallado](docs/USAGE.md)
-- [Contrato del Bridge remoto](docs/REMOTE.md)
+- [Conexión y transporte](docs/REMOTE.md)
 - [Reporte de compatibilidad](docs/OPENCODE_COMPAT.md)
 
 El proyecto está bajo licencia MIT; consulta [LICENSE](LICENSE). iSyCode Móvil no está afiliado con OpenCode, Codex, Anthropic, Google, xAI, NVIDIA, OpenRouter ni OpenAI.

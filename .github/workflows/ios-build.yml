@@ -180,6 +180,13 @@ jobs:
           sleep 4
           xcrun simctl io "$UDID" screenshot docs/screenshots/connect.png
           sips -Z 1600 docs/screenshots/connect.png
+          for SCENE in projects sessions chat; do
+            xcrun simctl terminate "$UDID" dev.iyscode.movil || true
+            xcrun simctl launch "$UDID" dev.iyscode.movil "--readme-screenshot=$SCENE"
+            sleep 3
+            xcrun simctl io "$UDID" screenshot "docs/screenshots/$SCENE.png"
+            sips -Z 1600 "docs/screenshots/$SCENE.png"
+          done
 
       - name: Upload README screenshots
         uses: actions/upload-artifact@v4

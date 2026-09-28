@@ -48,6 +48,13 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OCColor.bgDeep.ignoresSafeArea())
         .task {
+            #if targetEnvironment(simulator)
+            if let screenshotArgument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--readme-screenshot=") }) {
+                let scene = String(screenshotArgument.dropFirst("--readme-screenshot=".count))
+                store.prepareReadmeScreenshot(scene)
+                return
+            }
+            #endif
             await hostStore.restore()
             await hostStore.setAppActive(scenePhase == .active)
             consumePendingAppIntent()
