@@ -241,24 +241,37 @@ public final class WorkbenchStore: ObservableObject {
         do {
             await currentBackend?.stopEventStream()
             await currentBackend?.disconnect()
+            currentBackend = nil
             let bookmarkText: String?
             if forceOfflineDemo {
                 bookmarkText = nil
             } else {
                 bookmarkText = try await KeychainHelper.shared.load(key: "sandbox.authorizedFolderBookmark")
             }
-            let bookmark = bookmarkText.flatMap { Data(base64Encoded: $0) }
-            if bookmarkText != nil && bookmark == nil {
-                throw WorkspaceError.permissionDenied("The saved Files permission could not be read. Choose the folder again.")
+            var bookmark = bookmarkText.flatMap { Data(base64Encoded: $0) }
+            var expiredFolderGrant = bookmarkText != nil && bookmark == nil
+            if let savedBookmark = bookmark {
+                do {
+                    _ = try IOSWorkspace(securityScopedBookmark: savedBookmark)
+                } catch {
+                    bookmark = nil
+                    expiredFolderGrant = true
+                }
             }
             let backend = WorkbenchBackendFactory.makeNativeBackend(
                 workspaceBookmark: bookmark,
                 forceOfflineDemo: forceOfflineDemo
             )
+            try await backend.useNativeRuntime()
             currentBackend = backend
             backendMode = .native
-            
-            try await backend.useNativeRuntime()
+
+            if expiredFolderGrant {
+                try? await KeychainHelper.shared.delete(key: "sandbox.authorizedFolderBookmark")
+                UserDefaults.standard.removeObject(forKey: "sandbox.authorizedFolderName")
+                sandboxFolderName = nil
+                sandboxFolderError = "iOS ya no permite abrir la carpeta anterior. El sandbox usa su espacio privado; puedes elegir la carpeta otra vez en Ajustes."
+            }
             
             projects = try await backend.listProjects()
             if let project = projects.first {
@@ -268,6 +281,9 @@ public final class WorkbenchStore: ObservableObject {
             }
             
             connectionStatus = await backend.connectionStatus
+            if expiredFolderGrant {
+                connectionStatus += " · carpeta de Archivos revocada; usando espacio privado"
+            }
             connectionHealth = .connected
             sandboxSetupError = nil
             sandboxUsesLiveModel = backend.usesLiveModel
@@ -309,8 +325,8 @@ public final class WorkbenchStore: ObservableObject {
         sandboxFolderName = url.lastPathComponent
         if backendMode == .native {
             await useNativeRuntime()
-            guard connectionHealth == .connected else {
-                throw WorkspaceError.permissionDenied(connectionStatus)
+            guard connectionHealth == .connected, sandboxFolderName != nil else {
+                throw WorkspaceError.permissionDenied(sandboxFolderError ?? connectionStatus)
             }
         }
     }
