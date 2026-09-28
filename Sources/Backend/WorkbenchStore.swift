@@ -53,7 +53,7 @@ public final class WorkbenchStore: ObservableObject {
     /// Deterministic, non-personal UI data for screenshots captured by CI.
     /// Production builds and normal Simulator launches never enter this path.
     public func prepareReadmeScreenshot(_ scene: String) {
-        guard ["projects", "sessions", "chat"].contains(scene) else { return }
+        guard ["projects", "chat"].contains(scene) else { return }
         let project = Project(
             id: "readme-project",
             name: "mi-web-app · ejemplo",
@@ -77,6 +77,7 @@ public final class WorkbenchStore: ObservableObject {
         sandboxUsesLiveModel = true
         sessionState.currentProject = scene == "projects" ? nil : project
         sessionState.currentSession = scene == "chat" ? examples[0] : nil
+        sessionState.selectedModel = ModelInfo(name: "Demo visual", provider: "iSyCode", isLocal: true, route: "native")
         sessionState.activeSurface = .chat
         sessionState.clearTimeline()
         if scene == "chat" {

@@ -4,6 +4,7 @@ import SwiftUI
 
 public struct ComposerView: View {
     @EnvironmentObject private var sessionState: ActiveSessionState
+    @EnvironmentObject private var store: WorkbenchStore
     @FocusState private var isFocused: Bool
 
     public init() {}
@@ -103,7 +104,8 @@ public struct ComposerView: View {
     }
 
     private var composerPlaceholder: String {
-        sessionState.selectedModel?.route == "codex" ? "Message Codex…" : "Ask OpenCode…"
+        if store.backendMode == .native { return "Escribe a iSyCode…" }
+        return sessionState.selectedModel?.route == "codex" ? "Message Codex…" : "Ask OpenCode…"
     }
 }
 

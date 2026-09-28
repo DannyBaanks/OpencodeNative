@@ -1,35 +1,50 @@
-# iSyCode Móvil
+# iSyCode Móvil — parte de la familia iSyCode
 
 ### Tus proyectos y tus agentes, contigo en el iPhone.
 
-**iSyCode Móvil forma parte de la familia iSyCode.** La TUI de iSyCode para computadora, que estamos preparando para publicar en estos días, será el centro de ejecución: iniciará el host, descubrirá los runtimes instalados y gestionará sesiones y permisos. Esta app es su compañero nativo para iPhone: conecta, muestra conversaciones y te permite responder desde donde estés.
+## ¿Qué es esto?
 
-Hoy también puedes usar el **sandbox del iPhone** para explorar la interfaz sin computadora, o conectarte mediante los puentes disponibles de OpenCode y Codex. El host integrado de la futura TUI ya tiene emparejamiento v1; las sesiones remotas mediante ese host siguen en desarrollo.
+Imagina que dejaste una tarea corriendo en tu computadora y saliste de casa. Abres iSyCode Móvil, vuelves a la conversación, ves qué hizo el agente y respondes si necesita un permiso. Si quieres experimentar sin escritorio, abres el sandbox del propio iPhone.
+
+**Esta app es el compañero móvil de iSyCode.** La TUI de iSyCode para computadora, que estamos preparando para publicar en estos días, será el centro de la familia: arrancará el host, encontrará tus runtimes y gestionará sesiones y permisos. Móvil pone esa experiencia en una interfaz nativa que puedes llevar contigo.
+
+| En tu iPhone | Qué haces |
+| --- | --- |
+| 💬 **Conversaciones claras** | Distingues tus mensajes, respuestas del agente, herramientas y resultados. |
+| 📁 **Proyectos y sesiones** | Encuentras una tarea y retomas su historial. |
+| ✋ **Decisiones tuyas** | Respondes a los permisos que solicite el runtime conectado. |
+| 🧪 **Sandbox local** | Pruebas un agente Swift con archivos privados del iPhone o una carpeta que tú elijas. |
+| 🎨 **Tu estilo** | Eliges entre los temas Consola y Premium; hay espacio para más temas. |
+
+Hoy puedes conectarte mediante los puentes de OpenCode y Codex, o usar el sandbox local. El host integrado de la futura TUI ya tiene emparejamiento v1; sus sesiones remotas siguen en desarrollo.
 
 [![iOS Build](https://github.com/DannyBaanks/iSyCodeMovil/actions/workflows/ios-build.yml/badge.svg?branch=main)](https://github.com/DannyBaanks/iSyCodeMovil/actions/workflows/ios-build.yml)
 [Instalar en iPhone](#instalar-en-iphone) · [Ver la app](#la-app-por-dentro) · [Conectar una computadora](#conectar-una-computadora) · [La familia iSyCode](#la-familia-isycode)
 
 ---
 
-## La app por dentro
+<a id="la-app-por-dentro"></a>
 
-Estas pantallas salen de la app compilada en el **iPhone Simulator de GitHub Actions**. Las vistas de proyectos, sesiones y chat usan datos de ejemplo creados solo para las capturas. No contienen conversaciones ni claves de un teléfono personal.
+## 📸 La app por dentro
 
-| Conectar | Proyectos |
-| :---: | :---: |
-| <img src="docs/screenshots/connect.png" alt="Pantalla de conexión de iSyCode Móvil" width="320"> | <img src="docs/screenshots/projects.png" alt="Lista de proyectos de ejemplo" width="320"> |
-| **Empareja tu entorno o abre el sandbox.** | **Encuentra tu espacio de trabajo.** |
+Estas pantallas salen de la app compilada en el **iPhone Simulator de GitHub Actions**. Proyectos y chat usan datos de ejemplo creados solo para las capturas. No contienen conversaciones ni claves de un teléfono personal.
 
-| Sesiones | Conversación |
-| :---: | :---: |
-| <img src="docs/screenshots/sessions.png" alt="Sesiones de ejemplo" width="320"> | <img src="docs/screenshots/chat.png" alt="Chat de ejemplo con acción de archivo" width="320"> |
-| **Retoma cada tarea donde quedó.** | **Distingue mensajes, acciones y resultados.** |
+| Conectar | Proyectos | Conversación |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/connect.png" alt="Pantalla de conexión de iSyCode Móvil" width="280"> | <img src="docs/screenshots/projects.png" alt="Lista de proyectos de ejemplo" width="280"> | <img src="docs/screenshots/chat.png" alt="Chat de ejemplo con acción de archivo" width="280"> |
+| **Empareja o prueba.** | **Encuentra tu espacio.** | **Sigue cada acción.** |
 
-El workflow también publica las cuatro imágenes como artefacto **IysCodeMovil-ci-screenshots**.
+El workflow también publica estas imágenes como artefacto **IysCodeMovil-ci-screenshots**.
 
 ---
 
-## Instalar en iPhone
+## 🚀 Empieza en 3 pasos
+
+1. **Instala iSyCode Móvil.** Descarga la IPA de CI y fírmala con tu Apple ID. Los pasos están justo abajo.
+2. **Elige una puerta de entrada.** Prueba el demo offline en **Entorno de prueba**, o conecta OpenCode/Codex desde tu computadora.
+3. **Abre un proyecto y conversa.** Entra a una sesión, mira las acciones del agente y responde cuando pida permiso.
+
+### Instalar en iPhone
 
 La app todavía se distribuye desde GitHub Actions mientras preparamos una forma de instalación más sencilla:
 
@@ -40,7 +55,17 @@ La app todavía se distribuye desde GitHub Actions mientras preparamos una forma
 
 El CI entrega una **IPA sin firmar**. Con una cuenta Apple gratuita, la firma suele caducar a los siete días; vuelve a firmar la app cuando iOS lo pida.
 
-## Elige cómo empezar
+## 🗺️ Cómo se usa
+
+| Pantalla | Para qué sirve |
+| --- | --- |
+| **Conectar** | Escribes el PIN del host de iSyCode, pegas un enlace del Bridge o abres el sandbox local. |
+| **Proyectos** | Eliges el espacio de trabajo que quieres consultar. |
+| **Sesiones** | Retomas una tarea o comienzas otra. |
+| **Chat** | Hablas con el agente y ves por separado mensajes, herramientas y resultados. |
+| **Archivos y revisión** | Exploras los archivos disponibles y revisas los cambios que el runtime expone. |
+
+### ¿Qué conexión elijo?
 
 | Quiero… | Empiezo por… |
 | --- | --- |
@@ -85,7 +110,7 @@ Detalles y transporte: [guía de conexión remota](docs/REMOTE.md).
 
 ---
 
-## Sandbox del iPhone
+## 🧪 Sandbox del iPhone
 
 El sandbox ejecuta un agente Swift nativo en el contenedor privado de iOS. Puedes:
 
@@ -105,7 +130,7 @@ Para empezar, abre **Proveedores** en el selector del sandbox, elige un proveedo
 
 ---
 
-## Qué puedes hacer hoy
+## ✅ Qué puedes hacer hoy
 
 | Experiencia | Estado | Incluye |
 | --- | --- | --- |
@@ -122,7 +147,7 @@ El sandbox empieza en los archivos privados de iSyCode Móvil. Solo ve una carpe
 
 ---
 
-## Si algo no funciona
+## 🆘 Si algo no jala
 
 | Lo que ves | Qué revisar |
 | --- | --- |
@@ -160,7 +185,7 @@ Cada push a `main` compila la app, corre las pruebas en iOS Simulator y genera c
 
 </details>
 
-## Documentación y comunidad
+## 📚 Documentación y comunidad
 
 - [Roadmap de runtimes CLI](docs/ROADMAP_CLIS.md)
 - [Uso detallado](docs/USAGE.md)
