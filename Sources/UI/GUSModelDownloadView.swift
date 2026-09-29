@@ -2,6 +2,9 @@ import SwiftUI
 
 public struct GUSModelDownloadView: View {
     @ObservedObject private var manager: GUSModelDownloadManager
+    @EnvironmentObject private var store: WorkbenchStore
+    @State private var dualSmolEnabled = GUSDualModelExperimentSettings.isEnabled
+    @State private var isApplyingDualSmol = false
     @State private var modelPendingDeletion: String?
 
     public init(manager: GUSModelDownloadManager = .shared) { self.manager = manager }
@@ -21,6 +24,8 @@ public struct GUSModelDownloadView: View {
             ForEach(GUSModelManifest.all) { manifest in
                 modelCard(manifest)
             }
+
+            dualSmolControls
         }
         .padding(12)
         .background(OCColor.bgBase)
@@ -36,7 +41,69 @@ public struct GUSModelDownloadView: View {
         } message: {
             Text("Se eliminará solo este modelo del iPhone. Los demás modelos se conservarán.")
         }
-        .task { await manager.refresh() }
+        .task {
+            await manager.refresh()
+            dualSmolEnabled = GUSDualModelExperimentSettings.isEnabled
+        }
+    }
+
+    private var dualSmolControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("Dual-Smol · experimental", isOn: $dualSmolEnabled)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .disabled(!bothDualModelsReady && !dualSmolEnabled)
+
+            Text("Smol solo clasifica; Qwen sigue respondiendo. Es experimental y no garantiza estabilidad ni menor uso de memoria.")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !bothDualModelsReady {
+                let missing = [GUSModelManifest.qwen25Q4KM, GUSModelManifest.smolLM2Q4KM]
+                    .filter { !isModelReady($0.id) }
+                    .map(\.modelName)
+                    .joined(separator: " · ")
+                Text("Falta descargar y verificar: \(missing). Usa los botones de descarga de arriba.")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button {
+                Task {
+                    isApplyingDualSmol = true
+                    _ = await store.setDualSmolEnabled(dualSmolEnabled)
+                    dualSmolEnabled = GUSDualModelExperimentSettings.isEnabled
+                    isApplyingDualSmol = false
+                }
+            } label: {
+                HStack {
+                    if isApplyingDualSmol { ProgressView().tint(.white) }
+                    Text(dualSmolEnabled ? "Aplicar Dual-Smol" : "Desactivar y liberar Smol")
+                    Spacer()
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityHint(dualSmolEnabled
+                ? "Carga secuencialmente Qwen y Smol en el sandbox. Qwen seguirá respondiendo."
+                : "Descarga Smol de memoria; conserva el GGUF verificado en el dispositivo.")
+            .disabled(isApplyingDualSmol || (dualSmolEnabled && !bothDualModelsReady))
+        }
+        .padding(10)
+        .background(OCColor.bgDeep)
+        .overlay(RoundedRectangle(cornerRadius: 7).stroke(IysThemePreferences.active.accent.opacity(0.28), lineWidth: 1))
+    }
+
+    private var bothDualModelsReady: Bool {
+        isModelReady(GUSModelManifest.qwen25Q4KM.id) && isModelReady(GUSModelManifest.smolLM2Q4KM.id)
+    }
+
+    private func isModelReady(_ modelID: String) -> Bool {
+        guard case .ready? = manager.state(for: modelID) else { return false }
+        return manager.modelURL(id: modelID) != nil
     }
 
     @ViewBuilder

@@ -1,6 +1,6 @@
 # GUS Smol Auxiliary Experiment
 
-**Status:** Design approved in conversation; awaiting review of this written spec.
+**Status:** Approved for experimental implementation; physical-device validation still pending.
 
 ## Goal
 
@@ -40,19 +40,23 @@ the experiment off. Do not silently switch to another installed model.
 
 ### Runtime flow
 
-1. Qwen and Smol use separate `GUSLocalModelProvider`/inference-engine
-   instances and the existing verified model URLs/manifests.
-2. For each user turn, the coordinator gives Smol only the new user message and
-   the minimum bounded context needed for intent classification. It does not
-   pass the full conversation history, tools, file contents, credentials, or
-   capability catalog.
+1. Qwen uses the existing `GUSLocalModelProvider`. Smol uses a dedicated
+   internal auxiliary runner backed by its own `LlamaCppInferenceEngine` and
+   the existing verified Smol URL/manifest. The runner bypasses the normal GUS
+   provider prompt/tool wrapper so it cannot receive authority instructions or
+   tool formatting.
+2. For each user turn, the coordinator gives Smol only one fixed classifier
+   instruction and the latest user message. It does not pass the full
+   conversation history, tool schemas, capability catalog, file contents,
+   credentials, or GUS authority/policy instructions.
 3. Smol must return a strict, compact JSON object containing only integer
    `version: 1` and one fixed `intent` enum (`greeting`, `question`, `task`,
    `ambiguous`, `other`). The UTF-8 response is capped at 96 bytes and
    generation at 32 tokens. No free-form plan or tool call is accepted.
 4. Swift validates the complete response, schema, enum, and output length. It
-   also detects repeated output. Malformed, oversized, repetitive, cancelled,
-   or timed-out results are discarded.
+   also detects repeated output. Malformed, oversized, repetitive, or timed-out
+   results are discarded. A user cancellation cancels the whole turn; Smol is
+   not allowed to continue Qwen after the user has stopped the request.
 5. Qwen receives the normal conversation plus the validated intent as an
    explicitly untrusted hint. Qwen remains responsible for the user-facing
    answer. The normal Swift permission and tool path remains authoritative.
@@ -69,14 +73,15 @@ validation remains necessary.
 
 ### Safety and privacy boundaries
 
-- Smol receives no tool definitions and cannot emit executable tool requests.
+- Smol's dedicated runner receives no GUS authority/policy instructions or
+  tool definitions and cannot emit executable tool requests.
 - The intent hint cannot grant, deny, or broaden a permission, select a
   workspace, authorize a mutation, or claim an operation completed.
 - No shell, process, arbitrary network, or additional filesystem access is
   added.
-- Inputs and outputs stay on-device. Diagnostics contain status, duration,
-  output length, schema/repetition failure category, and model IDs only; they
-  do not persist prompt or response text.
+- Inputs and outputs stay on-device. Diagnostics contain fixed status
+  categories only; they do not persist prompt, response text, raw output length,
+  or tool data.
 - Turning the experiment off cancels in-flight auxiliary work and releases the
   Smol engine. Qwen-only operation remains available.
 
@@ -84,9 +89,11 @@ validation remains necessary.
 
 - Smol load failure: leave the experiment unavailable, retain Qwen-only use,
   and show a concise error.
-- Smol generation timeout, cancellation, malformed JSON, unsupported schema,
-  repeated output, or output over the hard cap: discard the hint and continue
-  with Qwen-only input for that turn; surface the reason without raw model text.
+- Smol generation timeout, malformed JSON, unsupported schema, repeated
+  output, or output over the hard cap: discard the hint and continue with
+  Qwen-only input for that turn; surface the reason without raw model text.
+  Explicit user cancellation stops the complete turn and unload/reload cleanup
+  remains responsible for releasing the engines.
 - Qwen failure: preserve the existing GUS error behavior; Smol does not answer
   as a fallback.
 - App restart: do not assume both models are resident. Recheck verified files

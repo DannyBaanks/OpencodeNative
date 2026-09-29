@@ -13,6 +13,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     private var providerID = "scripted"
     private var providerDisplay = "Scripted Demo"
     private var providerModelIDs = ["scripted-1"]
+    public private(set) var isDualSmolActive = false
     public var usesLiveModel: Bool { providerID != "scripted" }
     private var liveAnswerID: String?
     private var toolExecutor: NativeCapabilityToolExecutor?
@@ -104,6 +105,47 @@ public final class NativeSwiftBackend: WorkbenchBackend {
                   let modelURL = modelDownloadManager.selectedModelURL else {
                 throw ModelProviderError.notConfigured("Descarga y selecciona un modelo GUS verificado desde la pantalla sandbox.")
             }
+
+            if GUSDualModelExperimentSettings.isEnabled {
+                let qwenManifest = GUSModelManifest.qwen25Q4KM
+                let smolManifest = GUSModelManifest.smolLM2Q4KM
+                guard let qwenURL = modelDownloadManager.modelURL(id: qwenManifest.id),
+                      let smolURL = modelDownloadManager.modelURL(id: smolManifest.id) else {
+                    try await installSingleLocalModel(manifest: manifest, modelURL: modelURL)
+                    connectionStatusStorage += " · Smol unavailable; single-model fallback"
+                    eventContinuation?.yield(.auxiliaryModelStatus(.unavailable))
+                    return
+                }
+
+                let qwen = GUSLocalModelProvider(modelURL: qwenURL, manifest: qwenManifest)
+                let smol = GUSAuxiliaryModelRunner(modelURL: smolURL)
+                do {
+                    try await qwen.load(contextTokens: 2048)
+                    try await smol.load()
+                    let coordinator = GUSDualModelCoordinator(qwen: qwen, smol: smol) { [weak self] status in
+                        await self?.sendWorkbenchEvent(.auxiliaryModelStatus(status))
+                    }
+                    modelProvider = coordinator
+                    activeModelName = coordinator.availableModels.first
+                    providerID = coordinator.id
+                    providerDisplay = coordinator.name
+                    providerModelIDs = coordinator.availableModels
+                    isDualSmolActive = true
+                    agentLoop = nil
+                    boundSessionID = nil
+                    connectionStatusStorage = "sandbox · GUS local · Dual-Smol experimental · Qwen2.5-0.5B + SmolLM2-360M · 2K · sin conexión de proveedor"
+                    eventContinuation?.yield(.auxiliaryModelStatus(.active))
+                    return
+                } catch {
+                    await smol.unload()
+                    await qwen.unload()
+                    try await installSingleLocalModel(manifest: manifest, modelURL: modelURL)
+                    connectionStatusStorage += " · Smol unavailable; single-model fallback"
+                    eventContinuation?.yield(.auxiliaryModelStatus(.unavailable))
+                    return
+                }
+            }
+
             let provider = GUSLocalModelProvider(modelURL: modelURL, manifest: manifest)
             try await provider.load(contextTokens: 2048)
             modelProvider = provider
@@ -111,6 +153,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             providerID = provider.id
             providerDisplay = provider.name
             providerModelIDs = provider.availableModels
+            isDualSmolActive = false
             agentLoop = nil
             boundSessionID = nil
             connectionStatusStorage = "sandbox · GUS local · \(manifest.modelName) · 2K · sin conexión de proveedor"
@@ -135,11 +178,18 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         let activeTask = runningTask
         runningTask = nil
         failPendingPermissions()
-        await activeTask?.value
-        if let localProvider = modelProvider as? GUSLocalModelProvider {
+        if let dualProvider = modelProvider as? GUSDualModelCoordinator {
+            await dualProvider.cancel()
+        } else if let localProvider = modelProvider as? GUSLocalModelProvider {
             await localProvider.cancel()
+        }
+        await activeTask?.value
+        if let dualProvider = modelProvider as? GUSDualModelCoordinator {
+            await dualProvider.unload()
+        } else if let localProvider = modelProvider as? GUSLocalModelProvider {
             await localProvider.unload()
         }
+        isDualSmolActive = false
         agentLoop = nil
         modelProvider = nil
         activeModelName = nil
@@ -153,6 +203,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         providerID = "scripted"
         providerDisplay = "Scripted Demo"
         providerModelIDs = provider.availableModels
+        isDualSmolActive = false
         agentLoop = nil
         boundSessionID = nil
         connectionStatusStorage = "sandbox · offline demo. No API key or network required."
@@ -175,6 +226,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         providerID = id
         providerDisplay = display
         providerModelIDs = models
+        isDualSmolActive = false
         agentLoop = nil
         boundSessionID = nil
         connectionStatusStorage = "sandbox · \(activeModelName ?? fallback)"
@@ -338,7 +390,26 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         failPendingPermissions()
         runningTask?.cancel()
         runningTask = nil
+        if let dualProvider = modelProvider as? GUSDualModelCoordinator {
+            await dualProvider.cancel()
+        } else if let localProvider = modelProvider as? GUSLocalModelProvider {
+            await localProvider.cancel()
+        }
         eventContinuation?.yield(.sessionError("Stopped"))
+    }
+
+    private func installSingleLocalModel(manifest: GUSModelManifest, modelURL: URL) async throws {
+        let provider = GUSLocalModelProvider(modelURL: modelURL, manifest: manifest)
+        try await provider.load(contextTokens: 2048)
+        modelProvider = provider
+        activeModelName = provider.availableModels.first
+        providerID = provider.id
+        providerDisplay = provider.name
+        providerModelIDs = provider.availableModels
+        isDualSmolActive = false
+        agentLoop = nil
+        boundSessionID = nil
+        connectionStatusStorage = "sandbox · GUS local · \(manifest.modelName) · 2K · sin conexión de proveedor"
     }
     
     public func replyPermission(requestID: String, decision: PermissionResponse.Decision) async throws {

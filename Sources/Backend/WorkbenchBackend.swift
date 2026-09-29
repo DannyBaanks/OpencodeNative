@@ -75,6 +75,7 @@ public enum WorkbenchEvent: Sendable {
     case filesChanged
     case agentModeChanged(AgentMode)
     case modelChanged(ModelInfo?)
+    case auxiliaryModelStatus(GUSDualModelStatus)
 }
 
 public protocol WorkbenchBackend: Sendable {
