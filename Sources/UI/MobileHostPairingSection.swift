@@ -70,7 +70,7 @@ public struct MobileHostPairingSection: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             inputField(icon: "network") {
-                TextField("https://host:8765", text: $hostURL)
+                TextField("https://host/isycode", text: $hostURL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
@@ -115,7 +115,7 @@ public struct MobileHostPairingSection: View {
             HStack(alignment: .top, spacing: 7) {
                 Image(systemName: "lock.shield")
                     .foregroundColor(accent)
-                Text("Usa una dirección accesible desde este iPhone. Los hosts remotos requieren HTTPS de confianza.")
+                Text("Puedes incluir una ruta base como /isycode. Los hosts remotos requieren HTTPS de confianza.")
                     .foregroundColor(OCColor.textFaint)
             }
             .font(.system(size: 10, design: .monospaced))
