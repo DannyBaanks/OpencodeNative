@@ -129,18 +129,28 @@ public final class GUSModelDownloadManager: ObservableObject {
     public let manifest: GUSModelManifest
     private let transfer: any GUSModelTransfer
     private let modelDirectory: URL
+    private let legacyModelDirectory: URL?
     private let permitsFixtureManifest: Bool
     private var downloadTask: Task<Void, Never>?
 
     public convenience init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        self.init(manifest: .qwen15Q4KM, transfer: URLSessionGUSModelTransfer(), modelDirectory: support.appendingPathComponent("GUS/Models", isDirectory: true), permitsFixtureManifest: false)
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        self.init(
+            manifest: .qwen15Q4KM,
+            transfer: URLSessionGUSModelTransfer(),
+            modelDirectory: documents.appendingPathComponent("ISyCode/GUS/Models", isDirectory: true),
+            legacyModelDirectory: support.appendingPathComponent("GUS/Models", isDirectory: true),
+            permitsFixtureManifest: false
+        )
     }
 
-    init(manifest: GUSModelManifest, transfer: any GUSModelTransfer, modelDirectory: URL, permitsFixtureManifest: Bool = true) {
+    init(manifest: GUSModelManifest, transfer: any GUSModelTransfer, modelDirectory: URL,
+         legacyModelDirectory: URL? = nil, permitsFixtureManifest: Bool = true) {
         self.manifest = manifest
         self.transfer = transfer
         self.modelDirectory = modelDirectory
+        self.legacyModelDirectory = legacyModelDirectory
         self.permitsFixtureManifest = permitsFixtureManifest
     }
 
@@ -154,21 +164,34 @@ public final class GUSModelDownloadManager: ObservableObject {
         // Do not replace its progress state with `notDownloaded` mid-transfer.
         guard downloadTask == nil else { return }
         let installed = modelDirectory.appendingPathComponent(manifest.filename)
-        guard FileManager.default.fileExists(atPath: installed.path) else {
-            state = .notDownloaded
-            return
+        if FileManager.default.fileExists(atPath: installed.path) {
+            await verifyAndAdopt(installed)
+            if installedModelURL != nil { return }
         }
-        state = .verifying
-        do {
-            try await verify(installed)
-            try excludeFromBackup(installed)
-            state = .ready(installed)
-        } catch let error as GUSModelDownloadError {
-            try? FileManager.default.removeItem(at: installed)
-            state = .failed(error)
-        } catch {
-            state = .failed(.fileSystem(error.localizedDescription))
+
+        // Migrate a model installed by earlier app versions from private
+        // Application Support into the user-visible Files folder, but only
+        // after rechecking its pinned size and digest.
+        if let legacyModelDirectory {
+            let legacy = legacyModelDirectory.appendingPathComponent(manifest.filename)
+            if FileManager.default.fileExists(atPath: legacy.path) {
+                state = .verifying
+                do {
+                    try await verify(legacy)
+                    try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
+                    try FileManager.default.moveItem(at: legacy, to: installed)
+                    try excludeFromBackup(installed)
+                    state = .ready(installed)
+                } catch let error as GUSModelDownloadError {
+                    try? FileManager.default.removeItem(at: legacy)
+                    state = .failed(error)
+                } catch {
+                    state = .failed(.fileSystem(error.localizedDescription))
+                }
+                return
+            }
         }
+        state = .notDownloaded
     }
 
     public func startDownload() async {
@@ -194,6 +217,9 @@ public final class GUSModelDownloadManager: ObservableObject {
         cancelDownload()
         let installed = modelDirectory.appendingPathComponent(manifest.filename)
         try? FileManager.default.removeItem(at: installed)
+        if let legacyModelDirectory {
+            try? FileManager.default.removeItem(at: legacyModelDirectory.appendingPathComponent(manifest.filename))
+        }
         state = .notDownloaded
     }
 
@@ -279,6 +305,20 @@ public final class GUSModelDownloadManager: ObservableObject {
             throw GUSModelDownloadError.wrongSize(expected: manifest.byteCount, actual: result.0)
         }
         guard result.1 == manifest.sha256.lowercased() else { throw GUSModelDownloadError.wrongDigest }
+    }
+
+    private func verifyAndAdopt(_ installed: URL) async {
+        state = .verifying
+        do {
+            try await verify(installed)
+            try excludeFromBackup(installed)
+            state = .ready(installed)
+        } catch let error as GUSModelDownloadError {
+            try? FileManager.default.removeItem(at: installed)
+            state = .failed(error)
+        } catch {
+            state = .failed(.fileSystem(error.localizedDescription))
+        }
     }
 
     private func excludeFromBackup(_ file: URL) throws {

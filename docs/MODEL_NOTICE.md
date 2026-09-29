@@ -15,9 +15,12 @@ ISyCode Móvil can optionally download one model directly to the user's device:
 
 The model weights are not part of this repository, app bundle, IPA, or CI
 artifact. The app downloads only this pinned file after the user taps the
-download button, checks the exact byte count and SHA-256, and stores it in its
-private app container. A different model cannot be selected or imported through
-this feature.
+download button, checks the exact byte count and SHA-256, and stores it under
+`Files > On My iPhone > ISyCode Móvil > ISyCode/GUS/Models`. On launch, the app
+looks for the pinned file and verifies it again before making it available. A
+model already stored by an earlier version is moved to this folder only after
+the same size and SHA-256 checks. A different model cannot be selected or
+imported through this feature.
 
 ## Required attribution
 

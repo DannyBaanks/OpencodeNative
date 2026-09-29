@@ -17,7 +17,7 @@ public struct GUSModelDownloadView: View {
                         .font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
                 }
             }
-            Text("Descarga opcional y manual. El modelo se guarda en el iPhone, fuera del IPA. En modo local, tus mensajes no se envían a un proveedor.")
+            Text("Descarga opcional y manual. Se guarda fuera del IPA en Archivos → En mi iPhone → ISyCode Móvil → ISyCode/GUS/Models y se verifica al abrir. En modo local, tus mensajes no se envían a un proveedor.")
                 .font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
             Text("Versión inicial de GUS: solo orientación. No ejecuta herramientas ni modifica archivos.")
                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
