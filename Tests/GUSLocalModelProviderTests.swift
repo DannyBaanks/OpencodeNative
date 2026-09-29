@@ -22,7 +22,7 @@ final class GUSLocalModelProviderTests: XCTestCase {
         XCTAssertTrue(provider.capabilities.localOnly)
         XCTAssertFalse(provider.capabilities.toolCalls)
         XCTAssertEqual(provider.id, "gus-local")
-        XCTAssertTrue(provider.capabilities.restrictions.contains { $0.contains("guía") })
+        XCTAssertTrue(provider.capabilities.restrictions.contains { $0.localizedCaseInsensitiveContains("guía") })
 
         let response = try await provider.generate(
             messages: [ModelMessage(role: .user, content: "hola")],

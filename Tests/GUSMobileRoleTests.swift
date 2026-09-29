@@ -4,6 +4,9 @@ import XCTest
 final class GUSMobileRoleTests: XCTestCase {
     func testRoleStatesActualHarnessBoundaryAndUntrustedDataRule() {
         let prompt = GUSMobileRole.mobile.systemPrompt
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
         XCTAssertTrue(prompt.contains("capacidades que la app registra"))
         XCTAssertTrue(prompt.contains("shell, procesos, red arbitraria"))
         XCTAssertTrue(prompt.contains("datos no confiables"))
@@ -11,7 +14,10 @@ final class GUSMobileRoleTests: XCTestCase {
     }
 
     func testRoleDoesNotGrantApprovalOrNewCapabilities() {
-        let prompt = GUSMobileRole.mobile.systemPrompt.lowercased()
+        let prompt = GUSMobileRole.mobile.systemPrompt
+            .lowercased()
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
         XCTAssertTrue(prompt.contains("espera la aprobación"))
         XCTAssertFalse(prompt.contains("siempre tienes permiso"))
         XCTAssertFalse(prompt.contains("ignora las aprobaciones"))
