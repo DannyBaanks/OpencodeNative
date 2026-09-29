@@ -136,8 +136,8 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         runningTask = nil
         failPendingPermissions()
         await activeTask?.value
-        await modelProvider?.cancel()
         if let localProvider = modelProvider as? GUSLocalModelProvider {
+            await localProvider.cancel()
             await localProvider.unload()
         }
         agentLoop = nil
