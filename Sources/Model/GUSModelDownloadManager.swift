@@ -47,8 +47,8 @@ public protocol GUSModelTransfer: Sendable {
 
 private final class BackgroundGUSModelSessionDelegate: NSObject, URLSessionDownloadDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     var onProgress: (@Sendable (String, Int64, Int64) -> Void)?
-    var onDownloaded: (@Sendable (String, URL, @Sendable () -> Void) -> Void)?
-    var onFailure: (@Sendable (String, Error, @Sendable () -> Void) -> Void)?
+    var onDownloaded: (@Sendable (String, URL, @escaping @Sendable () -> Void) -> Void)?
+    var onFailure: (@Sendable (String, Error, @escaping @Sendable () -> Void) -> Void)?
     var onEventsFinished: (() -> Void)?
     private let allowedHosts: Set<String> = ["huggingface.co", "us.aws.cdn.hf.co", "cdn-lfs.huggingface.co", "cas-bridge.xethub.hf.co"]
     private let maximumBytesByID: [String: Int64]
