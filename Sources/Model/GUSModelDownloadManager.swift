@@ -210,10 +210,14 @@ public final class GUSModelDownloadManager: ObservableObject {
                 .volumeAvailableCapacityForImportantUsageKey,
                 .volumeAvailableCapacityKey
             ])
-            let freeBytes = values.volumeAvailableCapacityForImportantUsage
-                ?? values.volumeAvailableCapacity
-                ?? 0
-            let available = Int64(freeBytes)
+            let available: Int64
+            if let importantCapacity = values.volumeAvailableCapacityForImportantUsage {
+                available = importantCapacity
+            } else if let capacity = values.volumeAvailableCapacity {
+                available = Int64(capacity)
+            } else {
+                available = 0
+            }
             let required = manifest.byteCount + 100_000_000
             guard available >= required else {
                 throw GUSModelDownloadError.insufficientStorage(required: required, available: available)
