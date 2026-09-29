@@ -245,6 +245,10 @@ public final class WorkbenchStore: ObservableObject {
             sandboxSetupError = "No reconozco el proveedor seleccionado. Vuelve a elegirlo."
             return false
         }
+        if provider.id == "gus-local", !trimmed.isEmpty {
+            sandboxSetupError = "GUS local no acepta API keys. Elige un proveedor remoto si quieres usar una clave."
+            return false
+        }
 
         do {
             let persistence = try IOSPersistence()

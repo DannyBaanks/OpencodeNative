@@ -1,0 +1,20 @@
+import XCTest
+@testable import IysCodeMovilCore
+
+final class GUSModelSelectionTests: XCTestCase {
+    func testGUSIsSelectableWithoutEnteringAnAPIKey() {
+        let local = SandboxModelProvider.provider(id: "gus-local")
+        XCTAssertEqual(local?.id, "gus-local")
+        XCTAssertTrue(local?.keyPlaceholder.isEmpty == true)
+        XCTAssertEqual(local?.baseURL, "")
+        XCTAssertFalse(SandboxModelProvider.all.contains { $0.id == "gus-local" })
+        XCTAssertTrue(SandboxModelProvider.sandboxOptions.contains { $0.id == "gus-local" })
+    }
+
+    func testLocalProviderNeverLooksLikeARemoteModel() {
+        let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/model.gguf"))
+        XCTAssertTrue(provider.capabilities.localOnly)
+        XCTAssertFalse(provider.capabilities.toolCalls)
+        XCTAssertFalse(provider.capabilities.streaming)
+    }
+}

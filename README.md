@@ -14,6 +14,7 @@ Imagina que dejaste una tarea corriendo en tu computadora y saliste de casa. Abr
 | 📁 **Proyectos y sesiones** | Encuentras una tarea y retomas su historial. |
 | ✋ **Decisiones tuyas** | Respondes a los permisos que solicite el runtime conectado. |
 | 🧪 **Sandbox local** | Pruebas un agente Swift con archivos privados del iPhone o una carpeta que tú elijas. |
+| 🧠 **GUS local (experimental)** | Descarga Qwen Q4_K_M bajo demanda, fuera del IPA; la primera versión es de orientación y no ejecuta herramientas. |
 | 🎨 **Tu estilo** | Eliges entre los temas Consola y Premium; hay espacio para más temas. |
 
 Hoy puedes conectarte mediante los puentes de OpenCode y Codex, o usar el sandbox local. El host integrado de la futura TUI ya tiene emparejamiento v1; sus sesiones remotas siguen en desarrollo.
@@ -128,6 +129,10 @@ El catálogo incluye NVIDIA NIM, xAI, OpenAI API, Google Gemini y OpenRouter. Lo
 
 Para empezar, abre **Proveedores** en el selector del sandbox, elige un proveedor y agrega su clave. La app la conserva en el Keychain de ese iPhone.
 
+También puedes elegir **GUS local · Qwen 1.5**. La app muestra la procedencia y licencia, descarga el GGUF solo cuando tú lo pides y verifica tamaño y SHA-256 antes de instalarlo. El modelo no se incluye en el IPA. Esta primera versión responde localmente como guía; las llamadas a herramientas permanecen desactivadas hasta validar el formato de Qwen 1.5. La licencia del modelo es de uso no comercial. Consulta el [aviso completo y la procedencia](docs/MODEL_NOTICE.md).
+
+GUS requiere **iOS 16.4 o posterior**, por el mínimo del runtime iOS de llama.cpp. El IPA de CI sigue sin firmar y requiere una instalación autorizada.
+
 ---
 
 ## ✅ Qué puedes hacer hoy
@@ -169,6 +174,8 @@ Necesitas macOS, Xcode y [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```bash
 brew install xcodegen
+brew install cmake
+bash scripts/build-llama-xcframework.sh
 xcodegen generate
 open IysCodeMovil.xcodeproj
 ```

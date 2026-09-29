@@ -467,11 +467,13 @@ struct SandboxKeySheet: View {
     @State private var isStarting = false
     @State private var selectedProviderID = "nvidia"
     @State private var showProviderDirectory = false
+    @StateObject private var gusModelManager = GUSModelDownloadManager.shared
     @FocusState private var fieldFocused: Bool
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
                 Spacer(minLength: 28)
                 Text("sandbox")
                     .font(.system(size: 24, weight: .semibold, design: .monospaced))
@@ -499,14 +501,16 @@ struct SandboxKeySheet: View {
                     .padding(.bottom, 8)
 
                 Picker("Proveedor", selection: $selectedProviderID) {
-                    ForEach(SandboxModelProvider.all) { provider in
+                    ForEach(SandboxModelProvider.sandboxOptions) { provider in
                         Text(provider.name).tag(provider.id)
                     }
                 }
                 .tint(IysThemePreferences.active.accent)
                 .padding(.bottom, 12)
 
-                if let provider = SandboxModelProvider.provider(id: selectedProviderID) {
+                if selectedProviderID == "gus-local" {
+                    GUSModelDownloadView(manager: gusModelManager)
+                } else if let provider = SandboxModelProvider.provider(id: selectedProviderID) {
                     Text(provider.description)
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(Color.white.opacity(0.55))
@@ -545,7 +549,9 @@ struct SandboxKeySheet: View {
                     }
                 } label: {
                     HStack {
-                        Text(isStarting ? "abriendo sandbox..." : (hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "entrar con la clave guardada" : "guardar y entrar"))
+                        Text(isStarting ? "abriendo sandbox..." : (selectedProviderID == "gus-local"
+                            ? "usar GUS local"
+                            : (hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "entrar con la clave guardada" : "guardar y entrar")))
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
                         Spacer()
                         Text("↵")
@@ -557,8 +563,8 @@ struct SandboxKeySheet: View {
                     .background(IysThemePreferences.active.accent)
                 }
                 .buttonStyle(.plain)
-                .disabled(isStarting || (!hasKey && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
-                .opacity((isStarting || hasKey || !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? 1 : 0.5)
+                .disabled(!canStartSandbox)
+                .opacity(canStartSandbox || isStarting ? 1 : 0.5)
                 .padding(.top, 12)
 
                 if let error = store.sandboxSetupError {
@@ -594,8 +600,9 @@ struct SandboxKeySheet: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 18)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.horizontal, 18)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
             .background(OCColor.bgDeep.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -615,11 +622,18 @@ struct SandboxKeySheet: View {
     }
 
     private func refreshProviderKeyState() {
+        guard selectedProviderID != "gus-local" else { hasKey = false; return }
         Task {
             if let persistence = try? IOSPersistence() {
                 let saved = try? await persistence.loadAPIKey(provider: selectedProviderID)
                 hasKey = !(saved ?? "").isEmpty
             }
         }
+    }
+
+    private var canStartSandbox: Bool {
+        guard !isStarting else { return false }
+        if selectedProviderID == "gus-local" { return gusModelManager.installedModelURL != nil }
+        return hasKey || !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

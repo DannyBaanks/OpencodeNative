@@ -115,6 +115,9 @@ final class NativeCapabilityBrokerTests: XCTestCase {
 
     func testSandboxProviderDirectoryContainsOnlyConfiguredOpenAICompatibleAdapters() {
         XCTAssertEqual(SandboxModelProvider.all.map(\.id), ["nvidia", "xai", "openai", "gemini", "openrouter"])
+        XCTAssertEqual(SandboxModelProvider.sandboxOptions.first?.id, "gus-local")
+        XCTAssertEqual(SandboxModelProvider.provider(id: "gus-local")?.baseURL, "")
+        XCTAssertTrue(SandboxModelProvider.provider(id: "gus-local")?.keyPlaceholder.isEmpty == true)
         XCTAssertEqual(SandboxModelProvider.provider(id: "nvidia")?.baseURL, "https://integrate.api.nvidia.com/v1")
         XCTAssertEqual(SandboxModelProvider.provider(id: "gemini")?.baseURL,
                        "https://generativelanguage.googleapis.com/v1beta/openai")

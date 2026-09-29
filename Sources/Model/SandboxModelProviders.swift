@@ -11,6 +11,13 @@ public struct SandboxModelProvider: Identifiable, Sendable, Equatable {
     public let apiKeyURL: URL
     public let supportsGoogleOAuth: Bool
 
+    public static let gusLocal = SandboxModelProvider(
+        id: "gus-local", name: "GUS local · Qwen 1.5",
+        description: "Modelo Qwen fijado y ejecutado en este iPhone. No requiere API key ni envía prompts a un proveedor remoto.",
+        keyPlaceholder: "", baseURL: "", preferredModels: ["qwen1.5-1.8b-chat-q4_k_m"], fallbackModel: "qwen1.5-1.8b-chat-q4_k_m",
+        apiKeyURL: URL(string: "https://huggingface.co/Qwen/Qwen1.5-1.8B-Chat-GGUF/tree/07800fcba6d5d1df3dfa36e3763374a2c0d9f91b")!
+    )
+
     public static let all: [SandboxModelProvider] = [
         .init(id: "nvidia", name: "NVIDIA NIM", description: "Modelos NVIDIA y modelos abiertos servidos por NIM.",
               keyPlaceholder: "nvapi-…", baseURL: "https://integrate.api.nvidia.com/v1",
@@ -34,6 +41,8 @@ public struct SandboxModelProvider: Identifiable, Sendable, Equatable {
               apiKeyURL: URL(string: "https://openrouter.ai/keys")!)
     ]
 
+    public static var sandboxOptions: [SandboxModelProvider] { [gusLocal] + all }
+
     public init(id: String, name: String, description: String, keyPlaceholder: String,
                 baseURL: String, preferredModels: [String], fallbackModel: String,
                 apiKeyURL: URL, supportsGoogleOAuth: Bool = false) {
@@ -49,7 +58,8 @@ public struct SandboxModelProvider: Identifiable, Sendable, Equatable {
     }
 
     public static func provider(id: String) -> SandboxModelProvider? {
-        all.first { $0.id == id }
+        if id == gusLocal.id { return gusLocal }
+        return all.first { $0.id == id }
     }
 }
 

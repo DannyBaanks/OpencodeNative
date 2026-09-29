@@ -15,11 +15,11 @@ struct ProviderDirectoryView: View {
                             Text(provider.description)
                                 .font(OCTypography.meta)
                                 .foregroundStyle(OCColor.textFaint)
-                            Text("API compatible · clave en Keychain")
+                            Text(provider.id == "gus-local" ? "En el dispositivo · sin API key" : "API compatible · clave en Keychain")
                                 .font(OCTypography.metaMono)
                                 .foregroundStyle(IysThemePreferences.active.accent)
                             Link(destination: provider.apiKeyURL) {
-                                Label("Obtener API key", systemImage: "arrow.up.right.square")
+                                Label(provider.id == "gus-local" ? "Ver el archivo fijado" : "Obtener API key", systemImage: "arrow.up.right.square")
                                     .font(.system(size: 12, weight: .medium))
                             }
                         }

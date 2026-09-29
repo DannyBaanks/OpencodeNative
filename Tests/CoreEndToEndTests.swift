@@ -214,6 +214,41 @@ final class AgentEndToEndTests: XCTestCase {
 
         _ = try await loop.run(userInput: "demo")
         XCTAssertTrue(denied)
+        let fileExistsWithoutHandler = await ws.fileExists(at: "notes.txt")
+        XCTAssertFalse(fileExistsWithoutHandler, "a missing approval handler must not mutate files")
+    }
+
+    func testDeniedApprovalLeavesWorkspaceUnchanged() async throws {
+        let rootName = "e2e_denied_\(UUID().uuidString)"
+        let ws = try IOSWorkspace(rootName: rootName)
+        let rootURL = await ws.rootURL
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
+        let exec = FileSystemToolExecutor(workspace: ws)
+        let ctx = AgentContext(
+            conversationId: UUID().uuidString,
+            workspace: ws,
+            persistence: try IOSPersistence(),
+            modelProvider: provider,
+            toolExecutor: exec,
+            systemPrompt: "test",
+            maxTurns: 15,
+            permissionHandler: { request in
+                PermissionResponse(requestId: request.id, decision: .deny)
+            }
+        )
+        let loop = AgentLoop(context: ctx)
+        var asked = 0
+        await loop.setEventHandler { event in
+            if case .permissionRequested = event { asked += 1 }
+        }
+
+        _ = try await loop.run(userInput: "write a disposable note")
+
+        XCTAssertGreaterThan(asked, 0)
+        let fileExistsAfterDenial = await ws.fileExists(at: "notes.txt")
+        XCTAssertFalse(fileExistsAfterDenial, "denial must leave the workspace unchanged")
     }
     func testConversationContinuesAcrossMultipleUserPrompts() async throws {
         let rootName = "e2e_continuity_\(UUID().uuidString)"

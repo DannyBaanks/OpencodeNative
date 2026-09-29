@@ -56,8 +56,10 @@ public enum WorkbenchBackendFactory {
     
     /// Crea un backend nativo (sandbox local)
     @MainActor
-    public static func makeNativeBackend(workspaceBookmark: Data? = nil, forceOfflineDemo: Bool = false) -> WorkbenchBackend {
-        NativeSwiftBackend(workspaceBookmark: workspaceBookmark, forceOfflineDemo: forceOfflineDemo)
+    public static func makeNativeBackend(workspaceBookmark: Data? = nil, forceOfflineDemo: Bool = false,
+                                         modelDownloadManager: GUSModelDownloadManager = .shared) -> WorkbenchBackend {
+        NativeSwiftBackend(workspaceBookmark: workspaceBookmark, forceOfflineDemo: forceOfflineDemo,
+                           modelDownloadManager: modelDownloadManager)
     }
     
     /// Crea un backend demo/fixture para testing

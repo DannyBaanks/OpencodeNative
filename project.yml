@@ -2,14 +2,14 @@ name: IysCodeMovil
 options:
   bundleIdPrefix: dev.iyscode
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "16.4"
   createIntermediateGroups: true
 
 settings:
   base:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1,2"
-    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.4"
     PRODUCT_NAME: IysCodeMovil
     GENERATE_INFOPLIST_FILE: NO
     CURRENT_PROJECT_VERSION: "1"
@@ -33,6 +33,10 @@ targets:
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         SKIP_INSTALL: YES
+    dependencies:
+      - framework: .build/llama/llama.xcframework
+        embed: false
+        codeSign: false
 
   IysCodeMovil:
     type: application
@@ -47,6 +51,9 @@ targets:
         type: folder
     dependencies:
       - target: IysCodeMovilCore
+      - framework: .build/llama/llama.xcframework
+        embed: true
+        codeSign: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.iyscode.movil
@@ -65,6 +72,9 @@ targets:
         type: group
     dependencies:
       - target: IysCodeMovilCore
+      - framework: .build/llama/llama.xcframework
+        embed: false
+        codeSign: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.iyscode.movil.tests
