@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   SCHEME: IysCodeMovil
 
@@ -345,3 +348,68 @@ jobs:
           name: IysCodeMovil-signed
           path: IysCodeMovil-signed.ipa
           retention-days: 30
+
+  release:
+    name: Publish GitHub pre-release
+    runs-on: ubuntu-latest
+    needs: [build, test, sign]
+    # Publish one pre-release for each successful build of main. Manual builds
+    # on feature branches remain CI-only and never create public releases.
+    if: ${{ always() && github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.test.result == 'success' }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download unsigned IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: IysCodeMovil-unsigned
+          path: release-assets
+
+      - name: Download signed IPA when available
+        if: ${{ needs.sign.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: IysCodeMovil-signed
+          path: release-assets
+
+      - name: Prepare checksums and release notes
+        id: release_metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="ci-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          (cd release-assets && sha256sum ./*.ipa > SHA256SUMS.txt)
+          if [[ -f release-assets/IysCodeMovil-signed.ipa ]]; then
+            INSTALL_NOTE="A signed IPA is attached when the repository signing job completed successfully."
+          else
+            INSTALL_NOTE="Only the unsigned IPA is attached; it must be signed through an authorized Apple distribution path before installation."
+          fi
+          cat > release-assets/RELEASE-NOTES.txt <<EOF
+          Automated ISyCode Móvil pre-release from commit ${GITHUB_SHA}.
+
+          - CI run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Source commit: ${GITHUB_SHA}
+          - ${INSTALL_NOTE}
+          - The Qwen GGUF is not included in the IPA. The app downloads the pinned model separately and verifies its SHA-256.
+          - Model provenance and license: docs/MODEL_NOTICE.md in the source repository.
+
+          These builds are pre-releases for testing and are not stable version-numbered releases.
+          EOF
+
+      - name: Publish pre-release with IPA and SHA-256 checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ steps.release_metadata.outputs.tag }}" \
+            release-assets/*.ipa \
+            release-assets/SHA256SUMS.txt \
+            release-assets/RELEASE-NOTES.txt \
+            --target "$GITHUB_SHA" \
+            --title "ISyCode Móvil CI $GITHUB_RUN_NUMBER (${GITHUB_SHA:0:7})" \
+            --notes-file release-assets/RELEASE-NOTES.txt \
+            --prerelease \
+            --latest=false
