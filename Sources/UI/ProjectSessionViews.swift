@@ -647,17 +647,29 @@ struct SettingsSheet: View {
                 
                 Section("Attribution") {
                     HStack {
-                        Text("OpenCode")
+                        Text("ISyCode Móvil")
                         Spacer()
-                        Text("MIT License")
+                        Text("Independent open-source app")
                             .foregroundColor(OCColor.textFaint)
                     }
                     HStack {
-                        Text("IysCodeMovil")
+                        Text("License")
                         Spacer()
-                        Text("Not affiliated with OpenCode")
+                        Text("MIT")
                             .foregroundColor(OCColor.textFaint)
                     }
+                }
+
+                Section("External providers & projects") {
+                    LabeledContent("AI providers", value: "OpenAI · Anthropic · Google · xAI · NVIDIA · OpenRouter")
+                    LabeledContent("Desktop runtime", value: "OpenCode · Codex")
+                    LabeledContent("Local model", value: "Qwen · Hugging Face")
+                    LabeledContent("Inference runtime", value: "llama.cpp")
+
+                    Text("All names and trademarks belong to their respective owners. ISyCode Móvil is an independent client and is not affiliated with or endorsed by these providers or projects. Provider access, terms, model licenses, and charges are set by their respective owners.")
+                        .font(OCTypography.meta)
+                        .foregroundColor(OCColor.textFaint)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .navigationTitle("Settings")
