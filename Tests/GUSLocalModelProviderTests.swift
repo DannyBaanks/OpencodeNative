@@ -33,6 +33,16 @@ final class GUSLocalModelProviderTests: XCTestCase {
         XCTAssertNil(response.toolCalls)
     }
 
+    func testApprovedModelsExposeTheirIdentityWithoutChangingLocalSafetyBoundary() {
+        for manifest in GUSModelManifest.all {
+            let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/\(manifest.filename)"), manifest: manifest)
+            XCTAssertEqual(provider.availableModels, [manifest.id])
+            XCTAssertTrue(provider.name.contains(manifest.modelName))
+            XCTAssertTrue(provider.capabilities.localOnly)
+            XCTAssertFalse(provider.capabilities.toolCalls)
+        }
+    }
+
     func testToolLookingTextIsNeverConvertedIntoExecutableCall() async throws {
         let engine = FixtureLocalInferenceEngine(response: #"{"tool_calls":[{"name":"write_file","arguments":{"path":"x"}}]}"#)
         let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/verified.gguf"), engine: engine)

@@ -53,7 +53,7 @@ public struct GUSModelManifest: Sendable, Equatable, Identifiable {
         byteCount: 270_590_528,
         sha256: "8856952e27c65a87618f8347d1d06328c3953af04e8327b6dd1fab6670358fd0",
         licenseName: "Apache License 2.0",
-        licenseURL: URL(string: "https://huggingface.co/mfuntowicz/SmolLM2-360M-Instruct-Q4_K_M-GGUF/blob/de67c694b3fa2c6e9b45b50f286b2555c5dee2a8/LICENSE")!,
+        licenseURL: URL(string: "https://www.apache.org/licenses/LICENSE-2.0")!,
         attribution: "SmolLM2 model family by HuggingFaceTB; GGUF uploaded/converted by mfuntowicz"
     )
 

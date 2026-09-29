@@ -22,7 +22,7 @@ artifacts = {
         "smollm2-360m-instruct-q4_k_m.gguf", "270_590_528",
         "8856952e27c65a87618f8347d1d06328c3953af04e8327b6dd1fab6670358fd0",
         "mfuntowicz/SmolLM2-360M-Instruct-Q4_K_M-GGUF", "HuggingFaceTB",
-        "mfuntowicz", "Apache License 2.0",
+        "mfuntowicz", "Apache License 2.0", "https://www.apache.org/licenses/LICENSE-2.0",
     ],
 }
 missing = [f"{model_id}: {value}" for model_id, values in artifacts.items()

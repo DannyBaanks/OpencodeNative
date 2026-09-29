@@ -17,4 +17,10 @@ final class GUSModelSelectionTests: XCTestCase {
         XCTAssertFalse(provider.capabilities.toolCalls)
         XCTAssertFalse(provider.capabilities.streaming)
     }
+    func testGUSModelsAreExplicitlyPinnedAndDoNotAddRemoteOptions() {
+        XCTAssertEqual(GUSModelManifest.all.count, 3)
+        XCTAssertTrue(GUSModelManifest.all.allSatisfy { $0.sourceURL.scheme == "https" })
+        XCTAssertFalse(SandboxModelProvider.all.contains { $0.id.hasPrefix("qwen") || $0.id.hasPrefix("smollm") })
+    }
+
 }

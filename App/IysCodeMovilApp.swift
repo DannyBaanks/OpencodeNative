@@ -2,8 +2,18 @@ import SwiftUI
 import UIKit
 import IysCodeMovilCore
 
+@MainActor
+final class GUSBackgroundDownloadAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                 handleEventsForBackgroundURLSession identifier: String,
+       completionHandler: @escaping () -> Void) {
+        GUSModelDownloadManager.shared.handleBackgroundEvents(identifier: identifier, completionHandler: completionHandler)
+    }
+}
+
 @main
 public struct IysCodeMovilApp: App {
+    @UIApplicationDelegateAdaptor(GUSBackgroundDownloadAppDelegate.self) private var appDelegate
     @StateObject private var store = WorkbenchStore()
     @StateObject private var hostStore = MobileHostStore()
 

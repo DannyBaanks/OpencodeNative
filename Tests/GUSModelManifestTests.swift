@@ -30,6 +30,7 @@ final class GUSModelManifestTests: XCTestCase {
         XCTAssertEqual(smollm.sha256, "8856952e27c65a87618f8347d1d06328c3953af04e8327b6dd1fab6670358fd0")
         XCTAssertEqual(smollm.repository, "mfuntowicz/SmolLM2-360M-Instruct-Q4_K_M-GGUF")
         XCTAssertEqual(smollm.licenseName, "Apache License 2.0")
+        XCTAssertEqual(smollm.licenseURL.host, "www.apache.org")
         XCTAssertTrue(smollm.attribution.contains("HuggingFaceTB"))
         XCTAssertTrue(smollm.attribution.contains("mfuntowicz"))
 

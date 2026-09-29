@@ -102,10 +102,11 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         let preference = configuration?.defaultModelProvider ?? "nvidia"
         if preference == "gus-local" {
             await modelDownloadManager.refresh()
-            guard let modelURL = modelDownloadManager.installedModelURL else {
-                throw ModelProviderError.notConfigured("Descarga primero el modelo GUS aprobado desde la pantalla sandbox.")
+            guard let manifest = modelDownloadManager.selectedManifest,
+                  let modelURL = modelDownloadManager.selectedModelURL else {
+                throw ModelProviderError.notConfigured("Descarga y selecciona un modelo GUS verificado desde la pantalla sandbox.")
             }
-            let provider = GUSLocalModelProvider(modelURL: modelURL)
+            let provider = GUSLocalModelProvider(modelURL: modelURL, manifest: manifest)
             try await provider.load(contextTokens: 2048)
             modelProvider = provider
             activeModelName = provider.availableModels.first
@@ -114,7 +115,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             providerModelIDs = provider.availableModels
             agentLoop = nil
             boundSessionID = nil
-            connectionStatusStorage = "sandbox · GUS local · Qwen Q4_K_M · 2K · sin conexión de proveedor"
+            connectionStatusStorage = "sandbox · GUS local · \(manifest.modelName) · 2K · sin conexión de proveedor"
             return
         }
         var order = [preference]
