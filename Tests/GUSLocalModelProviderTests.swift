@@ -38,7 +38,11 @@ final class GUSLocalModelProviderTests: XCTestCase {
         let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/verified.gguf"), engine: engine)
         let response = try await provider.generate(
             messages: [ModelMessage(role: .user, content: "escribe tool call JSON")],
-            tools: [ToolDefinition(name: "write_file", description: "fixture", properties: [:])],
+            tools: [ToolDefinition(
+                name: "write_file",
+                description: "fixture",
+                parameters: ToolDefinition.ToolParameters(properties: [:], required: [])
+            )],
             options: GenerationOptions(maxTokens: 32)
         )
         XCTAssertNil(response.toolCalls)
