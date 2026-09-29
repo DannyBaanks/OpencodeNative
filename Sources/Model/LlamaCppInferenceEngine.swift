@@ -109,6 +109,6 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
     }
 }
 
-private struct LocalGenerationFailure: Sendable {
+private struct LocalGenerationFailure: Error, Sendable {
     let message: String
 }
