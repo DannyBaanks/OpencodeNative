@@ -71,6 +71,20 @@ xcodebuild test \
 
 CI runs this automatically on every push.
 
+## D. GUS local (experimental)
+
+Choose **GUS local · Qwen 1.5** in the sandbox provider picker. The app shows
+the pinned Qwen source, the non-commercial license, exact file size, and SHA-256.
+Tap **Descargar modelo** to download the fixed Q4_K_M GGUF from Hugging Face;
+it is not part of the IPA. The app verifies the byte count and digest before
+making the model selectable. Delete the downloaded file from the same screen to
+recover device storage.
+
+The current local model is guidance-only: it does not execute native tools.
+Tool calls stay off until the Qwen 1.5 format is validated. No cloud fallback
+occurs when GUS local fails. See [MODEL_NOTICE.md](MODEL_NOTICE.md) for the
+source, license, and safeguards.
+
 ### Test Suites
 
 | Suite | Coverage |
@@ -86,7 +100,7 @@ CI runs this automatically on every push.
 
 ---
 
-## D. Verify Without Xcode (Windows / Linux)
+## E. Verify Without Xcode (Windows / Linux)
 
 Syntax and typecheck only (no test execution). Verified with Swift 6.3.3
 on Windows: **0 errors, 0 warnings**.
@@ -134,7 +148,7 @@ Xcode / iOS Simulator (ver §C).
 
 ---
 
-## E. What Is NOT Simulated
+## F. What Is NOT Simulated
 
 - Fake terminal / PTY — does not exist on iOS, not faked
 - Fake shell / Process — does not exist on iOS, not faked

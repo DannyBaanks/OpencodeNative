@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   SCHEME: IysCodeMovil
 
@@ -12,7 +15,7 @@ jobs:
   build:
     name: Build unsigned IPA
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     
     steps:
       - name: Checkout
@@ -29,9 +32,18 @@ jobs:
           if git grep -n $'\xEF\xBB\xBF' -- '*.swift' ; then
             echo "::warning::UTF-8 BOM detected in Swift sources."
           fi
+
+      - name: Verify pinned GUS model manifest
+        run: python3 scripts/verify-gus-model-manifest.py
       
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Install CMake
+        run: brew install cmake
+
+      - name: Build pinned llama.cpp iOS XCFramework
+        run: bash scripts/build-llama-xcframework.sh
       
       - name: Generate Xcode project
         run: xcodegen generate
@@ -82,6 +94,16 @@ jobs:
           mkdir -p Payload
           cp -R "${{ steps.find_app.outputs.app_path }}" Payload/
           zip -r IysCodeMovil-unsigned.ipa Payload
+
+      - name: Verify model weights are not bundled
+        run: |
+          set -euo pipefail
+          if unzip -l IysCodeMovil-unsigned.ipa | grep -i '\.gguf'; then
+            echo "::error::The Qwen GGUF must stay out of the IPA."
+            exit 1
+          fi
+          echo "Unsigned IPA size: $(du -h IysCodeMovil-unsigned.ipa | cut -f1)"
+          echo "llama.cpp source: $(cat .build/llama/SOURCE_COMMIT)"
       
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
@@ -93,7 +115,7 @@ jobs:
   test:
     name: Run unit tests (iOS Simulator)
     runs-on: macos-latest
-    timeout-minutes: 25
+    timeout-minutes: 120
     
     steps:
       - name: Checkout
@@ -111,8 +133,17 @@ jobs:
             echo "::warning::UTF-8 BOM detected in Swift sources."
           fi
 
+      - name: Verify pinned GUS model manifest
+        run: python3 scripts/verify-gus-model-manifest.py
+
       - name: Install XcodeGen
         run: brew install xcodegen
+
+      - name: Install CMake
+        run: brew install cmake
+
+      - name: Build pinned llama.cpp iOS XCFramework
+        run: bash scripts/build-llama-xcframework.sh
 
       - name: Generate Xcode project
         run: xcodegen generate
@@ -317,3 +348,68 @@ jobs:
           name: IysCodeMovil-signed
           path: IysCodeMovil-signed.ipa
           retention-days: 30
+
+  release:
+    name: Publish GitHub pre-release
+    runs-on: ubuntu-latest
+    needs: [build, test, sign]
+    # Publish one pre-release for each successful build of main. Manual builds
+    # on feature branches remain CI-only and never create public releases.
+    if: ${{ always() && github.ref == 'refs/heads/main' && needs.build.result == 'success' && needs.test.result == 'success' }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download unsigned IPA
+        uses: actions/download-artifact@v4
+        with:
+          name: IysCodeMovil-unsigned
+          path: release-assets
+
+      - name: Download signed IPA when available
+        if: ${{ needs.sign.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: IysCodeMovil-signed
+          path: release-assets
+
+      - name: Prepare checksums and release notes
+        id: release_metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="ci-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          (cd release-assets && sha256sum ./*.ipa > SHA256SUMS.txt)
+          if [[ -f release-assets/IysCodeMovil-signed.ipa ]]; then
+            INSTALL_NOTE="A signed IPA is attached when the repository signing job completed successfully."
+          else
+            INSTALL_NOTE="Only the unsigned IPA is attached; it must be signed through an authorized Apple distribution path before installation."
+          fi
+          cat > release-assets/RELEASE-NOTES.txt <<EOF
+          Automated ISyCode Móvil pre-release from commit ${GITHUB_SHA}.
+
+          - CI run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Source commit: ${GITHUB_SHA}
+          - ${INSTALL_NOTE}
+          - The Qwen GGUF is not included in the IPA. The app downloads the pinned model separately and verifies its SHA-256.
+          - Model provenance and license: docs/MODEL_NOTICE.md in the source repository.
+
+          These builds are pre-releases for testing and are not stable version-numbered releases.
+          EOF
+
+      - name: Publish pre-release with IPA and SHA-256 checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ steps.release_metadata.outputs.tag }}" \
+            release-assets/*.ipa \
+            release-assets/SHA256SUMS.txt \
+            release-assets/RELEASE-NOTES.txt \
+            --target "$GITHUB_SHA" \
+            --title "ISyCode Móvil CI $GITHUB_RUN_NUMBER (${GITHUB_SHA:0:7})" \
+            --notes-file release-assets/RELEASE-NOTES.txt \
+            --prerelease \
+            --latest=false

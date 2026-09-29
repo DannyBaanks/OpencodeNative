@@ -31,6 +31,7 @@ public final class SessionViewModel: ObservableObject {
     @Published public var statusLine: String = "idle"
     @Published public var lastBootAttempt: OpenCodeBootAttempt?
     @Published public var showMatrix: Bool = false
+    @Published public private(set) var pendingPermission: PermissionRequest?
 
     public enum Provider { case scripted, remote }
 
@@ -40,6 +41,8 @@ public final class SessionViewModel: ObservableObject {
     private var modelProvider_any: (any ModelProvider)?
     private var toolExecutor: FileSystemToolExecutor?
     private var agentLoop: AgentLoop?
+    private var permissionContinuation: CheckedContinuation<PermissionResponse, Never>?
+    private var agentTask: Task<Void, Never>?
     private var providerKind: Provider = .scripted
     private var conversationId: String = UUID().uuidString
 
@@ -127,6 +130,9 @@ public final class SessionViewModel: ObservableObject {
     // MARK: - Runtime init
 
     private func initRuntime() async {
+        denyPendingPermission()
+        agentTask?.cancel()
+        agentTask = nil
         do {
             let ws = try IOSWorkspace()
             let ps = try IOSPersistence()
@@ -159,9 +165,8 @@ public final class SessionViewModel: ObservableObject {
                 systemPrompt: systemPromptText(),
                 maxTurns: 12,
                 permissionHandler: { [weak self] request in
-                    // En una implementación real, esto mostraría UI y esperaría respuesta
-                    // Por ahora, auto-permitimos para demo
-                    return PermissionResponse(requestId: request.id, decision: .allowOnce)
+                    guard let self else { return PermissionResponse(requestId: request.id, decision: .deny) }
+                    return await self.waitForPermission(request)
                 }
             )
             let loop = AgentLoop(context: ctx)
@@ -178,12 +183,53 @@ public final class SessionViewModel: ObservableObject {
     }
 
     private func systemPromptText() -> String {
-        """
-        Eres un asistente que opera dentro del runtime nativo alternativo de IysCodeMovil en iOS.
-        No eres IysCode: el TUI real de IysCode NO puede arrancar en iOS (ver boot attempt).
-        Tienes 8 tools de filesystem restringidas al sandbox. Sin shell, sin git, sin compilar.
-        Responde de forma concisa. Cuando el usuario pida algo imposible en iOS, explícalo.
-        """
+        GUSMobileRole.mobile.systemPrompt
+    }
+
+    private func waitForPermission(_ request: PermissionRequest) async -> PermissionResponse {
+        guard pendingPermission.map(\.id) == nil else {
+            return PermissionResponse(requestId: request.id, decision: .deny)
+        }
+        pendingPermission = request
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard pendingPermission?.id == request.id else {
+                    continuation.resume(returning: PermissionResponse(requestId: request.id, decision: .deny))
+                    return
+                }
+                permissionContinuation = continuation
+            }
+        } onCancel: { [weak self] in
+            Task { @MainActor in self?.denyPendingPermission(requestID: request.id) }
+        }
+    }
+
+    /// Resolves only the currently displayed request; stale UI actions cannot approve a later tool call.
+    public func respondToPermission(requestID: String, decision: PermissionResponse.Decision) {
+        guard pendingPermission?.id == requestID else { return }
+        let resolved = PermissionDecisionGate.decision(
+            requestID: requestID,
+            pendingRequestID: pendingPermission?.id,
+            proposed: decision
+        )
+        pendingPermission = nil
+        let continuation = permissionContinuation
+        permissionContinuation = nil
+        continuation?.resume(returning: PermissionResponse(requestId: requestID, decision: resolved))
+    }
+
+    public func cancelAgent() {
+        denyPendingPermission()
+        agentTask?.cancel()
+        agentTask = nil
+        isProcessing = false
+        statusLine = "idle"
+    }
+
+    private func denyPendingPermission(requestID: String? = nil) {
+        guard let request = pendingPermission,
+              requestID == nil || request.id == requestID else { return }
+        respondToPermission(requestID: request.id, decision: .deny)
     }
 
     // MARK: - Agent run
@@ -195,13 +241,22 @@ public final class SessionViewModel: ObservableObject {
         }
         isProcessing = true
         statusLine = "agent running…"
-        Task {
+        agentTask = Task {
             do {
                 _ = try await loop.run(userInput: userInput)
-                await MainActor.run { self.isProcessing = false; self.statusLine = "idle" }
+                await MainActor.run { self.isProcessing = false; self.statusLine = "idle"; self.agentTask = nil }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.denyPendingPermission()
+                    self.isProcessing = false
+                    self.statusLine = "idle"
+                    self.agentTask = nil
+                }
             } catch {
                 await MainActor.run {
+                    self.denyPendingPermission()
                     self.isProcessing = false
+                    self.agentTask = nil
                     self.statusLine = "agent error"
                     self.emit(.error, error.localizedDescription)
                 }

@@ -25,10 +25,13 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     public let eventStream: AsyncStream<WorkbenchEvent>
     private let workspaceBookmark: Data?
     private let forceOfflineDemo: Bool
+    private let modelDownloadManager: GUSModelDownloadManager
     
-    public init(workspaceBookmark: Data? = nil, forceOfflineDemo: Bool = false) {
+    public init(workspaceBookmark: Data? = nil, forceOfflineDemo: Bool = false,
+                modelDownloadManager: GUSModelDownloadManager = .shared) {
         self.workspaceBookmark = workspaceBookmark
         self.forceOfflineDemo = forceOfflineDemo
+        self.modelDownloadManager = modelDownloadManager
         var cont: AsyncStream<WorkbenchEvent>.Continuation?
         self.eventStream = AsyncStream { cont = $0 }
         self.eventContinuation = cont
@@ -97,6 +100,23 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         }
         let configuration = try await ps.loadConfiguration()
         let preference = configuration?.defaultModelProvider ?? "nvidia"
+        if preference == "gus-local" {
+            await modelDownloadManager.refresh()
+            guard let modelURL = modelDownloadManager.installedModelURL else {
+                throw ModelProviderError.notConfigured("Descarga primero el modelo GUS aprobado desde la pantalla sandbox.")
+            }
+            let provider = GUSLocalModelProvider(modelURL: modelURL)
+            try await provider.load(contextTokens: 2048)
+            modelProvider = provider
+            activeModelName = provider.availableModels.first
+            providerID = provider.id
+            providerDisplay = provider.name
+            providerModelIDs = provider.availableModels
+            agentLoop = nil
+            boundSessionID = nil
+            connectionStatusStorage = "sandbox · GUS local · Qwen Q4_K_M · 2K · sin conexión de proveedor"
+            return
+        }
         var order = [preference]
         let fallbackOrder = SandboxModelProvider.all.map(\.id).filter { !order.contains($0) }
         order.append(contentsOf: fallbackOrder)
@@ -204,11 +224,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     }
     
     private func systemPromptText() -> String {
-        """
-        You are an assistant in OpenCodeNative, a native iOS workbench for OpenCode.
-        You operate within the iOS sandbox with filesystem tools.
-        Be concise and technical. Use tools to accomplish tasks.
-        """
+        GUSMobileRole.mobile.systemPrompt
     }
     
     public func listProjects() async throws -> [Project] {

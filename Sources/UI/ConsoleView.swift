@@ -17,12 +17,16 @@ public struct ConsoleView: View {
             statusBar
             Divider().opacity(0.4)
             transcriptView
+            if let request = vm.pendingPermission {
+                permissionCard(request)
+            }
             Divider().opacity(0.4)
             inputLine
         }
         .background(Color(.systemBackground))
         .preferredColorScheme(.dark)
         .task { await vm.initialize() }
+        .onDisappear { vm.cancelAgent() }
         .sheet(isPresented: $showMatrixSheet) {
             MatrixSheet(vm: vm)
         }
@@ -113,6 +117,38 @@ public struct ConsoleView: View {
 
     private var canSend: Bool {
         !vm.isProcessing && !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func permissionCard(_ request: PermissionRequest) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Aprobación requerida", systemImage: "exclamationmark.shield.fill")
+                .font(.system(.caption, design: .monospaced).weight(.semibold))
+                .foregroundColor(.orange)
+            Text(request.reason)
+                .font(.system(.caption, design: .monospaced))
+            Text("\(request.toolName) · \(request.arguments.map { "\($0.key)=\($0.value)" }.sorted().joined(separator: " · "))")
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundColor(.secondary)
+                .textSelection(.enabled)
+            HStack {
+                Button("Denegar") {
+                    vm.respondToPermission(requestID: request.id, decision: .deny)
+                }
+                .accessibilityIdentifier("permission-deny")
+                Spacer()
+                Button("Aprobar una vez") {
+                    vm.respondToPermission(requestID: request.id, decision: .allowOnce)
+                }
+                .fontWeight(.semibold)
+                .accessibilityIdentifier("permission-allow-once")
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.45), lineWidth: 1))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
     }
 
     private func color(for kind: TranscriptLine.Kind) -> Color {

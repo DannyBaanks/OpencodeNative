@@ -14,6 +14,7 @@ Imagina que dejaste una tarea corriendo en tu computadora y saliste de casa. Abr
 | 📁 **Proyectos y sesiones** | Encuentras una tarea y retomas su historial. |
 | ✋ **Decisiones tuyas** | Respondes a los permisos que solicite el runtime conectado. |
 | 🧪 **Sandbox local** | Pruebas un agente Swift con archivos privados del iPhone o una carpeta que tú elijas. |
+| 🧠 **GUS local (experimental)** | Descarga Qwen Q4_K_M bajo demanda, fuera del IPA; la primera versión es de orientación y no ejecuta herramientas. |
 | 🎨 **Tu estilo** | Eliges entre los temas Consola y Premium; hay espacio para más temas. |
 
 Hoy puedes conectarte mediante los puentes de OpenCode y Codex, o usar el sandbox local. El host integrado de la futura TUI ya tiene emparejamiento v1; sus sesiones remotas siguen en desarrollo.
@@ -36,6 +37,8 @@ Estas pantallas salen de la app compilada en el **iPhone Simulator de GitHub Act
 
 El workflow también publica estas imágenes como artefacto **IysCodeMovil-ci-screenshots**.
 
+Cada compilación exitosa de `main` publica una **pre-release** en [GitHub Releases](https://github.com/DannyBaanks/iSyCodeMovil/releases), con IPA, notas y checksums SHA-256. Si la firma opcional de CI está configurada, incluye también la IPA firmada; en caso contrario, la IPA unsigned requiere firma antes de instalarse. Las compilaciones manuales de otras ramas solo generan artifacts de Actions.
+
 ---
 
 ## 🚀 Empieza en 3 pasos
@@ -46,14 +49,13 @@ El workflow también publica estas imágenes como artefacto **IysCodeMovil-ci-sc
 
 ### Instalar en iPhone
 
-La app todavía se distribuye desde GitHub Actions mientras preparamos una forma de instalación más sencilla:
+La última compilación de `main` está en [GitHub Releases](https://github.com/DannyBaanks/iSyCodeMovil/releases). También puedes descargar una build de rama desde Actions:
 
-1. Abre [Actions → iOS Build](https://github.com/DannyBaanks/iSyCodeMovil/actions/workflows/ios-build.yml).
-2. Entra a la última corrida verde de `main`.
-3. En **Artifacts**, descarga **IysCodeMovil-unsigned** y extrae el archivo IPA.
-4. Fírmalo e instálalo con tu Apple ID mediante [iloader](https://iloader.app/), [SideStore](https://sidestore.io/) o [AltStore](https://altstore.io/).
+1. Descarga `IysCodeMovil-signed.ipa` si aparece; si solo hay `IysCodeMovil-unsigned.ipa`, descárgala y fírmala.
+2. Revisa `SHA256SUMS.txt` para comprobar el archivo descargado.
+3. Instálala con un método autorizado como [iloader](https://iloader.app/), [SideStore](https://sidestore.io/) o [AltStore](https://altstore.io/).
 
-El CI entrega una **IPA sin firmar**. Con una cuenta Apple gratuita, la firma suele caducar a los siete días; vuelve a firmar la app cuando iOS lo pida.
+La firma opcional del workflow requiere credenciales Apple guardadas como secrets del repositorio. Sin ellas, la pre-release contiene únicamente una **IPA sin firmar**. Con una cuenta Apple gratuita, la firma suele caducar a los siete días; vuelve a firmar la app cuando iOS lo pida.
 
 ## 🗺️ Cómo se usa
 
@@ -128,6 +130,10 @@ El catálogo incluye NVIDIA NIM, xAI, OpenAI API, Google Gemini y OpenRouter. Lo
 
 Para empezar, abre **Proveedores** en el selector del sandbox, elige un proveedor y agrega su clave. La app la conserva en el Keychain de ese iPhone.
 
+También puedes elegir **GUS local · Qwen 1.5**. La app muestra la procedencia y licencia, descarga el GGUF solo cuando tú lo pides y verifica tamaño y SHA-256 antes de instalarlo. El modelo no se incluye en el IPA. Esta primera versión responde localmente como guía; las llamadas a herramientas permanecen desactivadas hasta validar el formato de Qwen 1.5. La licencia del modelo es de uso no comercial. Consulta el [aviso completo y la procedencia](docs/MODEL_NOTICE.md).
+
+GUS requiere **iOS 16.4 o posterior**, por el mínimo del runtime iOS de llama.cpp. El IPA de CI sigue sin firmar y requiere una instalación autorizada.
+
 ---
 
 ## ✅ Qué puedes hacer hoy
@@ -169,6 +175,8 @@ Necesitas macOS, Xcode y [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```bash
 brew install xcodegen
+brew install cmake
+bash scripts/build-llama-xcframework.sh
 xcodegen generate
 open IysCodeMovil.xcodeproj
 ```
