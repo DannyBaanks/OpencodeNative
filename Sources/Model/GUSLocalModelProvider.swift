@@ -65,4 +65,9 @@ public struct GUSLocalModelProvider: ModelProvider {
     }
 
     public func cancel() async { await engine.cancel() }
+
+    func unload() async {
+        await engine.cancel()
+        await engine.unload()
+    }
 }

@@ -47,15 +47,22 @@ public protocol GUSModelTransfer: Sendable {
 
 private final class BackgroundGUSModelSessionDelegate: NSObject, URLSessionDownloadDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     var onProgress: (@Sendable (String, Int64, Int64) -> Void)?
-    var onDownloaded: (@Sendable (String, URL, @escaping @Sendable () -> Void) -> Void)?
-    var onFailure: (@Sendable (String, Error, @escaping @Sendable () -> Void) -> Void)?
+    var onDownloaded: (@Sendable (String, URL, @Sendable () -> Void) -> Void)?
+    var onFailure: (@Sendable (String, Error, @Sendable () -> Void) -> Void)?
     var onEventsFinished: (() -> Void)?
     private let allowedHosts: Set<String> = ["huggingface.co", "us.aws.cdn.hf.co", "cdn-lfs.huggingface.co", "cas-bridge.xethub.hf.co"]
+    private let maximumBytesByID: [String: Int64]
     private let lock = NSLock()
     private var rejectedTasks = Set<Int>()
+    private var oversizedTasks = Set<Int>()
     private var backgroundCompletion: (() -> Void)?
     private var pendingProcessing = 0
     private var didFinishEvents = false
+
+    init(maximumBytesByID: [String: Int64]) {
+        self.maximumBytesByID = maximumBytesByID
+        super.init()
+    }
 
     func setBackgroundCompletion(_ completion: @escaping () -> Void) {
         lock.lock(); backgroundCompletion = completion; lock.unlock()
@@ -65,6 +72,11 @@ private final class BackgroundGUSModelSessionDelegate: NSObject, URLSessionDownl
                     didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64) {
         guard let id = downloadTask.taskDescription else { return }
+        if let limit = maximumBytesByID[id], totalBytesWritten > limit {
+            lock.lock(); oversizedTasks.insert(downloadTask.taskIdentifier); lock.unlock()
+            downloadTask.cancel()
+            return
+        }
         onProgress?(id, totalBytesWritten, totalBytesExpectedToWrite)
     }
 
@@ -106,9 +118,14 @@ private final class BackgroundGUSModelSessionDelegate: NSObject, URLSessionDownl
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let error, let id = task.taskDescription else { return }
-        lock.lock(); let rejected = rejectedTasks.remove(task.taskIdentifier) != nil; lock.unlock()
-        if (error as NSError).code == NSURLErrorCancelled && !rejected { return }
-        deliverFailure(id: id, error: rejected ? GUSModelDownloadError.untrustedRedirect : error)
+        lock.lock()
+        let rejected = rejectedTasks.remove(task.taskIdentifier) != nil
+        let oversized = oversizedTasks.remove(task.taskIdentifier) != nil
+        lock.unlock()
+        if (error as NSError).code == NSURLErrorCancelled && !rejected && !oversized { return }
+        let failure: Error = oversized ? GUSModelDownloadError.tooLarge
+            : rejected ? GUSModelDownloadError.untrustedRedirect : error
+        deliverFailure(id: id, error: failure)
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
@@ -155,8 +172,8 @@ public final class GUSModelDownloadManager: ObservableObject {
     /// Compatibility accessors for existing call sites; new UI uses per-model APIs.
     public var manifest: GUSModelManifest { selectedManifest ?? manifests.values.sorted { $0.id < $1.id }.first ?? GUSModelManifest.qwen15Q4KM }
     public var state: GUSModelDownloadState { state(for: manifest.id) ?? .notDownloaded }
-    public var installedModelURL: URL? { selectedModelURL }
-    public var selectedManifest: GUSModelManifest? { selectedModelID.flatMap(GUSModelManifest.model(id:)) }
+    public var installedModelURL: URL? { selectedModelURL ?? (fixtureMode ? manifests.keys.sorted().first.flatMap { modelURL(id: $0) } : nil) }
+    public var selectedManifest: GUSModelManifest? { selectedModelID.flatMap { GUSModelManifest.model(id: $0) } }
     public var selectedModelURL: URL? {
         guard let selectedModelID else { return nil }
         return modelURL(id: selectedModelID)
@@ -188,7 +205,7 @@ public final class GUSModelDownloadManager: ObservableObject {
         self.modelDirectory = modelDirectory
         self.legacyModelDirectory = legacyModelDirectory
         self.fixtureMode = false
-        self.delegate = BackgroundGUSModelSessionDelegate()
+        self.delegate = BackgroundGUSModelSessionDelegate(maximumBytesByID: Dictionary(uniqueKeysWithValues: catalog.map { ($0.id, $0.byteCount) }))
         self.selectedModelID = UserDefaults.standard.string(forKey: "gus.selectedModelID")
         self.activeBackgroundID = UserDefaults.standard.string(forKey: Self.activeModelDefaultsKey)
         configureBackgroundSession()
@@ -242,7 +259,10 @@ public final class GUSModelDownloadManager: ObservableObject {
         let installed = modelDirectory.appendingPathComponent(manifest.filename)
         if FileManager.default.fileExists(atPath: installed.path) {
             await verifyAndAdopt(installed, manifest: manifest)
-            if modelURL(id: manifest.id) != nil { return }
+            if modelURL(id: manifest.id) != nil {
+                clearActiveTransferIfNeeded(modelID: manifest.id)
+                return
+            }
         }
         let staged = stagingURL(for: manifest)
         if FileManager.default.fileExists(atPath: staged.path) {
@@ -253,9 +273,18 @@ public final class GUSModelDownloadManager: ObservableObject {
                 try FileManager.default.moveItem(at: staged, to: installed)
                 try excludeFromBackup(installed)
                 states[manifest.id] = .ready(installed)
+                clearActiveTransferIfNeeded(modelID: manifest.id)
+                return
+            } catch let error as GUSModelDownloadError {
+                try? FileManager.default.removeItem(at: staged)
+                states[manifest.id] = .failed(error)
+                clearActiveTransferIfNeeded(modelID: manifest.id)
                 return
             } catch {
                 try? FileManager.default.removeItem(at: staged)
+                states[manifest.id] = .failed(.fileSystem(error.localizedDescription))
+                clearActiveTransferIfNeeded(modelID: manifest.id)
+                return
             }
         }
         if manifest.id == GUSModelManifest.qwen15Q4KM.id, let legacyModelDirectory {
@@ -298,7 +327,10 @@ public final class GUSModelDownloadManager: ObservableObject {
             try ensureSpace(for: manifest)
             if fixtureMode {
                 guard let transfer = transfers[modelID] else { states[modelID] = .failed(.invalidSource); return }
-                let task = Task { [weak self] in await self?.performFixtureDownload(manifest, transfer: transfer) }
+                let task = Task { [weak self] in
+                    guard let self else { return }
+                    await self.performFixtureDownload(manifest, transfer: transfer)
+                }
                 fixtureTasks[modelID] = task
                 await task.value
             } else {
@@ -359,11 +391,6 @@ public final class GUSModelDownloadManager: ObservableObject {
         guard identifier == Self.backgroundSessionIdentifier else { completionHandler(); return }
         delegate?.setBackgroundCompletion(completionHandler)
         configureBackgroundSession()
-        backgroundSession?.getTasksWithCompletionHandler { [weak self] _, _, tasks in
-            Task { @MainActor in
-                if tasks.isEmpty { self?.delegate?.urlSessionDidFinishEvents(forBackgroundURLSession: self?.backgroundSession ?? URLSession.shared) }
-            }
-        }
     }
 
     private func configureBackgroundSession() {
@@ -414,7 +441,13 @@ public final class GUSModelDownloadManager: ObservableObject {
                         UserDefaults.standard.set(activeID, forKey: Self.activeModelDefaultsKey)
                     } else if let interruptedID = UserDefaults.standard.string(forKey: Self.activeModelDefaultsKey),
                               self.manifests[interruptedID] != nil {
-                        self.states[interruptedID] = .failed(.interrupted)
+                        if self.modelURL(id: interruptedID) != nil {
+                            UserDefaults.standard.removeObject(forKey: Self.activeModelDefaultsKey)
+                        } else if let currentState = self.states[interruptedID], case .downloading = currentState {
+                            self.states[interruptedID] = .failed(.interrupted)
+                        } else if self.states[interruptedID] == nil || self.states[interruptedID] == .notDownloaded {
+                            self.states[interruptedID] = .failed(.interrupted)
+                        }
                     }
                     for task in managed {
                         guard let id = task.taskDescription, let expected = self.manifests[id]?.byteCount else { continue }
@@ -498,6 +531,12 @@ public final class GUSModelDownloadManager: ObservableObject {
         }
     }
 
+    private func clearActiveTransferIfNeeded(modelID: String) {
+        guard UserDefaults.standard.string(forKey: Self.activeModelDefaultsKey) == modelID else { return }
+        UserDefaults.standard.removeObject(forKey: Self.activeModelDefaultsKey)
+        if activeBackgroundID == modelID { activeBackgroundID = nil }
+    }
+
     private func stateSet(_ id: String, _ state: GUSModelDownloadState) { states[id] = state }
 
     private func stagingURL(for manifest: GUSModelManifest) -> URL {
@@ -552,9 +591,11 @@ public final class GUSModelDownloadManager: ObservableObject {
         } catch let error as GUSModelDownloadError {
             try? FileManager.default.removeItem(at: installed)
             states[manifest.id] = .failed(error)
+            clearActiveTransferIfNeeded(modelID: manifest.id)
         } catch {
             try? FileManager.default.removeItem(at: installed)
             states[manifest.id] = .failed(.fileSystem(error.localizedDescription))
+            clearActiveTransferIfNeeded(modelID: manifest.id)
         }
     }
 

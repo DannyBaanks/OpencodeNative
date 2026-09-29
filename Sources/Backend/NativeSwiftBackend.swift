@@ -50,12 +50,9 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     }
     
     public func disconnect() async {
+        await releaseActiveModel()
         failPendingPermissions()
-        runningTask?.cancel()
-        runningTask = nil
-        agentLoop = nil
         boundSessionID = nil
-        modelProvider = nil
         activeModelName = nil
         toolExecutor = nil
         workspace = nil
@@ -94,6 +91,7 @@ public final class NativeSwiftBackend: WorkbenchBackend {
     /// configured supported provider. No key keeps the offline demo available.
     public func reloadSandboxModel() async throws {
         guard let ps = persistence else { throw WorkbenchError.notConnected }
+        await releaseActiveModel()
         if forceOfflineDemo {
             installOfflineDemo()
             return
@@ -129,6 +127,23 @@ public final class NativeSwiftBackend: WorkbenchBackend {
             return
         }
         installOfflineDemo()
+    }
+
+
+    private func releaseActiveModel() async {
+        runningTask?.cancel()
+        let activeTask = runningTask
+        runningTask = nil
+        failPendingPermissions()
+        await activeTask?.value
+        await modelProvider?.cancel()
+        if let localProvider = modelProvider as? GUSLocalModelProvider {
+            await localProvider.unload()
+        }
+        agentLoop = nil
+        modelProvider = nil
+        activeModelName = nil
+        boundSessionID = nil
     }
 
     private func installOfflineDemo() {

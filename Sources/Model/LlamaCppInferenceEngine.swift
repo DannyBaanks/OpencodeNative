@@ -4,6 +4,7 @@ protocol LocalInferenceEngine: Sendable {
     func load(modelURL: URL, contextTokens: Int) async throws
     func generate(messages: [ModelMessage], options: GenerationOptions) async throws -> String
     func cancel() async
+    func unload() async
 }
 
 final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
@@ -91,6 +92,18 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
         let current = context
         if let current { gus_llama_cancel(current) }
         lock.unlock()
+    }
+
+    public func unload() async {
+        await Task.detached(priority: .utility) { [self] in
+            inferenceLane.wait()
+            defer { inferenceLane.signal() }
+            lock.lock()
+            let current = context
+            context = nil
+            lock.unlock()
+            if let current { gus_llama_destroy(current) }
+        }.value
     }
 
     private static func chatPrompt(_ messages: [ModelMessage]) -> String {

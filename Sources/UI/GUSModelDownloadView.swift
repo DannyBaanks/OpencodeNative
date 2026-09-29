@@ -1,5 +1,4 @@
 import SwiftUI
-import IysCodeMovilCore
 
 public struct GUSModelDownloadView: View {
     @ObservedObject private var manager: GUSModelDownloadManager

@@ -127,7 +127,7 @@ final class GUSModelDownloadManagerTests: XCTestCase {
 
         await manager.refresh()
 
-        XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(manager.installedModelURL)), bytes)
+        XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(manager.modelURL(id: "fixture"))), bytes)
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("fixture.fixture.gguf.partial").path))
     }
 
@@ -175,7 +175,7 @@ final class GUSModelDownloadManagerTests: XCTestCase {
         XCTAssertEqual(manager.state, .failed(.transfer("temporary network failure")))
         await manager.startDownload()
 
-        XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(manager.installedModelURL)), bytes)
+        XCTAssertEqual(try Data(contentsOf: try XCTUnwrap(manager.modelURL(id: manifest.id))), bytes)
     }
 
     func testFreshInstallDoesNotStartDownloadAutomatically() async throws {
@@ -271,7 +271,7 @@ final class GUSModelDownloadManagerTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let manager = GUSModelDownloadManager(manifests: [], transfers: [:], modelDirectory: directory)
         await manager.startDownload(modelID: "unknown")
-        XCTAssertEqual(manager.state(for: "unknown"), nil)
+        XCTAssertEqual(manager.state(for: "unknown"), .failed(.invalidSource))
         XCTAssertNil(manager.modelURL(id: "unknown"))
     }
 
