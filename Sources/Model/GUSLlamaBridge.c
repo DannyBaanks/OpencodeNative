@@ -106,11 +106,29 @@ char * gus_llama_generate(GUSLlamaContext * state, const char * prompt, uint32_t
         return NULL;
     }
 
-    struct llama_batch prompt_batch = llama_batch_get_one(tokens, token_count);
-    if (llama_decode(state->context, prompt_batch) != 0) {
+    // llama_decode has a hard n_batch limit (256 in our iOS context). Sending
+    // the full conversation as one batch works for the first short prompt, but
+    // a second turn includes the previous answer and can exceed that limit;
+    // llama.cpp asserts in that case and terminates the app. Prefill in
+    // sequential chunks so the memory positions continue across the prompt.
+    const uint32_t batch_limit = llama_n_batch(state->context);
+    if (batch_limit == 0) {
         free(tokens);
-        set_error(error, error_capacity, "llama.cpp failed while evaluating the prompt.");
+        set_error(error, error_capacity, "llama.cpp reported an invalid prompt batch size.");
         return NULL;
+    }
+    for (int32_t offset = 0; offset < token_count;) {
+        const int32_t remaining = token_count - offset;
+        const int32_t chunk_size = remaining < (int32_t)batch_limit
+            ? remaining
+            : (int32_t)batch_limit;
+        struct llama_batch prompt_batch = llama_batch_get_one(tokens + offset, chunk_size);
+        if (llama_decode(state->context, prompt_batch) != 0) {
+            free(tokens);
+            set_error(error, error_capacity, "llama.cpp failed while evaluating the prompt.");
+            return NULL;
+        }
+        offset += chunk_size;
     }
     free(tokens);
 
