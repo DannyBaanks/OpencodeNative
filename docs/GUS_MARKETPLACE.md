@@ -32,7 +32,7 @@ Each pinned model carries:
    - **Bridge + catalog checks** builds the pinned llama.cpp on Linux and compiles the app's real `GUSLlamaBridge.c`. It checks chat framing and control-token neutralization against every llama.cpp vocab file.
    - **Resolve pins** reads the revision, size, SHA-256, license, architecture, context length, KV geometry and chat template from Hugging Face.
    - **Smoke** downloads each model, verifies the hash and generates an answer with the app's bridge. The job log prints one `PROPOSAL {…}` line per model.
-3. Copy the proposal into the entry and set `status: pinned`. Then run `python3 scripts/gus_catalog/generate.py`.
+3. Save those lines as a JSON list and run `python3 scripts/gus_catalog/promote.py proposals.json`. It pins every candidate that resolved and answered correctly, maps licenses (custom licenses are marked non-commercial until checked) and flags models above 1.6 GB as experimental. Then run `python3 scripts/gus_catalog/generate.py`.
 
 Once an entry is pinned, CI cross-checks it against Hugging Face on every run. A changed hash, size, revision or KV geometry fails the build.
 

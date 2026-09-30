@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import crosscheck  # noqa: E402
 import generate  # noqa: E402
 import pin  # noqa: E402
+import promote  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = json.loads((ROOT / "Catalog" / "models.json").read_text(encoding="utf-8"))
@@ -120,6 +121,20 @@ class GGUFHeaderTests(unittest.TestCase):
             pin.gguf_header(fileobj=io.BytesIO(b"NOPE" + b"\0" * 32))
         with self.assertRaises(EOFError):
             pin.gguf_header(fileobj=io.BytesIO(_gguf_bytes([("general.architecture", pin.STR, "x")])[:-3]))
+
+
+class PromoteTests(unittest.TestCase):
+    def test_swift_names(self):
+        self.assertEqual(promote.swift_name("nemotron-nano-9b-v2-q4km"), "nemotronNano9bV2Q4km")
+
+    def test_unknown_license_is_not_commercial(self):
+        entry = {"id": "x-q4km", "name": "X", "family": "X", "vendor": "V", "parameters": "1B"}
+        p = {"repository": "o/r", "revision": "a" * 40, "filename": "x.gguf", "byte_count": 2_000_000_000,
+             "sha256": "b" * 64, "license": "other"}
+        out = promote.promote(entry, p, 1_600_000_000)
+        self.assertFalse(out["commercial_use"])
+        self.assertTrue(out["experimental"])
+        self.assertIn("/blob/" + "a" * 40 + "/", out["license_url"])
 
 
 class CrosscheckTests(unittest.TestCase):
