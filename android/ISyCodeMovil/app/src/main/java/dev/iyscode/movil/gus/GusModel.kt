@@ -32,8 +32,13 @@ data class GusModel(
     /** f16 K+V bytes per context token, read from the GGUF header by the pin workflow. */
     val kvBytesPerToken: Long?,
     val nativeContextLength: Int?,
+    /** System directive that turns off `<think>` for reasoning models in chat. */
+    val thinkingOffDirective: String? = null,
 ) {
     enum class Evidence { UNMEASURED, DESKTOP_SMOKE, DEVICE_MEASURED }
+
+    /** The chat system prompt for this model: reasoning models get their thinking-off directive. */
+    fun chatSystemPrompt(base: String): String = thinkingOffDirective?.let { "$base\n\n$it" } ?: base
 
     /** Short display name without the quantization suffix. */
     val shortName: String get() = name.substringBefore(" ·")

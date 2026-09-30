@@ -41,7 +41,11 @@ public struct GUSLocalModelProvider: ModelProvider {
 
     public func generate(messages: [ModelMessage], tools: [ToolDefinition]?, options: GenerationOptions) async throws -> ModelResponse {
         var localMessages = messages
-        let localBoundary = "Esta versión local es solo de orientación: no puede ejecutar herramientas ni cambiar archivos. Explica el límite y ofrece pasos que el usuario pueda revisar. Si no estás seguro de un dato (fechas, nombres, cifras), dilo en lugar de inventarlo."
+        var localBoundary = "Esta versión local es solo de orientación: no puede ejecutar herramientas ni cambiar archivos. Explica el límite y ofrece pasos que el usuario pueda revisar. Si no estás seguro de un dato (fechas, nombres, cifras), dilo en lugar de inventarlo."
+        if let directive = manifest.thinkingOffDirective {
+            // Without it reasoning models spend the whole reply budget in <think>.
+            localBoundary += "\n\n" + directive
+        }
         if let systemIndex = localMessages.firstIndex(where: { $0.role == .system }) {
             let original = localMessages[systemIndex]
             localMessages[systemIndex] = ModelMessage(role: .system, content: original.content + "\n\n" + localBoundary)

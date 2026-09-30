@@ -59,14 +59,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: llama.cpp
-          key: llama-linux-static-${{ steps.llama.outputs.commit }}-v1
+          key: llama-linux-static-${{ steps.llama.outputs.commit }}-portable-v2
 
       - name: Build llama.cpp (static, CPU)
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           git clone --filter=blob:none --no-checkout https://github.com/ggml-org/llama.cpp.git llama.cpp
           git -C llama.cpp checkout --detach "${{ steps.llama.outputs.commit }}"
-          cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF \
+          # GGML_NATIVE=OFF: the harness runs on other runners, whose CPUs may lack
+          # instructions (AVX-512) the build machine has; a native build died there
+          # with SIGILL before printing anything ("CRASHED", ~6 MB RSS).
+          cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF \
             -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build llama.cpp/build --target llama -j"$(nproc)"
 
@@ -113,8 +116,10 @@ jobs:
           python3 - <<'EOF' >> "$GITHUB_OUTPUT"
           import json
           pins = json.load(open("gus-pins.json"))
+          catalog = {m["id"]: m for m in json.load(open("Catalog/models.json"))["models"]}
           # Linux runners have ~14 GB free disk and 16 GB RAM: skip anything larger than 7 GB.
-          ok = [{"id": p["id"], "url": p["source_url"], "sha256": p["sha256"], "bytes": p["byte_count"]}
+          ok = [{"id": p["id"], "url": p["source_url"], "sha256": p["sha256"], "bytes": p["byte_count"],
+                 "thinking_off": catalog.get(p["id"], {}).get("thinking_off", "")}
                 for p in pins if p["status"] == "OK" and p["byte_count"] <= 7 * 1024**3]
           print("matrix=" + json.dumps({"include": ok}))
           EOF
@@ -148,6 +153,8 @@ jobs:
           test "$(stat -c %s model.gguf)" = "${{ matrix.bytes }}"
 
       - name: Generate with the app bridge
+        env:
+          GUS_THINKING_OFF: ${{ matrix.thinking_off }}
         run: |
           set -o pipefail
           chmod +x dist/bridge_smoke

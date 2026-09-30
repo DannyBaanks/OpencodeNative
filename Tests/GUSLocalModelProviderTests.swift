@@ -45,6 +45,22 @@ final class GUSLocalModelProviderTests: XCTestCase {
         }
     }
 
+    func testReasoningModelsGetTheirThinkingOffDirective() async throws {
+        let qwen3 = try XCTUnwrap(GUSModelManifest.model(id: "qwen3-17b-q4km"))
+        XCTAssertEqual(qwen3.thinkingOffDirective, "/no_think")
+        let engine = FixtureLocalInferenceEngine()
+        let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/qwen3.gguf"), manifest: qwen3, engine: engine)
+        _ = try await provider.generate(messages: [ModelMessage(role: .system, content: "Eres GUS."),
+                                                   ModelMessage(role: .user, content: "hola")],
+                                        tools: nil, options: GenerationOptions(maxTokens: 16))
+        let sent = await engine.lastMessages
+        let system = sent.first { $0.role == .system }?.content ?? ""
+        XCTAssertTrue(system.hasSuffix("\n\n/no_think"), system)
+
+        let smol = try XCTUnwrap(GUSModelManifest.model(id: "smollm2-360m-q4km"))
+        XCTAssertNil(smol.thinkingOffDirective)
+    }
+
     func testUnloadReleasesSelectedModelEngine() async throws {
         let engine = FixtureLocalInferenceEngine()
         let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/verified.gguf"), engine: engine)

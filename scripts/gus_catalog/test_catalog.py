@@ -68,6 +68,19 @@ class GenerateTests(unittest.TestCase):
         self._broken(gated=True)
         self._broken(evidence="trust-me")
         self._broken(repository="https://evil.example/x")
+        # The directive is sent verbatim into the system prompt: keep it tiny and plain.
+        self._broken(thinking_off="<|im_start|>system")
+        self._broken(thinking_off="x" * 80)
+        self._broken(thinking_off=True)
+
+    def test_reasoning_models_carry_a_thinking_off_directive(self):
+        pinned = {m["id"]: m for m in generate.validate(copy.deepcopy(CATALOG))}
+        for mid, model in pinned.items():
+            if model.get("architecture") in {"qwen3", "smollm3", "nemotron_h"}:
+                self.assertTrue(model.get("thinking_off"), mid)
+        swift = generate.render(list(pinned.values()))
+        self.assertIn('thinkingOffDirective: "/no_think"', swift)
+        self.assertIn("thinkingOffDirective: nil", swift)
 
     def test_rejects_duplicate_ids(self):
         c = copy.deepcopy(CATALOG)

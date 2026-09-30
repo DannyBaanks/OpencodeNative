@@ -90,6 +90,10 @@ def validate(catalog: dict) -> list[dict]:
             raise CatalogError(f"{mid}: evidence must be one of {sorted(EVIDENCE)}")
         if e.get("gated"):
             raise CatalogError(f"{mid}: gated repositories cannot be downloaded anonymously")
+        directive = e.get("thinking_off")
+        if directive is not None and not (isinstance(directive, str)
+                                          and re.fullmatch(r"[A-Za-z0-9 /_-]{1,40}", directive)):
+            raise CatalogError(f"{mid}: thinking_off must be a short plain directive")
         for k in ("kv_bytes_per_token", "context_length"):
             if k in e and not (isinstance(e[k], int) and e[k] > 0):
                 raise CatalogError(f"{mid}: {k} must be a positive integer")
@@ -137,7 +141,8 @@ def render(pinned: list[dict]) -> str:
             f"        evidence: .{_evidence_case(e.get('evidence', 'unmeasured'))},",
             f"        architecture: {opt_str('architecture')},",
             f"        kvBytesPerToken: {opt_int('kv_bytes_per_token')},",
-            f"        nativeContextLength: {opt_int('context_length')}",
+            f"        nativeContextLength: {opt_int('context_length')},",
+            f"        thinkingOffDirective: {opt_str('thinking_off')}",
             "    )",
             "",
         ]
@@ -192,6 +197,7 @@ def render_kotlin(pinned: list[dict]) -> str:
             f"        architecture = {opt_str('architecture')},",
             f"        kvBytesPerToken = {opt_long('kv_bytes_per_token')},",
             f"        nativeContextLength = {opt_int('context_length')},",
+            f"        thinkingOffDirective = {opt_str('thinking_off')},",
             "    )",
             "",
         ]

@@ -126,7 +126,7 @@ class GusViewModel(application: Application) : AndroidViewModel(application) {
                     engine.load(model, file)
                     _ui.update { it.copy(loadingModel = false) }
                 }
-                val generation = engine.generate(promptFor(history), maxTokens = 256, temperature = 0.6f)
+                val generation = engine.generate(promptFor(model, history), maxTokens = 256, temperature = 0.6f)
                 val meta = "%.1f tok/s · %d tokens".format(generation.stats.generationTokensPerSecond, generation.stats.generatedTokens)
                 _ui.update { it.copy(messages = it.messages + ChatUiMessage(ChatMessage.Role.ASSISTANT, generation.text.ifBlank { "…" }, meta)) }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -148,8 +148,8 @@ class GusViewModel(application: Application) : AndroidViewModel(application) {
     fun clearChat() = _ui.update { it.copy(messages = emptyList(), error = null) }
 
     /** Keeps the conversation within the 2K context: a system message plus the most recent turns. */
-    private fun promptFor(history: List<ChatUiMessage>): List<ChatMessage> {
-        val system = ChatMessage(ChatMessage.Role.SYSTEM, SYSTEM_PROMPT)
+    private fun promptFor(model: GusModel, history: List<ChatUiMessage>): List<ChatMessage> {
+        val system = ChatMessage(ChatMessage.Role.SYSTEM, model.chatSystemPrompt(SYSTEM_PROMPT))
         val kept = ArrayDeque<ChatMessage>()
         var budget = 3500
         for (m in history.asReversed()) {
