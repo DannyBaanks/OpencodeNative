@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Versioned release to publish from main, e.g. v0.5.0 (empty = CI pre-release)"
+        required: false
+        default: ""
 
 concurrency:
   group: ios-build-${{ github.event.pull_request.number || github.ref }}
@@ -386,12 +391,31 @@ jobs:
       - name: Prepare checksums and release notes
         id: release_metadata
         shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="ci-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-          SHORT_SHA="${GITHUB_SHA:0:7}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           (cd release-assets && sha256sum ./*.ipa > SHA256SUMS.txt)
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            # Versioned release: tag, notes and app version must agree.
+            [[ "${RELEASE_TAG}" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || { echo "::error::release_tag must look like v0.5.0"; exit 1; }
+            VERSION="${RELEASE_TAG#v}"
+            NOTES="docs/releases/${RELEASE_TAG}.md"
+            [[ -f "$NOTES" ]] || { echo "::error::Missing $NOTES"; exit 1; }
+            grep -q "MARKETING_VERSION: \"${VERSION}\"" project.yml || { echo "::error::project.yml MARKETING_VERSION is not ${VERSION}"; exit 1; }
+            if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then echo "::error::${RELEASE_TAG} already exists"; exit 1; fi
+            cp "$NOTES" release-assets/RELEASE-NOTES.md
+            printf '\n---\n\n- Commit: %s\n- CI: %s/%s/actions/runs/%s\n' "$GITHUB_SHA" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" >> release-assets/RELEASE-NOTES.md
+            {
+              echo "tag=${RELEASE_TAG}"
+              echo "title=iSyCode Móvil ${VERSION%.0}"
+              echo "notes=release-assets/RELEASE-NOTES.md"
+              echo "flags=--latest"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TAG="ci-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
           if [[ -f release-assets/IysCodeMovil-signed.ipa ]]; then
             INSTALL_NOTE="A signed IPA is attached when the repository signing job completed successfully."
           else
@@ -403,23 +427,29 @@ jobs:
           - CI run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           - Source commit: ${GITHUB_SHA}
           - ${INSTALL_NOTE}
-          - The Qwen GGUF is not included in the IPA. The app downloads the pinned model separately and verifies its SHA-256.
+          - GUS model files are not included in the IPA. The app downloads pinned models separately and verifies their SHA-256.
           - Model provenance and license: docs/MODEL_NOTICE.md in the source repository.
 
           These builds are pre-releases for testing and are not stable version-numbered releases.
           EOF
+          {
+            echo "tag=$TAG"
+            echo "title=ISyCode Móvil CI $GITHUB_RUN_NUMBER (${GITHUB_SHA:0:7})"
+            echo "notes=release-assets/RELEASE-NOTES.txt"
+            echo "flags=--prerelease --latest=false"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Publish pre-release with IPA and SHA-256 checksums
+      - name: Publish release with IPA and SHA-256 checksums
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # shellcheck disable=SC2086  # flags are intentionally word-split
           gh release create "${{ steps.release_metadata.outputs.tag }}" \
             release-assets/*.ipa \
             release-assets/SHA256SUMS.txt \
-            release-assets/RELEASE-NOTES.txt \
+            "${{ steps.release_metadata.outputs.notes }}" \
             --target "$GITHUB_SHA" \
-            --title "ISyCode Móvil CI $GITHUB_RUN_NUMBER (${GITHUB_SHA:0:7})" \
-            --notes-file release-assets/RELEASE-NOTES.txt \
-            --prerelease \
-            --latest=false
+            --title "${{ steps.release_metadata.outputs.title }}" \
+            --notes-file "${{ steps.release_metadata.outputs.notes }}" \
+            ${{ steps.release_metadata.outputs.flags }}
