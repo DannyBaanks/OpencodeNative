@@ -3,7 +3,12 @@ name: iOS Build (unsigned IPA)
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -307,7 +312,7 @@ jobs:
     needs: build
     timeout-minutes: 10
     # Solo corre si el repo tiene el var ENABLE_ILOADER_SIGN='true' y los secrets APPLE_ID/TEAM_ID configurados.
-    if: ${{ vars.ENABLE_ILOADER_SIGN == 'true' }}
+    if: ${{ vars.ENABLE_ILOADER_SIGN == 'true' && github.event_name != 'pull_request' }}
 
     steps:
       - name: Checkout

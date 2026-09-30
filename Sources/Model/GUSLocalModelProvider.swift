@@ -4,7 +4,7 @@ import Foundation
 /// been validated, so it is never parsed into executable NativeCapabilities.
 public struct GUSLocalModelProvider: ModelProvider {
     public let id = "gus-local"
-    public let name = "GUS local · Qwen 1.5 1.8B Q4_K_M"
+    public var name: String { "GUS local · \(manifest.modelName)" }
     public let capabilities = ModelProviderCapabilities(
         streaming: false,
         toolCalls: false,
@@ -15,16 +15,18 @@ public struct GUSLocalModelProvider: ModelProvider {
         localOnly: true,
         restrictions: ["Inferencia local solamente", "Guía solamente hasta validar las llamadas a herramientas Qwen 1.5"]
     )
-    public let availableModels = ["qwen1.5-1.8b-chat-q4_k_m"]
+    public var availableModels: [String] { [manifest.id] }
 
     private let engine: any LocalInferenceEngine
     private let modelURL: URL
+    public let manifest: GUSModelManifest
 
     // Internal so callers outside the app's verified download path cannot hand
     // an arbitrary file URL to the local runtime.
-    init(modelURL: URL, engine: any LocalInferenceEngine = LlamaCppInferenceEngine()) {
+    init(modelURL: URL, manifest: GUSModelManifest = .qwen15Q4KM, engine: (any LocalInferenceEngine)? = nil) {
         self.modelURL = modelURL
-        self.engine = engine
+        self.manifest = manifest
+        self.engine = engine ?? LlamaCppInferenceEngine(chatTemplateOverride: manifest.chatTemplateOverride)
     }
 
     public func load(contextTokens: Int = 2048) async throws {
@@ -47,7 +49,7 @@ public struct GUSLocalModelProvider: ModelProvider {
             localMessages.insert(ModelMessage(role: .system, content: localBoundary), at: 0)
         }
         let text = try await engine.generate(messages: localMessages, options: options)
-        return ModelResponse(content: text, toolCalls: nil, finishReason: "stop", metadata: ["execution": "on-device", "model": availableModels[0]])
+        return ModelResponse(content: text, toolCalls: nil, finishReason: "stop", metadata: ["execution": "on-device", "model": manifest.modelName, "model_id": manifest.id])
     }
 
     public func generateStream(messages: [ModelMessage], tools: [ToolDefinition]?, options: GenerationOptions) -> AsyncThrowingStream<ModelStreamChunk, Error> {
@@ -63,4 +65,9 @@ public struct GUSLocalModelProvider: ModelProvider {
     }
 
     public func cancel() async { await engine.cancel() }
+
+    func unload() async {
+        await engine.cancel()
+        await engine.unload()
+    }
 }

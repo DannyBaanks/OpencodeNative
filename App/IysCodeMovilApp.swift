@@ -2,12 +2,25 @@ import SwiftUI
 import UIKit
 import IysCodeMovilCore
 
+@MainActor
+final class GUSBackgroundDownloadAppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                 handleEventsForBackgroundURLSession identifier: String,
+       completionHandler: @escaping () -> Void) {
+        GUSModelDownloadManager.shared.handleBackgroundEvents(identifier: identifier, completionHandler: completionHandler)
+    }
+}
+
 @main
 public struct IysCodeMovilApp: App {
+    @UIApplicationDelegateAdaptor(GUSBackgroundDownloadAppDelegate.self) private var appDelegate
     @StateObject private var store = WorkbenchStore()
     @StateObject private var hostStore = MobileHostStore()
 
     public init() {
+        // First: diagnose how the previous run ended, before any model work.
+        GUSFlightRecorder.shared.start()
+        GUSMetricKitCollector.shared.register()
         IysThemePreferences.applyPendingOnLaunch()
     }
 
@@ -69,8 +82,12 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { phase in
             Task { await hostStore.setAppActive(phase == .active) }
-            if phase == .active { consumePendingAppIntent() }
+            if phase == .active {
+                GUSFlightRecorder.shared.markForeground()
+                consumePendingAppIntent()
+            }
             if phase == .background {
+                GUSFlightRecorder.shared.markBackground()
                 enteredBackground = true
             } else if phase == .active, enteredBackground {
                 enteredBackground = false

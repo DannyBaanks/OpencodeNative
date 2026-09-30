@@ -73,17 +73,21 @@ CI runs this automatically on every push.
 
 ## D. GUS local (experimental)
 
-Choose **GUS local · Qwen 1.5** in the sandbox provider picker. The app shows
-the pinned Qwen source, the non-commercial license, exact file size, and SHA-256.
-Tap **Descargar modelo** to download the fixed Q4_K_M GGUF from Hugging Face;
-it is not part of the IPA. The app verifies the byte count and digest before
-making the model selectable. Delete the downloaded file from the same screen to
-recover device storage.
+Choose **GUS local** in the sandbox provider picker. The model screen lists
+three fixed GGUF artifacts: Qwen1.5-1.8B Q4_K_M, Qwen2.5-0.5B Q4_K_M, and
+SmolLM2-360M Q4_K_M. Each card shows its pinned source revision, exact size,
+license, attribution, and SHA-256. Tap **Descargar** to fetch a model directly
+to the iPhone; it is not part of the IPA. The app verifies exact byte count and
+digest before making it selectable. Multiple approved models can remain
+installed, but GUS loads the explicitly selected model only. Delete each model
+individually to reclaim storage.
 
-The current local model is guidance-only: it does not execute native tools.
-Tool calls stay off until the Qwen 1.5 format is validated. No cloud fallback
-occurs when GUS local fails. See [MODEL_NOTICE.md](MODEL_NOTICE.md) for the
-source, license, and safeguards.
+All three models receive the same GUS role and safety boundary. This version is
+guidance-only: it does not execute native tools, add iOS permissions, or fall
+back to a cloud model. Background transfers can continue while iOS suspends the
+app or the screen is locked. A user force-quit cancels the transfer; reopen the
+app to retry, and the download may restart from zero. See
+[MODEL_NOTICE.md](MODEL_NOTICE.md) for provenance, licenses, and safeguards.
 
 ### Test Suites
 

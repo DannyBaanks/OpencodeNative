@@ -1,0 +1,37 @@
+name: GUS benchmark result
+description: Publish an on-device benchmark exported from ISyCode (Modelos locales → Benchmark).
+title: "[benchmark] "
+labels: [benchmark]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Paste the JSON exactly as exported. It contains measurements only (device model, iOS, memory, tokens/s) — no prompts or answers.
+        A maintainer adds the `benchmark-approved` label; CI then validates it and opens a PR adding it to `benchmarks/` and `docs/BENCHMARKS.md`.
+        KILLED results (iOS closed the app) are welcome: they show where a model stops fitting.
+  - type: textarea
+    id: report
+    attributes:
+      label: Benchmark JSON
+      render: json
+      placeholder: '{"schema": "isycode.gus.benchmark/1", ...}'
+    validations:
+      required: true
+  - type: input
+    id: device_name
+    attributes:
+      label: Device name (optional)
+      description: The JSON has the hardware id (e.g. iPhone13,2); add the marketing name if you like.
+      placeholder: iPhone 12
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes (optional)
+      description: Case on/off, charging, other apps open, anything unusual.
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Publication
+      options:
+        - label: I agree to publish this result in the repository under the project license.
+          required: true

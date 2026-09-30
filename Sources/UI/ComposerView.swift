@@ -11,6 +11,17 @@ public struct ComposerView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            if store.gusDualSmolActive {
+                HStack {
+                    Label("Dual-Smol · experimental", systemImage: "sparkles")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(IysThemePreferences.active.accent)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, OCSpacing.lg)
+                .padding(.top, OCSpacing.xs)
+            }
+
             // Attachments row
             if !sessionState.composerAttachments.isEmpty {
                 AttachmentsBar(attachments: sessionState.composerAttachments) { attachment in

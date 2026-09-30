@@ -110,8 +110,7 @@ public struct MobileHostAPI: Sendable {
               let scheme = components.scheme?.lowercased(),
               let host = components.host?.lowercased(),
               components.user == nil, components.password == nil,
-              components.query == nil, components.fragment == nil,
-              components.path.isEmpty || components.path == "/" else {
+              components.query == nil, components.fragment == nil else {
             throw MobileHostAPIError.invalidBaseURL
         }
         let loopback = host == "localhost" || host == "::1" || host == "[::1]"
@@ -119,14 +118,27 @@ public struct MobileHostAPI: Sendable {
         guard scheme == "https" || (scheme == "http" && loopback) else {
             throw MobileHostAPIError.invalidBaseURL
         }
-        components.path = ""
+        // Keep an optional deployment mount point (for example `/isycode`).
+        // Restrict it to simple path segments so URL normalization cannot
+        // escape the configured prefix or reinterpret encoded separators.
+        let pathSegments = components.path.split(separator: "/", omittingEmptySubsequences: true)
+        guard pathSegments.allSatisfy({ segment in
+            !segment.isEmpty && segment != "." && segment != ".."
+                && segment.unicodeScalars.allSatisfy {
+                    CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_~.")
+                        .contains($0)
+                }
+        }) else {
+            throw MobileHostAPIError.invalidBaseURL
+        }
+        components.path = pathSegments.isEmpty ? "" : "/" + pathSegments.joined(separator: "/")
         guard let url = components.url else { throw MobileHostAPIError.invalidBaseURL }
         return url
     }
 
     public func checkHealth(baseURL: String) async throws {
         let base = try normalizedBaseURL(baseURL)
-        let (_, status) = try await send(path: "/v1/health", method: "GET", baseURL: base)
+        let (_, status) = try await send(path: "v1/health", method: "GET", baseURL: base)
         guard status == 200 else { throw MobileHostAPIError.rejected(status, nil) }
     }
 
@@ -139,7 +151,7 @@ public struct MobileHostAPI: Sendable {
         }
         let base = try normalizedBaseURL(baseURL)
         let body = try Self.makeEncoder().encode(PairExchangeRequest(code: normalizedCode, deviceName: deviceName))
-        let (data, status) = try await send(path: "/v1/pair/exchange", method: "POST", baseURL: base, body: body)
+        let (data, status) = try await send(path: "v1/pair/exchange", method: "POST", baseURL: base, body: body)
         guard status == 201 else { throw Self.rejection(data: data, status: status) }
         let response = try Self.makeDecoder().decode(PairExchangeResponse.self, from: data)
         guard !response.apiKey.isEmpty, !response.keyID.isEmpty,
@@ -160,7 +172,7 @@ public struct MobileHostAPI: Sendable {
         let base = try normalizedBaseURL(baseURL)
         let body = try Self.makeEncoder().encode(HeartbeatRequest(clientID: clientID, deviceName: deviceName))
         let (data, status) = try await send(
-            path: "/v1/clients/heartbeat",
+            path: "v1/clients/heartbeat",
             method: "POST",
             baseURL: base,
             apiKey: apiKey,
@@ -172,9 +184,17 @@ public struct MobileHostAPI: Sendable {
     }
 
     private func send(path: String, method: String, baseURL: URL, apiKey: String? = nil, body: Data? = nil) async throws -> (Data, Int) {
-        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
+        guard !path.hasPrefix("/"),
+              let endpoint = URLComponents(string: path),
+              endpoint.query == nil, endpoint.fragment == nil,
+              endpoint.path.split(separator: "/").allSatisfy({ $0 != "." && $0 != ".." }),
+              var baseComponents = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw MobileHostAPIError.invalidBaseURL
         }
+        let basePath = baseComponents.path.split(separator: "/", omittingEmptySubsequences: true)
+        let endpointPath = endpoint.path.split(separator: "/", omittingEmptySubsequences: true)
+        baseComponents.path = "/" + (basePath + endpointPath).joined(separator: "/")
+        guard let url = baseComponents.url else { throw MobileHostAPIError.invalidBaseURL }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.timeoutInterval = 8

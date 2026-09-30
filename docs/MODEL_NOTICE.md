@@ -1,54 +1,54 @@
 # GUS local model notice
 
-## Model and source
+GUS Mobile is an open-source project. Model files remain with their respective
+upstream repositories and are downloaded by the user directly to the iPhone;
+they are not bundled in the app, IPA, or CI artifacts. Before a model can be
+used, the app verifies its pinned file size and SHA-256 digest.
 
-ISyCode Móvil can optionally download one model directly to the user's device:
+## Approved models
 
-- **Model:** Qwen1.5-1.8B-Chat, GGUF Q4_K_M
-- **File:** `qwen1_5-1_8b-chat-q4_k_m.gguf`
-- **Repository:** [Qwen/Qwen1.5-1.8B-Chat-GGUF](https://huggingface.co/Qwen/Qwen1.5-1.8B-Chat-GGUF)
-- **Pinned revision:** [`07800fcba6d5d1df3dfa36e3763374a2c0d9f91b`](https://huggingface.co/Qwen/Qwen1.5-1.8B-Chat-GGUF/tree/07800fcba6d5d1df3dfa36e3763374a2c0d9f91b)
-- **Uploader listed for this GGUF revision:** JustinLin610
-- **Size:** 1,217,752,928 bytes
-- **SHA-256:** `702e983c77883426806a2af75d34ab3e462e1b822f9dc23b49e02280c24b2b18`
-- **License:** [Tongyi Qianwen Research License Agreement](https://huggingface.co/Qwen/Qwen1.5-1.8B-Chat-GGUF/blob/07800fcba6d5d1df3dfa36e3763374a2c0d9f91b/LICENSE), non-commercial terms. A copy is included at [docs/licenses/TONGYI_QIANWEN_RESEARCH_LICENSE.txt](licenses/TONGYI_QIANWEN_RESEARCH_LICENSE.txt).
+| Model artifact | File / size | Pinned source | License and attribution |
+| --- | --- | --- | --- |
+| Qwen1.5-1.8B-Chat Q4_K_M | `qwen1_5-1_8b-chat-q4_k_m.gguf` · 1,217,752,928 bytes | [Qwen GGUF](https://huggingface.co/Qwen/Qwen1.5-1.8B-Chat-GGUF/tree/07800fcba6d5d1df3dfa36e3763374a2c0d9f91b), revision `07800fcba6d5d1df3dfa36e3763374a2c0d9f91b` | [Tongyi Qianwen Research License](https://huggingface.co/Qwen/Qwen1.5-1.8B-Chat-GGUF/blob/07800fcba6d5d1df3dfa36e3763374a2c0d9f91b/LICENSE), non-commercial; GGUF upload by JustinLin610 |
+| Qwen2.5-0.5B-Instruct Q4_K_M | `qwen2.5-0.5b-instruct-q4_k_m.gguf` · 491,400,032 bytes | [Qwen GGUF](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/tree/9217f5db79a29953eb74d5343926648285ec7e67), revision `9217f5db79a29953eb74d5343926648285ec7e67` | [Apache 2.0](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/blob/9217f5db79a29953eb74d5343926648285ec7e67/LICENSE); Qwen model family |
+| SmolLM2-360M-Instruct Q4_K_M | `smollm2-360m-instruct-q4_k_m.gguf` · 270,590,528 bytes | [GGUF conversion](https://huggingface.co/mfuntowicz/SmolLM2-360M-Instruct-Q4_K_M-GGUF/tree/de67c694b3fa2c6e9b45b50f286b2555c5dee2a8), revision `de67c694b3fa2c6e9b45b50f286b2555c5dee2a8` | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) (model card: [HuggingFaceTB/SmolLM2-360M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct)); model family by HuggingFaceTB, GGUF uploaded/converted by mfuntowicz |
 
-The model weights are not part of this repository, app bundle, IPA, or CI
-artifact. The app downloads only this pinned file after the user taps the
-download button, checks the exact byte count and SHA-256, and stores it under
-`Files > On My iPhone > ISyCode Móvil > ISyCode/GUS/Models`. On launch, the app
-looks for the pinned file and verifies it again before making it available. A
-model already stored by an earlier version is moved to this folder only after
-the same size and SHA-256 checks. A different model cannot be selected or
-imported through this feature.
+The application pins each artifact's SHA-256 in its reviewed source manifest.
+The digest is displayed in the model screen and checked along with exact size
+before installation or loading. Model files live under the app's
+`Files > On My iPhone > ISyCode Móvil > ISyCode/GUS/Models` folder. Users may
+keep more than one approved model and select one at a time.
 
-## Required attribution
-
-The model license requires this notice in copies of the model materials:
+For the Qwen1.5 research license, the required attribution is:
 
 > Tongyi Qianwen is licensed under the Tongyi Qianwen RESEARCH LICENSE AGREEMENT, Copyright (c) Alibaba Cloud. All Rights Reserved.
 
-ISyCode Móvil and GUS are not authored, endorsed, or supported by Alibaba Cloud
-or Qwen. The GGUF uploader attribution above identifies the uploader shown by
-the pinned repository revision; it does not claim that uploader authored the
-Qwen model.
+The Qwen1.5 license text is included at
+[docs/licenses/TONGYI_QIANWEN_RESEARCH_LICENSE.txt](licenses/TONGYI_QIANWEN_RESEARCH_LICENSE.txt).
 
-## Scope and safeguards
+## GUS behavior and boundaries
 
-- ISyCode is an open-source, non-commercial project. The chosen model's license
-  is also non-commercial; users must follow the license for their own use.
-- Prompts and inference are local when **GUS local** is selected. The explicit
-  model download contacts the pinned Hugging Face route.
-- GUS local currently provides guidance only. Tool calls remain disabled until
-  Qwen 1.5's tool-call format has been characterized and validated. A local
-  model, role prompt, or downloaded model does not grant file permissions.
-- The native capability catalog and iOS permissions remain unchanged. Any
-  future file mutation must pass the app's visible approval flow.
-- Neither this project nor its future independent models use Qwen outputs to
-  train, fine-tune, distill, or create training data for another LLM.
+All three models use the same GUS role prompt. The selected model changes the
+local inference weights only; it does not change GUS instructions or grant
+capabilities. GUS currently provides local guidance with tool calls disabled.
+The app's permissions and approval flow remain the authority for any future
+action. Local inference does not fall back to a remote provider.
+
+Starting a download is an explicit user action. iOS background transfers can
+continue while the app is suspended or the screen is locked, and iOS may relaunch
+the app for transfer events. Force-quitting from the app switcher cancels the
+transfer; reopen the app to see whether it can resume or must restart. Network
+conditions and iOS scheduling may also delay completion.
+
+Each model's owners and licensors remain third parties; ISyCode Móvil does not
+claim to own, author, endorse, or support Qwen, HuggingFaceTB, or the GGUF
+converters/uploaders. Users must follow the license for the specific model they
+choose. Qwen outputs are not used to train, fine-tune, distill, or create
+training data for another model.
 
 ## Inference runtime
 
 The iOS runtime is built from [llama.cpp](https://github.com/ggml-org/llama.cpp)
-commit `842b1880415d6f508f03b789e5ce70194def7bfd`. It is linked as a native
-XCFramework under its MIT license (copy: [docs/licenses/LLAMA_CPP_MIT_LICENSE.txt](licenses/LLAMA_CPP_MIT_LICENSE.txt)); the app does not launch a CLI or subprocess.
+commit `842b1880415d6f508f03b789e5ce70194def7bfd` under the MIT license (copy:
+[docs/licenses/LLAMA_CPP_MIT_LICENSE.txt](licenses/LLAMA_CPP_MIT_LICENSE.txt)).
+The app does not launch a CLI or subprocess.

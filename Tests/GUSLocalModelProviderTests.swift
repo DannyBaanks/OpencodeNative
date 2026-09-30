@@ -5,9 +5,11 @@ private actor FixtureLocalInferenceEngine: LocalInferenceEngine {
     private let response: String
     private(set) var loadedURL: URL?
     private(set) var lastMessages: [ModelMessage] = []
+    private(set) var didUnload = false
 
     init(response: String = "respuesta local") { self.response = response }
-    func load(modelURL: URL, contextTokens: Int) async throws { loadedURL = modelURL }
+    func load(modelURL: URL, contextTokens: Int) async throws { loadedURL = modelURL; didUnload = false }
+    func unload() async { didUnload = true; loadedURL = nil }
     func generate(messages: [ModelMessage], options: GenerationOptions) async throws -> String {
         lastMessages = messages
         return response
@@ -31,6 +33,27 @@ final class GUSLocalModelProviderTests: XCTestCase {
         )
         XCTAssertEqual(response.content, "respuesta local")
         XCTAssertNil(response.toolCalls)
+    }
+
+    func testApprovedModelsExposeTheirIdentityWithoutChangingLocalSafetyBoundary() {
+        for manifest in GUSModelManifest.all {
+            let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/\(manifest.filename)"), manifest: manifest)
+            XCTAssertEqual(provider.availableModels, [manifest.id])
+            XCTAssertTrue(provider.name.contains(manifest.modelName))
+            XCTAssertTrue(provider.capabilities.localOnly)
+            XCTAssertFalse(provider.capabilities.toolCalls)
+        }
+    }
+
+    func testUnloadReleasesSelectedModelEngine() async throws {
+        let engine = FixtureLocalInferenceEngine()
+        let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/verified.gguf"), engine: engine)
+        try await provider.load()
+        await provider.unload()
+        let loadedURL = await engine.loadedURL
+        let didUnload = await engine.didUnload
+        XCTAssertTrue(didUnload)
+        XCTAssertNil(loadedURL)
     }
 
     func testToolLookingTextIsNeverConvertedIntoExecutableCall() async throws {

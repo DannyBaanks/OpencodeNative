@@ -19,6 +19,7 @@ public final class WorkbenchStore: ObservableObject {
     @Published public private(set) var connectionHealth: ConnectionHealth = .disconnected
     /// False when the on-phone sandbox is the canned notes.txt script.
     @Published public private(set) var sandboxUsesLiveModel = false
+    @Published public private(set) var gusDualSmolActive = false
     @Published public private(set) var sandboxFolderName: String? = UserDefaults.standard.string(forKey: "sandbox.authorizedFolderName")
     @Published public var sandboxFolderError: String?
     @Published public var sandboxSetupError: String?
@@ -72,6 +73,7 @@ public final class WorkbenchStore: ObservableObject {
         projects = [project]
         sessions = examples
         backendMode = .native
+        gusDualSmolActive = false
         connectionHealth = .connected
         connectionStatus = "Vista de ejemplo para README"
         sandboxUsesLiveModel = true
@@ -124,6 +126,7 @@ public final class WorkbenchStore: ObservableObject {
             let backend = try WorkbenchBackendFactory.makeBackend(from: pairing)
             currentBackend = backend
             backendMode = .remote
+            gusDualSmolActive = false
             try await backend.connectRemote(pairing: pairing)
 
             let host: String
@@ -213,6 +216,7 @@ public final class WorkbenchStore: ObservableObject {
         activeRemotePairing = nil
         activeRemoteBackendType = nil
         backendMode = .unconfigured
+        gusDualSmolActive = false
         connectionStatus = ""
         isConnecting = false
         connectionHealth = .disconnected
@@ -312,6 +316,7 @@ public final class WorkbenchStore: ObservableObject {
             try await backend.useNativeRuntime()
             currentBackend = backend
             backendMode = .native
+            gusDualSmolActive = (backend as? NativeSwiftBackend)?.isDualSmolActive ?? false
 
             if expiredFolderGrant {
                 try? await KeychainHelper.shared.delete(key: "sandbox.authorizedFolderBookmark")
@@ -351,6 +356,7 @@ public final class WorkbenchStore: ObservableObject {
         } catch {
             backendMode = .unconfigured
             connectionHealth = .disconnected
+            gusDualSmolActive = false
             connectionStatus = "error: \(error.localizedDescription)"
         }
     }
@@ -849,6 +855,9 @@ public final class WorkbenchStore: ObservableObject {
             
         case .modelChanged(let model):
             if let model { sessionState.selectedModel = model }
+
+        case .auxiliaryModelStatus(let status):
+            addSystemEvent(status.rawValue)
             
         case .filesChanged:
             await loadFiles()
@@ -1022,6 +1031,53 @@ public final class WorkbenchStore: ObservableObject {
             addSystemEvent(connectionStatus)
         } catch {
             addErrorEvent("Could not save the API key: \(error.localizedDescription)")
+        }
+    }
+
+    @discardableResult
+    public func setDualSmolEnabled(_ enabled: Bool) async -> Bool {
+        let manager = GUSModelDownloadManager.shared
+        if enabled {
+            await manager.refresh()
+            guard manager.modelURL(id: GUSModelManifest.qwen25Q4KM.id) != nil,
+                  manager.modelURL(id: GUSModelManifest.smolLM2Q4KM.id) != nil else {
+                addErrorEvent("Descarga y verifica Qwen2.5-0.5B y SmolLM2-360M antes de activar Dual-Smol.")
+                return false
+            }
+        }
+
+        let previous = GUSDualModelExperimentSettings.isEnabled
+        GUSDualModelExperimentSettings.setEnabled(enabled)
+        guard let backend = currentBackend as? NativeSwiftBackend else {
+            gusDualSmolActive = false
+            return true
+        }
+
+        do {
+            try await backend.reloadSandboxModel()
+            if enabled && !backend.isDualSmolActive {
+                GUSDualModelExperimentSettings.setEnabled(false)
+                try? await backend.reloadSandboxModel()
+                gusDualSmolActive = backend.isDualSmolActive
+                connectionStatus = await backend.connectionStatus
+                addErrorEvent("No se pudo cargar la pareja Dual-Smol. GUS continúa con el modelo seleccionado.")
+                return false
+            }
+            gusDualSmolActive = backend.isDualSmolActive
+            connectionStatus = await backend.connectionStatus
+            sandboxUsesLiveModel = backend.usesLiveModel
+            await loadModelsAndAgents()
+            if let model = availableModels.first { sessionState.selectedModel = model }
+            if !enabled { addSystemEvent(GUSDualModelStatus.disabled.rawValue) }
+            return true
+        } catch {
+            GUSDualModelExperimentSettings.setEnabled(previous)
+            try? await backend.reloadSandboxModel()
+            gusDualSmolActive = backend.isDualSmolActive
+            connectionStatus = await backend.connectionStatus
+            sandboxUsesLiveModel = backend.usesLiveModel
+            addErrorEvent("No pude aplicar Dual-Smol: \(error.localizedDescription)")
+            return false
         }
     }
 }
