@@ -59,14 +59,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: llama.cpp
-          key: llama-linux-static-${{ steps.llama.outputs.commit }}-v1
+          key: llama-linux-static-${{ steps.llama.outputs.commit }}-portable-v2
 
       - name: Build llama.cpp (static, CPU)
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           git clone --filter=blob:none --no-checkout https://github.com/ggml-org/llama.cpp.git llama.cpp
           git -C llama.cpp checkout --detach "${{ steps.llama.outputs.commit }}"
-          cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF \
+          # GGML_NATIVE=OFF: the harness runs on other runners, whose CPUs may lack
+          # instructions (AVX-512) the build machine has; a native build died there
+          # with SIGILL before printing anything ("CRASHED", ~6 MB RSS).
+          cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF -DGGML_NATIVE=OFF \
             -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=OFF -DCMAKE_BUILD_TYPE=Release
           cmake --build llama.cpp/build --target llama -j"$(nproc)"
 
