@@ -18,6 +18,10 @@ if f'llamaCppCommit = "{build_commit}"' not in (root / "Sources/Model/GUSBenchma
     print("::error::GUSBenchmark.llamaCppCommit does not match scripts/build-llama-xcframework.sh", file=sys.stderr)
     raise SystemExit(1)
 
+if f'LLAMA_CPP_COMMIT = "{build_commit}"' not in (root / "android/ISyCodeMovil/app/src/main/java/dev/iyscode/movil/gus/GusBuild.kt").read_text(encoding="utf-8"):
+    print("::error::Android GusBuild.LLAMA_CPP_COMMIT does not match scripts/build-llama-xcframework.sh", file=sys.stderr)
+    raise SystemExit(1)
+
 manifest = (root / "Sources/Model/GUSModelCatalog.generated.swift").read_text(encoding="utf-8")
 # The originally approved artifacts must never change silently.
 artifacts = {
