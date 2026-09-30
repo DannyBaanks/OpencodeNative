@@ -194,11 +194,11 @@ public enum GUSBenchmark {
 
     // MARK: Pending run (KILLED detection)
 
-    static var directory: URL {
+    public static var directory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ISyCode/Benchmarks", isDirectory: true)
     }
-    static var pendingURL: URL { directory.appendingPathComponent("pending.json") }
+    public static var pendingURL: URL { directory.appendingPathComponent("pending.json") }
 
     static func writePending(_ report: GUSBenchmarkReport, to url: URL = pendingURL) {
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
