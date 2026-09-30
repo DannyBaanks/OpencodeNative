@@ -281,7 +281,11 @@ public actor AgentLoop {
             await eventHandler?(.turnStarted(turn: turn))
             
             // Construir mensajes para el modelo
-            let modelMessages = buildModelMessages(from: conversation)
+            let modelMessages = ModelContextBudget.fit(
+                buildModelMessages(from: conversation),
+                budget: ModelContextBudget.characterBudget(for: context.modelProvider.capabilities,
+                                                           reservedOutputTokens: Self.maxOutputTokens)
+            )
             
             await eventHandler?(.modelRequest(messages: modelMessages))
             
@@ -315,7 +319,7 @@ public actor AgentLoop {
             let options = GenerationOptions(
                 model: context.modelName,
                 temperature: 0.7,
-                maxTokens: 2048
+                maxTokens: Self.maxOutputTokens
             )
             
             let response = try await completeTurn(
@@ -604,27 +608,13 @@ public actor AgentLoop {
             return ToolCall(
                 id: slot.id.isEmpty ? "call_\(index)" : slot.id,
                 name: slot.name,
-                arguments: Self.flatArguments(slot.args)
+                arguments: ToolArgumentDecoding.flatten(slot.args)
             )
         }
         return ModelResponse(content: content, toolCalls: calls.isEmpty ? nil : calls, finishReason: "stop")
     }
 
-    private static func flatArguments(_ json: String) -> [String: String] {
-        guard let data = json.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return [:]
-        }
-        var out: [String: String] = [:]
-        for (key, value) in obj {
-            switch value {
-            case let text as String: out[key] = text
-            case let number as NSNumber: out[key] = number.stringValue
-            default: out[key] = "\(value)"
-            }
-        }
-        return out
-    }
+    static let maxOutputTokens = 2048
 }
 
 /// Errores del agente

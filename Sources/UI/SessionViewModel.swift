@@ -147,9 +147,10 @@ public final class SessionViewModel: ObservableObject {
                 let savedConfig = try? await ps.loadConfiguration()
                 // Cargar API key desde Keychain
                 let apiKey = (try? await ps.loadAPIKey(provider: "remote")) ?? ""
-                let baseURL = savedConfig?.defaultModelProvider == "anthropic" 
-                    ? "https://api.anthropic.com/v1" 
-                    : (savedConfig?.workspacePath ?? "https://api.openai.com/v1")
+                // workspacePath is a folder, not an API endpoint; it used to be sent as the base URL.
+                let baseURL = savedConfig?.defaultModelProvider == "anthropic"
+                    ? "https://api.anthropic.com/v1"
+                    : "https://api.openai.com/v1"
                 try await remote.configure(ModelConfiguration(apiKey: apiKey, baseURL: baseURL))
                 provider = remote
             }
