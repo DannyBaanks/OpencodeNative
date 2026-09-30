@@ -23,7 +23,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "qwen2",
         kvBytesPerToken: 196_608,
-        nativeContextLength: 32_768
+        nativeContextLength: 32_768,
+        thinkingOffDirective: nil
     )
 
     public static let qwen25Q4KM = GUSModelManifest(
@@ -47,7 +48,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "qwen2",
         kvBytesPerToken: 12_288,
-        nativeContextLength: 32_768
+        nativeContextLength: 32_768,
+        thinkingOffDirective: nil
     )
 
     public static let smolLM2Q4KM = GUSModelManifest(
@@ -71,7 +73,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "llama",
         kvBytesPerToken: 40_960,
-        nativeContextLength: 8_192
+        nativeContextLength: 8_192,
+        thinkingOffDirective: nil
     )
 
     public static let smollm2135mQ4km = GUSModelManifest(
@@ -95,7 +98,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "llama",
         kvBytesPerToken: 23_040,
-        nativeContextLength: 8_192
+        nativeContextLength: 8_192,
+        thinkingOffDirective: nil
     )
 
     public static let smollm217bQ4km = GUSModelManifest(
@@ -119,7 +123,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "llama",
         kvBytesPerToken: 196_608,
-        nativeContextLength: 8_192
+        nativeContextLength: 8_192,
+        thinkingOffDirective: nil
     )
 
     public static let smollm33bQ4km = GUSModelManifest(
@@ -143,7 +148,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "smollm3",
         kvBytesPerToken: 73_728,
-        nativeContextLength: 65_536
+        nativeContextLength: 65_536,
+        thinkingOffDirective: "/no_think"
     )
 
     public static let qwen2515bQ4km = GUSModelManifest(
@@ -167,7 +173,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "qwen2",
         kvBytesPerToken: 28_672,
-        nativeContextLength: 32_768
+        nativeContextLength: 32_768,
+        thinkingOffDirective: nil
     )
 
     public static let qwen306bQ4km = GUSModelManifest(
@@ -191,7 +198,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "qwen3",
         kvBytesPerToken: 114_688,
-        nativeContextLength: 40_960
+        nativeContextLength: 40_960,
+        thinkingOffDirective: "/no_think"
     )
 
     public static let qwen317bQ4km = GUSModelManifest(
@@ -215,7 +223,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "qwen3",
         kvBytesPerToken: 114_688,
-        nativeContextLength: 40_960
+        nativeContextLength: 40_960,
+        thinkingOffDirective: "/no_think"
     )
 
     public static let qwen34bQ4km = GUSModelManifest(
@@ -239,7 +248,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "qwen3",
         kvBytesPerToken: 147_456,
-        nativeContextLength: 40_960
+        nativeContextLength: 40_960,
+        thinkingOffDirective: "/no_think"
     )
 
     public static let qwen38bQ4km = GUSModelManifest(
@@ -263,7 +273,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "qwen3",
         kvBytesPerToken: 147_456,
-        nativeContextLength: 40_960
+        nativeContextLength: 40_960,
+        thinkingOffDirective: "/no_think"
     )
 
     public static let llama321bQ4km = GUSModelManifest(
@@ -287,7 +298,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "llama",
         kvBytesPerToken: 32_768,
-        nativeContextLength: 131_072
+        nativeContextLength: 131_072,
+        thinkingOffDirective: nil
     )
 
     public static let llama323bQ4km = GUSModelManifest(
@@ -311,7 +323,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "llama",
         kvBytesPerToken: 114_688,
-        nativeContextLength: 131_072
+        nativeContextLength: 131_072,
+        thinkingOffDirective: nil
     )
 
     public static let llama318bQ4km = GUSModelManifest(
@@ -335,7 +348,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "llama",
         kvBytesPerToken: 131_072,
-        nativeContextLength: 131_072
+        nativeContextLength: 131_072,
+        thinkingOffDirective: nil
     )
 
     public static let gemma31bQ4km = GUSModelManifest(
@@ -359,7 +373,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "gemma3",
         kvBytesPerToken: 26_624,
-        nativeContextLength: 32_768
+        nativeContextLength: 32_768,
+        thinkingOffDirective: nil
     )
 
     public static let gemma34bQ4km = GUSModelManifest(
@@ -383,7 +398,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "gemma3",
         kvBytesPerToken: 139_264,
-        nativeContextLength: 131_072
+        nativeContextLength: 131_072,
+        thinkingOffDirective: nil
     )
 
     public static let phi35MiniQ4km = GUSModelManifest(
@@ -407,7 +423,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "phi3",
         kvBytesPerToken: 393_216,
-        nativeContextLength: 131_072
+        nativeContextLength: 131_072,
+        thinkingOffDirective: nil
     )
 
     public static let phi4MiniQ4km = GUSModelManifest(
@@ -431,7 +448,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "phi3",
         kvBytesPerToken: 131_072,
-        nativeContextLength: 131_072
+        nativeContextLength: 131_072,
+        thinkingOffDirective: nil
     )
 
     public static let tinyllama11bQ4km = GUSModelManifest(
@@ -455,7 +473,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "llama",
         kvBytesPerToken: 22_528,
-        nativeContextLength: 2_048
+        nativeContextLength: 2_048,
+        thinkingOffDirective: nil
     )
 
     public static let nemotronNano4bQ4km = GUSModelManifest(
@@ -479,7 +498,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "llama",
         kvBytesPerToken: 131_072,
-        nativeContextLength: 131_072
+        nativeContextLength: 131_072,
+        thinkingOffDirective: "detailed thinking off"
     )
 
     public static let nemotronMini4bQ4km = GUSModelManifest(
@@ -503,7 +523,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "nemotron",
         kvBytesPerToken: 131_072,
-        nativeContextLength: 4_096
+        nativeContextLength: 4_096,
+        thinkingOffDirective: nil
     )
 
     public static let nemotronNano9bV2Q4km = GUSModelManifest(
@@ -527,7 +548,8 @@ extension GUSModelManifest {
         evidence: .desktopSmoke,
         architecture: "nemotron_h",
         kvBytesPerToken: 229_376,
-        nativeContextLength: 1_048_576
+        nativeContextLength: 1_048_576,
+        thinkingOffDirective: "/no_think"
     )
 
     /// Every artifact the app may download, in catalog order.

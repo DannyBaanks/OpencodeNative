@@ -41,6 +41,10 @@ public struct GUSModelManifest: Sendable, Equatable, Identifiable {
     /// f16 K+V bytes per context token, read from the GGUF header by the pin workflow.
     public let kvBytesPerToken: Int64?
     public let nativeContextLength: Int?
+    /// Reasoning models (Qwen3, SmolLM3, Nemotron) spend a 256-token chat budget
+    /// inside `<think>` and answer nothing. This model-specific system directive
+    /// turns thinking off for chat.
+    public let thinkingOffDirective: String?
 
     public static func model(id: String) -> GUSModelManifest? {
         all.first { $0.id == id }
@@ -64,7 +68,7 @@ public struct GUSModelManifest: Sendable, Equatable, Identifiable {
          attribution: String = "fixture", family: String = "fixture", vendor: String = "fixture",
          parameterLabel: String = "?", commercialUse: Bool = false, chatTemplateOverride: String? = nil,
          isExperimental: Bool = false, evidence: Evidence = .unmeasured, architecture: String? = nil,
-         kvBytesPerToken: Int64? = nil, nativeContextLength: Int? = nil) {
+         kvBytesPerToken: Int64? = nil, nativeContextLength: Int? = nil, thinkingOffDirective: String? = nil) {
         self.id = id
         self.modelName = modelName
         self.repository = repository
@@ -86,5 +90,6 @@ public struct GUSModelManifest: Sendable, Equatable, Identifiable {
         self.architecture = architecture
         self.kvBytesPerToken = kvBytesPerToken
         self.nativeContextLength = nativeContextLength
+        self.thinkingOffDirective = thinkingOffDirective
     }
 }

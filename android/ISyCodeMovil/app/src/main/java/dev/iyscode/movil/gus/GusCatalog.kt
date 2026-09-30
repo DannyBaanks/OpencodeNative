@@ -24,6 +24,7 @@ object GusCatalog {
         architecture = "qwen2",
         kvBytesPerToken = 196608L,
         nativeContextLength = 32768,
+        thinkingOffDirective = null,
     )
 
     val qwen25Q4KM = GusModel(
@@ -48,6 +49,7 @@ object GusCatalog {
         architecture = "qwen2",
         kvBytesPerToken = 12288L,
         nativeContextLength = 32768,
+        thinkingOffDirective = null,
     )
 
     val smolLM2Q4KM = GusModel(
@@ -72,6 +74,7 @@ object GusCatalog {
         architecture = "llama",
         kvBytesPerToken = 40960L,
         nativeContextLength = 8192,
+        thinkingOffDirective = null,
     )
 
     val smollm2135mQ4km = GusModel(
@@ -96,6 +99,7 @@ object GusCatalog {
         architecture = "llama",
         kvBytesPerToken = 23040L,
         nativeContextLength = 8192,
+        thinkingOffDirective = null,
     )
 
     val smollm217bQ4km = GusModel(
@@ -120,6 +124,7 @@ object GusCatalog {
         architecture = "llama",
         kvBytesPerToken = 196608L,
         nativeContextLength = 8192,
+        thinkingOffDirective = null,
     )
 
     val smollm33bQ4km = GusModel(
@@ -144,6 +149,7 @@ object GusCatalog {
         architecture = "smollm3",
         kvBytesPerToken = 73728L,
         nativeContextLength = 65536,
+        thinkingOffDirective = "/no_think",
     )
 
     val qwen2515bQ4km = GusModel(
@@ -168,6 +174,7 @@ object GusCatalog {
         architecture = "qwen2",
         kvBytesPerToken = 28672L,
         nativeContextLength = 32768,
+        thinkingOffDirective = null,
     )
 
     val qwen306bQ4km = GusModel(
@@ -192,6 +199,7 @@ object GusCatalog {
         architecture = "qwen3",
         kvBytesPerToken = 114688L,
         nativeContextLength = 40960,
+        thinkingOffDirective = "/no_think",
     )
 
     val qwen317bQ4km = GusModel(
@@ -216,6 +224,7 @@ object GusCatalog {
         architecture = "qwen3",
         kvBytesPerToken = 114688L,
         nativeContextLength = 40960,
+        thinkingOffDirective = "/no_think",
     )
 
     val qwen34bQ4km = GusModel(
@@ -240,6 +249,7 @@ object GusCatalog {
         architecture = "qwen3",
         kvBytesPerToken = 147456L,
         nativeContextLength = 40960,
+        thinkingOffDirective = "/no_think",
     )
 
     val qwen38bQ4km = GusModel(
@@ -264,6 +274,7 @@ object GusCatalog {
         architecture = "qwen3",
         kvBytesPerToken = 147456L,
         nativeContextLength = 40960,
+        thinkingOffDirective = "/no_think",
     )
 
     val llama321bQ4km = GusModel(
@@ -288,6 +299,7 @@ object GusCatalog {
         architecture = "llama",
         kvBytesPerToken = 32768L,
         nativeContextLength = 131072,
+        thinkingOffDirective = null,
     )
 
     val llama323bQ4km = GusModel(
@@ -312,6 +324,7 @@ object GusCatalog {
         architecture = "llama",
         kvBytesPerToken = 114688L,
         nativeContextLength = 131072,
+        thinkingOffDirective = null,
     )
 
     val llama318bQ4km = GusModel(
@@ -336,6 +349,7 @@ object GusCatalog {
         architecture = "llama",
         kvBytesPerToken = 131072L,
         nativeContextLength = 131072,
+        thinkingOffDirective = null,
     )
 
     val gemma31bQ4km = GusModel(
@@ -360,6 +374,7 @@ object GusCatalog {
         architecture = "gemma3",
         kvBytesPerToken = 26624L,
         nativeContextLength = 32768,
+        thinkingOffDirective = null,
     )
 
     val gemma34bQ4km = GusModel(
@@ -384,6 +399,7 @@ object GusCatalog {
         architecture = "gemma3",
         kvBytesPerToken = 139264L,
         nativeContextLength = 131072,
+        thinkingOffDirective = null,
     )
 
     val phi35MiniQ4km = GusModel(
@@ -408,6 +424,7 @@ object GusCatalog {
         architecture = "phi3",
         kvBytesPerToken = 393216L,
         nativeContextLength = 131072,
+        thinkingOffDirective = null,
     )
 
     val phi4MiniQ4km = GusModel(
@@ -432,6 +449,7 @@ object GusCatalog {
         architecture = "phi3",
         kvBytesPerToken = 131072L,
         nativeContextLength = 131072,
+        thinkingOffDirective = null,
     )
 
     val tinyllama11bQ4km = GusModel(
@@ -456,6 +474,7 @@ object GusCatalog {
         architecture = "llama",
         kvBytesPerToken = 22528L,
         nativeContextLength = 2048,
+        thinkingOffDirective = null,
     )
 
     val nemotronNano4bQ4km = GusModel(
@@ -480,6 +499,7 @@ object GusCatalog {
         architecture = "llama",
         kvBytesPerToken = 131072L,
         nativeContextLength = 131072,
+        thinkingOffDirective = "detailed thinking off",
     )
 
     val nemotronMini4bQ4km = GusModel(
@@ -504,6 +524,7 @@ object GusCatalog {
         architecture = "nemotron",
         kvBytesPerToken = 131072L,
         nativeContextLength = 4096,
+        thinkingOffDirective = null,
     )
 
     val nemotronNano9bV2Q4km = GusModel(
@@ -528,6 +549,7 @@ object GusCatalog {
         architecture = "nemotron_h",
         kvBytesPerToken = 229376L,
         nativeContextLength = 1048576,
+        thinkingOffDirective = "/no_think",
     )
 
     /** Every artifact the app may download, in catalog order. */

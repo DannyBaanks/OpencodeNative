@@ -146,8 +146,14 @@ static int run_smoke(const char * path, const char * override) {
 
     // The chat path: sampling + repetition penalty on a question that made
     // small models loop ("Don Zelaya, reelecto hasta 2024").
+    // Reasoning models get the catalog's thinking-off directive, as in the app.
+    const char * directive = getenv("GUS_THINKING_OFF");
+    char chat_system[512];
+    snprintf(chat_system, sizeof(chat_system), "%s%s%s",
+             "Eres GUS, un asistente local. Responde en español, breve y claro. Si no estás seguro de un dato, dilo.",
+             directive && *directive ? "\n\n" : "", directive && *directive ? directive : "");
     GUSChatMessage history[] = {
-        {"system", "Eres GUS, un asistente local. Responde en español, breve y claro. Si no estás seguro de un dato, dilo."},
+        {"system", chat_system},
         {"user", "¿Quién fue presidente de México en el año 2000?"},
     };
     GUSSamplingParams sampling = gus_llama_default_chat_sampling();
@@ -158,6 +164,11 @@ static int run_smoke(const char * path, const char * override) {
     char * greedy = gus_llama_generate_chat(ctx, history, 2, override, 160, NULL, err2, sizeof(err2));
     printf(",\"sampled_ok\":%s,\"sampled_repeat\":%.2f,\"greedy_repeat\":%.2f",
            sampled ? "true" : "false", repeat_ratio(sampled), repeat_ratio(greedy));
+    // An opened but unclosed think block means the reply budget ran out while
+    // reasoning: the app would show nothing.
+    const bool unfinished_think = sampled && strstr(sampled, "<think>") && !strstr(sampled, "</think>");
+    printf(",\"thinking_off\":"); json_string(stdout, directive ? directive : "");
+    printf(",\"unfinished_think\":%s", unfinished_think ? "true" : "false");
     printf(",\"sampled_output\":"); json_string(stdout, sampled ? sampled : err2);
     printf(",\"greedy_output\":"); json_string(stdout, greedy ? greedy : err2);
     printf("}\n");

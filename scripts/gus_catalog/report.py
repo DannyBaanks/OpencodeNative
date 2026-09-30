@@ -16,18 +16,20 @@ def gib(n: int | None) -> str:
 
 
 def render(pins: list[dict], smokes: dict[str, dict]) -> str:
-    rows = ["| id | pin | GiB | arch | kv/tok | template | smoke | gen tok/s | RSS GiB | Paris | repeat greedy→chat |",
-            "|---|---|---:|---|---:|---|---|---:|---:|---|---|"]
+    rows = ["| id | pin | GiB | arch | kv/tok | template | smoke | gen tok/s | RSS GiB | Paris | repeat greedy→chat | chat answers |",
+            "|---|---|---:|---|---:|---|---|---:|---:|---|---|---|"]
     for p in pins:
         g = p.get("gguf") or {}
         s = smokes.get(p["id"], {})
         loop = (f"{s['greedy_repeat']:.2f}→{s['sampled_repeat']:.2f}"
                 if "greedy_repeat" in s and "sampled_repeat" in s else "")
-        rows.append("| {id} | {st} | {gb} | {arch} | {kv} | {tmpl} | {smoke} | {tps} | {rss} | {paris} | {loop} |".format(
+        answers = {True: "no (stuck in think)", False: "yes"}.get(s.get("unfinished_think"), "")
+        rows.append("| {id} | {st} | {gb} | {arch} | {kv} | {tmpl} | {smoke} | {tps} | {rss} | {paris} | {loop} | {answers} |".format(
             id=p["id"], st=p.get("status"), gb=gib(p.get("byte_count")), arch=g.get("architecture") or "",
             kv=g.get("kv_bytes_per_token") or "", tmpl=s.get("template_source", ""),
             smoke=s.get("status", "—"), tps=s.get("gen_tok_s", ""), rss=gib(s.get("max_rss_bytes")),
-            paris={True: "yes", False: "no"}.get(s.get("mentions_paris"), ""), loop=loop))
+            paris={True: "yes", False: "no"}.get(s.get("mentions_paris"), ""), loop=loop,
+            answers=answers))
     return "\n".join(["## GUS catalog resolution", "", *rows, "",
                       "Desktop CPU numbers only. Phone evidence comes from the in-app benchmark.", ""])
 
@@ -46,6 +48,7 @@ def proposal(p: dict, s: dict) -> dict:
         "output": (s.get("output") or "")[:120],
         "greedy_repeat": s.get("greedy_repeat"), "sampled_repeat": s.get("sampled_repeat"),
         "sampled_output": (s.get("sampled_output") or "")[:160],
+        "thinking_off": s.get("thinking_off"), "unfinished_think": s.get("unfinished_think"),
     }
 
 

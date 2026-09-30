@@ -242,6 +242,15 @@ class BenchmarkTest {
         override fun now() = "2026-09-30T10:00:00Z"
     }
 
+    @Test fun reasoningModelsGetTheirThinkingOffDirectiveInChat() {
+        val qwen3 = GusCatalog.model("qwen3-17b-q4km")!!
+        assertEquals("/no_think", qwen3.thinkingOffDirective)
+        assertTrue(qwen3.chatSystemPrompt("Eres GUS.").endsWith("\n\n/no_think"))
+        val smol = GusCatalog.model("smollm2-360m-q4km")!!
+        assertNull(smol.thinkingOffDirective)
+        assertEquals("Eres GUS.", smol.chatSystemPrompt("Eres GUS."))
+    }
+
     @Test fun protocolMatchesIos() {
         assertEquals(1, Benchmark.PROTOCOL_VERSION)
         assertEquals(listOf("short-answer", "json-object", "long-prefill", "sustained-generation"), Benchmark.tasks.map { it.id })
