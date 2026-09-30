@@ -275,6 +275,48 @@ final class GUSModelDownloadManagerTests: XCTestCase {
         XCTAssertNil(manager.modelURL(id: "unknown"))
     }
 
+    func testImportAdoptsMatchingModelsFromAFolderAndRejectsOthers() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let external = root.appendingPathComponent("Descargas/GUS", isDirectory: true)
+        let modelDirectory = root.appendingPathComponent("container", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: external, withIntermediateDirectories: true)
+        let qwen = Data("qwen weights".utf8)
+        let smol = Data("smol weights!".utf8)
+        // Renamed by the user: still matched by size + SHA-256.
+        try qwen.write(to: external.appendingPathComponent("my-qwen-copy.gguf"))
+        try smol.write(to: external.appendingPathComponent("smol.gguf"))
+        try Data("not a pinned model".utf8).write(to: external.appendingPathComponent("random.gguf"))
+        try Data("ignored".utf8).write(to: external.appendingPathComponent("notes.txt"))
+        let tampered = Data("smol weightz!".utf8)  // same size as smol, wrong hash
+        let tamperedDir = root.appendingPathComponent("tampered", isDirectory: true)
+        try FileManager.default.createDirectory(at: tamperedDir, withIntermediateDirectories: true)
+        try tampered.write(to: tamperedDir.appendingPathComponent("smol.gguf"))
+
+        let manager = GUSModelDownloadManager(
+            manifests: [fixtureManifest(id: "qwen", filename: "qwen.gguf", bytes: qwen),
+                        fixtureManifest(id: "smol", filename: "smol.gguf", bytes: smol)],
+            transfers: [:], modelDirectory: modelDirectory)
+
+        let rejected = await manager.importModels(from: [tamperedDir])
+        XCTAssertEqual(rejected.rejected, ["smol.gguf"])
+        XCTAssertNil(manager.modelURL(id: "smol"))
+
+        let summary = await manager.importModels(from: [root.appendingPathComponent("Descargas")])
+        XCTAssertEqual(Set(summary.imported), ["qwen", "smol"])
+        XCTAssertEqual(summary.rejected, ["random.gguf"])
+        let installed = try XCTUnwrap(manager.modelURL(id: "qwen"))
+        XCTAssertEqual(installed.lastPathComponent, "qwen.gguf")
+        XCTAssertEqual(try Data(contentsOf: installed), qwen)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: external.appendingPathComponent("my-qwen-copy.gguf").path),
+                      "import copies; the user's backup stays in Files")
+        XCTAssertEqual(manager.installedModelFiles.count, 2)
+
+        let again = await manager.importModels(from: [external.appendingPathComponent("smol.gguf")])
+        XCTAssertEqual(again.alreadyInstalled, ["smol"])
+        XCTAssertTrue(again.imported.isEmpty)
+    }
+
     private func fixtureManifest(id: String, filename: String, bytes: Data) -> GUSModelManifest {
         GUSModelManifest(id: id, modelName: id, filename: filename, revision: "fixture",
             sourceURL: URL(string: "https://huggingface.co/test/resolve/fixture/\(filename)")!,

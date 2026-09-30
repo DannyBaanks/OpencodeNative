@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 public struct GUSModelDownloadView: View {
     @ObservedObject private var manager: GUSModelDownloadManager
@@ -11,6 +13,10 @@ public struct GUSModelDownloadView: View {
     @State private var riskyDownload: GUSModelManifest?
     @State private var showCrashHistory = false
     @State private var benchmarkModel: GUSModelManifest?
+    @State private var showImporter = false
+    @State private var exportFiles: [URL] = []
+    @State private var isImporting = false
+    @State private var importMessage: String?
 
     public init(manager: GUSModelDownloadManager = .shared) { self.manager = manager }
 
@@ -50,6 +56,8 @@ public struct GUSModelDownloadView: View {
                 }
             }
 
+            modelBackupControls
+
             Button { showCrashHistory = true } label: {
                 Label("Informes de fallos", systemImage: "stethoscope")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
@@ -87,6 +95,19 @@ public struct GUSModelDownloadView: View {
             }
         }
         .sheet(isPresented: $showCrashHistory) { GUSCrashHistoryView() }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.folder, .item],
+                      allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result, !urls.isEmpty else { return }
+            Task {
+                isImporting = true
+                let summary = await manager.importModels(from: urls)
+                isImporting = false
+                importMessage = Self.describe(summary)
+            }
+        }
+        .sheet(isPresented: Binding(get: { !exportFiles.isEmpty }, set: { if !$0 { exportFiles = [] } })) {
+            GUSDocumentExporter(urls: exportFiles) { exportFiles = [] }
+        }
         .sheet(item: $benchmarkModel) { manifest in
             if let url = manager.modelURL(id: manifest.id) {
                 GUSBenchmarkView(manifest: manifest, modelURL: url)
@@ -97,6 +118,54 @@ public struct GUSModelDownloadView: View {
             await manager.refresh()
             dualSmolEnabled = GUSDualModelExperimentSettings.isEnabled
         }
+    }
+
+    /// Models live in the app container, which iOS wipes when the app is deleted
+    /// or sideloaded again under a new identifier. A copy in Files survives that.
+    private var modelBackupControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("¿Reinstalaste la app? iOS borra sus datos al eliminarla o al reinstalarla con otro identificador. Guarda una copia de tus modelos en Archivos (fuera de la carpeta de ISyCode, p. ej. En mi iPhone › Descargas) e impórtala después: se verifica el SHA-256 y no se vuelve a descargar.")
+                .font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button { showImporter = true } label: {
+                    HStack {
+                        if isImporting { ProgressView() }
+                        Label("Importar desde Archivos", systemImage: "square.and.arrow.down")
+                    }
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isImporting)
+                Button { exportFiles = manager.installedModelFiles } label: {
+                    Label("Guardar copia", systemImage: "square.and.arrow.up")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(manager.installedModelFiles.isEmpty)
+            }
+            if let importMessage {
+                Text(importMessage)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(IysThemePreferences.active.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(10)
+        .background(OCColor.bgDeep)
+        .overlay(RoundedRectangle(cornerRadius: 7).stroke(IysThemePreferences.active.accent.opacity(0.2), lineWidth: 1))
+    }
+
+    static func describe(_ summary: GUSModelDownloadManager.ImportSummary) -> String {
+        var parts: [String] = []
+        if !summary.imported.isEmpty { parts.append("Importados y verificados: \(summary.imported.count)") }
+        if !summary.alreadyInstalled.isEmpty { parts.append("ya instalados: \(summary.alreadyInstalled.count)") }
+        if !summary.rejected.isEmpty {
+            parts.append("no coinciden con el catálogo: \(summary.rejected.joined(separator: ", "))")
+        }
+        return parts.isEmpty ? "No encontré archivos .gguf en lo que elegiste." : parts.joined(separator: " · ")
     }
 
     private var recommendedModels: [GUSModelManifest] {
@@ -328,5 +397,28 @@ public struct GUSModelDownloadView: View {
             Button("Reintentar") { Task { await manager.startDownload(modelID: manifest.id) } }
                 .buttonStyle(.bordered)
         }
+    }
+}
+
+/// Presents the system "Save to Files" picker, copying (not moving) the files.
+struct GUSDocumentExporter: UIViewControllerRepresentable {
+    let urls: [URL]
+    let onFinish: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forExporting: urls, asCopy: true)
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ controller: UIDocumentPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        let onFinish: () -> Void
+        init(onFinish: @escaping () -> Void) { self.onFinish = onFinish }
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { onFinish() }
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { onFinish() }
     }
 }

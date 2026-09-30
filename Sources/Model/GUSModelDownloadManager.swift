@@ -537,6 +537,93 @@ public final class GUSModelDownloadManager: ObservableObject {
         if activeBackgroundID == modelID { activeBackgroundID = nil }
     }
 
+    // MARK: Import / export (models survive app reinstalls)
+
+    public struct ImportSummary: Sendable, Equatable {
+        public var imported: [String] = []
+        public var alreadyInstalled: [String] = []
+        /// GGUF files that do not match any catalog pin (size or SHA-256).
+        public var rejected: [String] = []
+    }
+
+    /// Adopts GGUF files the user picked in Files (single files or folders).
+    /// iOS deletes the app container when the app is removed or reinstalled
+    /// under a new identifier (common with sideloading), so models kept in
+    /// "On My iPhone" or iCloud Drive can be brought back without downloading.
+    /// Only files whose size and SHA-256 match a catalog pin are accepted; the
+    /// copy is an APFS clone on the same volume, so it costs no extra space.
+    public func importModels(from pickedURLs: [URL]) async -> ImportSummary {
+        var summary = ImportSummary()
+        for picked in pickedURLs {
+            let scoped = picked.startAccessingSecurityScopedResource()
+            defer { if scoped { picked.stopAccessingSecurityScopedResource() } }
+            for file in Self.ggufFiles(at: picked) {
+                await importFile(file, into: &summary)
+            }
+        }
+        return summary
+    }
+
+    /// Verified model files, for "Save a copy to Files".
+    public var installedModelFiles: [URL] {
+        manifests.keys.sorted().compactMap { modelURL(id: $0) }
+    }
+
+    private func importFile(_ file: URL, into summary: inout ImportSummary) async {
+        let size = ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? NSNumber)?.int64Value ?? -1
+        // Prefer an exact filename match, then any pin with the same size.
+        let name = file.lastPathComponent
+        let candidates = manifests.values
+            .filter { $0.byteCount == size }
+            .sorted { ($0.filename == name ? 0 : 1, $0.id) < ($1.filename == name ? 0 : 1, $1.id) }
+        guard !candidates.isEmpty else {
+            summary.rejected.append(name)
+            return
+        }
+        if let ready = candidates.first(where: { modelURL(id: $0.id) != nil }) {
+            summary.alreadyInstalled.append(ready.id)
+            return
+        }
+        for manifest in candidates {
+            let staged = stagingURL(for: manifest)
+            let installed = modelDirectory.appendingPathComponent(manifest.filename)
+            do {
+                try prepareModelDirectory()
+                try? FileManager.default.removeItem(at: staged)
+                states[manifest.id] = .verifying
+                try FileManager.default.copyItem(at: file, to: staged)
+                try await verify(staged, manifest: manifest)
+                try? FileManager.default.removeItem(at: installed)
+                try FileManager.default.moveItem(at: staged, to: installed)
+                try excludeFromBackup(installed)
+                states[manifest.id] = .ready(installed)
+                summary.imported.append(manifest.id)
+                return
+            } catch {
+                try? FileManager.default.removeItem(at: staged)
+                states[manifest.id] = .notDownloaded
+            }
+        }
+        summary.rejected.append(name)
+    }
+
+    /// The picked URL itself if it is a GGUF, otherwise GGUFs up to two levels below it.
+    static func ggufFiles(at url: URL) -> [URL] {
+        let isGGUF: (URL) -> Bool = { $0.pathExtension.lowercased() == "gguf" }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return [] }
+        guard isDirectory.boolValue else { return isGGUF(url) ? [url] : [] }
+        guard let enumerator = FileManager.default.enumerator(
+            at: url, includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]) else { return [] }
+        var found: [URL] = []
+        for case let child as URL in enumerator {
+            if enumerator.level > 2 { enumerator.skipDescendants(); continue }
+            if isGGUF(child) { found.append(child) }
+        }
+        return found.sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
     private func stateSet(_ id: String, _ state: GUSModelDownloadState) { states[id] = state }
 
     private func stagingURL(for manifest: GUSModelManifest) -> URL {
