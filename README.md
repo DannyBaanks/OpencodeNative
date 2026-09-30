@@ -1,203 +1,278 @@
-# iSyCode Móvil — parte de la familia iSyCode
+<div align="center">
 
-### Tus proyectos y tus agentes, contigo en el iPhone.
+<img src="./Assets.xcassets/AppIcon.appiconset/AppIcon-1024x1x.png" alt="Ícono de iSyCode Móvil" width="140">
 
-## ¿Qué es esto?
+# iSyCode Móvil
 
-Imagina que dejaste una tarea corriendo en tu computadora y saliste de casa. Abres iSyCode Móvil, vuelves a la conversación, ves qué hizo el agente y respondes si necesita un permiso. Si quieres experimentar sin escritorio, abres el sandbox del propio iPhone.
-
-**Esta app es el compañero móvil de iSyCode.** La TUI de iSyCode para computadora, que estamos preparando para publicar en estos días, será el centro de la familia: arrancará el host, encontrará tus runtimes y gestionará sesiones y permisos. Móvil pone esa experiencia en una interfaz nativa que puedes llevar contigo.
-
-| En tu iPhone | Qué haces |
-| --- | --- |
-| 💬 **Conversaciones claras** | Distingues tus mensajes, respuestas del agente, herramientas y resultados. |
-| 📁 **Proyectos y sesiones** | Encuentras una tarea y retomas su historial. |
-| ✋ **Decisiones tuyas** | Respondes a los permisos que solicite el runtime conectado. |
-| 🧪 **Sandbox local** | Pruebas un agente Swift con archivos privados del iPhone o una carpeta que tú elijas. |
-| 🧠 **GUS local (experimental)** | Descarga uno de tres GGUF aprobados bajo demanda, fuera del IPA; todos comparten el mismo rol GUS y no ejecutan herramientas. |
-| 🎨 **Tu estilo** | Eliges entre los temas Consola y Premium; hay espacio para más temas. |
-
-Hoy puedes conectarte mediante los puentes de OpenCode y Codex, o usar el sandbox local. El host integrado de la futura TUI ya tiene emparejamiento v1; sus sesiones remotas siguen en desarrollo.
+### Tus agentes y tu propia IA, contigo en el iPhone. Incluso sin internet.
 
 [![iOS Build](https://github.com/DannyBaanks/iSyCodeMovil/actions/workflows/ios-build.yml/badge.svg?branch=main)](https://github.com/DannyBaanks/iSyCodeMovil/actions/workflows/ios-build.yml)
-[Instalar en iPhone](#instalar-en-iphone) · [Ver la app](#la-app-por-dentro) · [Conectar una computadora](#conectar-una-computadora) · [La familia iSyCode](#la-familia-isycode)
+[![Release](https://img.shields.io/github/v/release/DannyBaanks/iSyCodeMovil?include_prereleases&label=release)](https://github.com/DannyBaanks/iSyCodeMovil/releases)
+[![iOS 16.4+](https://img.shields.io/badge/iOS-16.4%2B-111111?logo=apple)](#-instálala)
+[![22 modelos locales](https://img.shields.io/badge/GUS-22%20modelos%20locales-7c5cff)](#-gus-una-ia-que-vive-en-tu-iphone)
+[![Licencia MIT](https://img.shields.io/badge/licencia-MIT-blue)](./LICENSE)
+
+[Instalar](#-instálala) · [GUS sin internet](#-gus-una-ia-que-vive-en-tu-iphone) · [Conectar tu compu](#-conecta-tu-computadora) · [Si algo no jala](#-si-algo-no-jala)
+
+</div>
 
 ---
 
-<a id="la-app-por-dentro"></a>
+## ¿Qué es esto?
+
+Dejaste a un agente trabajando en tu computadora y saliste de casa. Abres **iSyCode Móvil**, ves qué hizo, le das permiso para seguir y listo, sin volver al escritorio.
+
+¿Estás en el metro, sin señal? Abres **GUS**, una IA que vive **dentro de tu iPhone**. Nada sale del teléfono y no necesitas cuenta ni internet.
+
+| | |
+|---|---|
+| 💬 **Tus conversaciones, claras** | Ves por separado tus mensajes, lo que responde el agente, las herramientas que usa y sus resultados. |
+| ✋ **Tú decides** | Cuando el agente quiere cambiar algo, te pregunta. Apruebas o rechazas desde el celular. |
+| 🧠 **GUS: IA sin internet** | Elige entre **22 modelos** (Qwen, Llama, Gemma, Phi, SmolLM, NVIDIA Nemotron…) y úsalos offline. |
+| 📏 **Sabe qué cabe en tu iPhone** | La app mide la memoria real de tu teléfono y te dice qué modelo va bien, cuál va justo y cuál no. |
+| 📊 **Benchmarks de la comunidad** | Mide qué tan rápido corre cada modelo en tu iPhone y publica el resultado para ayudar a otros. |
+| 🩺 **Si se cierra, te dice por qué** | Al volver a abrirla sabes en qué estaba, con qué modelo y si fue por falta de memoria. |
+| 💾 **No vuelvas a descargar** | Guarda tus modelos en Archivos y recupéralos al reinstalar la app. |
+| 🧪 **Sandbox en el bolsillo** | Un agente que trabaja con los archivos privados de la app o con la carpeta que tú elijas. |
+| 🎨 **Tu estilo** | Temas Consola y Premium. |
+
+> iSyCode Móvil es el compañero de bolsillo de **iSyCode**, la experiencia de escritorio que estamos por publicar.
+
+---
 
 ## 📸 La app por dentro
 
-Estas pantallas salen de la app compilada en el **iPhone Simulator de GitHub Actions**. Proyectos y chat usan datos de ejemplo creados solo para las capturas. No contienen conversaciones ni claves de un teléfono personal.
-
 | Conectar | Proyectos | Conversación |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/connect.png" alt="Pantalla de conexión de iSyCode Móvil" width="280"> | <img src="docs/screenshots/projects.png" alt="Lista de proyectos de ejemplo" width="280"> | <img src="docs/screenshots/chat.png" alt="Chat de ejemplo con acción de archivo" width="280"> |
-| **Empareja o prueba.** | **Encuentra tu espacio.** | **Sigue cada acción.** |
+| <img src="docs/screenshots/connect.png" alt="Pantalla de conexión de iSyCode Móvil" width="250"> | <img src="docs/screenshots/projects.png" alt="Lista de proyectos de ejemplo" width="250"> | <img src="docs/screenshots/chat.png" alt="Chat de ejemplo con una acción sobre un archivo" width="250"> |
+| **Empareja o prueba sin conexión.** | **Encuentra tu espacio.** | **Sigue cada acción del agente.** |
 
-El workflow también publica estas imágenes como artefacto **IysCodeMovil-ci-screenshots**.
-
-Cada compilación exitosa de `main` publica una **pre-release** en [GitHub Releases](https://github.com/DannyBaanks/iSyCodeMovil/releases), con IPA, notas y checksums SHA-256. Si la firma opcional de CI está configurada, incluye también la IPA firmada; en caso contrario, la IPA unsigned requiere firma antes de instalarse. Las compilaciones manuales de otras ramas solo generan artifacts de Actions.
+<p align="center"><sub>Capturas generadas en el iPhone Simulator de GitHub Actions con datos de ejemplo. Ninguna viene de un teléfono personal.</sub></p>
 
 ---
 
 ## 🚀 Empieza en 3 pasos
 
-1. **Instala iSyCode Móvil.** Descarga la IPA de CI y fírmala con tu Apple ID. Los pasos están justo abajo.
-2. **Elige una puerta de entrada.** Prueba el demo offline en **Entorno de prueba**, o conecta OpenCode/Codex desde tu computadora.
-3. **Abre un proyecto y conversa.** Entra a una sesión, mira las acciones del agente y responde cuando pida permiso.
+**1. Instala la app.** Baja la IPA y fírmala con tu Apple ID ([cómo, aquí abajo](#-instálala)).
 
-### Instalar en iPhone
+**2. Elige cómo empezar:**
 
-La última compilación de `main` está en [GitHub Releases](https://github.com/DannyBaanks/iSyCodeMovil/releases). También puedes descargar una build de rama desde Actions:
+| Quiero… | Toco… |
+|---|---|
+| Probar la app sin nada más | **Entorno de prueba → guion de demo**. Es offline y no pide clave. |
+| Una IA que funcione sin internet | **Entorno de prueba → GUS local**, y descargo un modelo. |
+| Ver a mis agentes de la compu | **Conectar**, y pego el enlace del Bridge ([ver cómo](#-conecta-tu-computadora)). |
 
-1. Descarga `IysCodeMovil-signed.ipa` si aparece; si solo hay `IysCodeMovil-unsigned.ipa`, descárgala y fírmala.
-2. Revisa `SHA256SUMS.txt` para comprobar el archivo descargado.
-3. Instálala con un método autorizado como [iloader](https://iloader.app/), [SideStore](https://sidestore.io/) o [AltStore](https://altstore.io/).
+**3. Conversa.** Abre una sesión, mira lo que hace el agente y responde cuando te pida permiso.
 
-La firma opcional del workflow requiere credenciales Apple guardadas como secrets del repositorio. Sin ellas, la pre-release contiene únicamente una **IPA sin firmar**. Con una cuenta Apple gratuita, la firma suele caducar a los siete días; vuelve a firmar la app cuando iOS lo pida.
+### 📲 Instálala
 
-## 🗺️ Cómo se usa
+1. Entra a [**Releases**](https://github.com/DannyBaanks/iSyCodeMovil/releases) y baja la última versión. Usa `IysCodeMovil-signed.ipa` si aparece; si no, `IysCodeMovil-unsigned.ipa`.
+2. Si quieres comprobar el archivo, usa `SHA256SUMS.txt`.
+3. Instálala con [**iloader**](https://iloader.app), [SideStore](https://sidestore.io) o [AltStore](https://altstore.io) usando tu Apple ID.
+4. En el iPhone ve a **Ajustes → General → VPN y administración de dispositivos**, confía en tu Apple ID y activa el **Modo de desarrollador** si te lo pide.
 
-| Pantalla | Para qué sirve |
-| --- | --- |
-| **Conectar** | Escribes el PIN del host de iSyCode, pegas un enlace del Bridge o abres el sandbox local. |
-| **Proyectos** | Eliges el espacio de trabajo que quieres consultar. |
-| **Sesiones** | Retomas una tarea o comienzas otra. |
-| **Chat** | Hablas con el agente y ves por separado mensajes, herramientas y resultados. |
-| **Archivos y revisión** | Exploras los archivos disponibles y revisas los cambios que el runtime expone. |
-
-### ¿Qué conexión elijo?
-
-| Quiero… | Empiezo por… |
-| --- | --- |
-| Conocer la app sin computadora | **Entorno de prueba → ver el guion de demo**. Es una sesión offline y no requiere clave. |
-| Trabajar con OpenCode en mi computadora | Ejecutar el Bridge y pegar el enlace que muestra. |
-| Conversar con Codex desde el móvil | Usar la conexión experimental por Tailscale, con las funciones descritas en la [guía remota](docs/REMOTE.md#experimental-codex-app-server). |
-| Emparejar con el host de iSyCode | Usar la dirección del host y el PIN de seis dígitos. Hoy permite conexión e inventario; la ejecución de sesiones llegará con la TUI. |
-
-En el chat puedes seguir la conversación, distinguir las acciones del agente y responder a solicitudes de permiso. En el sandbox local, el agente empieza en el espacio privado de la app; tú decides si además le concedes una carpeta desde Archivos.
-
-## La familia iSyCode
-
-**iSyCode** es la experiencia de escritorio y el sustrato que estamos preparando para publicar en estos días. Su TUI arranca el host, detecta las herramientas instaladas en la computadora y aplica los permisos del usuario. **iSyCode Móvil** es la vista de bolsillo de ese ecosistema: empareja el iPhone, presenta sesiones y transmite tus decisiones al host.
-
-El trabajo para unirlos avanza por etapas. El contrato **Host v1** ya contempla estado, PIN temporal, credencial guardada en el llavero e inventario de runtimes. La creación de sesiones, el streaming y las aprobaciones a través de ese host todavía están pendientes. Mientras tanto, el Bridge de OpenCode y la conexión experimental de Codex siguen disponibles.
+> ⏳ Con un Apple ID gratuito la app **dura 7 días**. Después vuelves a firmarla y sigue funcionando.
+>
+> 💾 Antes de reinstalar, usa **Guardar copia** en la pantalla de modelos para no volver a descargar GUS ([ver abajo](#-no-vuelvas-a-descargar-tus-modelos)).
 
 ---
 
-## Conectar una computadora
+## 🧠 GUS: una IA que vive en tu iPhone
 
-### OpenCode, disponible hoy
+GUS corre **dentro del teléfono** con [llama.cpp](https://github.com/ggml-org/llama.cpp). Tus mensajes no salen del iPhone, no hay cuenta ni clave, y funciona en modo avión.
 
-Necesitas Node.js 18 o posterior, OpenCode instalado en la computadora y el iPhone en una red que pueda alcanzar esa computadora.
+**Cómo:** **Entorno de prueba → Proveedores → GUS local**. Elige un modelo, descárgalo una vez y listo.
 
-En una terminal, entra a la carpeta del proyecto que quieres abrir y ejecuta:
+### Los modelos
+
+**Recomendados:** pesan hasta 1.6 GB y funcionan en la mayoría de iPhones recientes.
+
+| Modelo | De | Tamaño | Lo bueno |
+|---|---|---:|---|
+| SmolLM2 135M | Hugging Face | 0.1 GB | Diminuto y rapidísimo |
+| SmolLM2 360M | Hugging Face | 0.3 GB | Ligero para respuestas cortas |
+| Qwen3 0.6B | Alibaba | 0.4 GB | Razona antes de contestar |
+| Qwen2.5 0.5B | Alibaba | 0.5 GB | El equilibrio clásico |
+| TinyLlama 1.1B | TinyLlama | 0.7 GB | Clásico y ligero |
+| Llama 3.2 1B | Meta | 0.8 GB | Multilingüe, incluye español |
+| Gemma 3 1B | Google | 0.8 GB | Multilingüe, de Google |
+| SmolLM2 1.7B | Hugging Face | 1.1 GB | El más capaz de los Smol |
+| Qwen3 1.7B | Alibaba | 1.1 GB | Razonamiento en poco espacio |
+| Qwen2.5 1.5B | Alibaba | 1.1 GB | Sólido para todo |
+| Qwen1.5 1.8B | Alibaba | 1.2 GB | El original de GUS (uso no comercial) |
+
+**Experimentales 🧪:** para iPhones con más RAM, como un Pro reciente. Están ocultos tras un interruptor.
+
+| Modelo | De | Tamaño |
+|---|---|---:|
+| SmolLM3 3B | Hugging Face | 1.9 GB |
+| Llama 3.2 3B | Meta | 2.0 GB |
+| Phi-3.5 mini · Phi-4 mini | Microsoft | 2.4–2.5 GB |
+| Gemma 3 4B | Google | 2.5 GB |
+| Qwen3 4B | Alibaba | 2.5 GB |
+| Nemotron Mini 4B · Nemotron Nano 4B | NVIDIA | 2.7–2.8 GB |
+| Llama 3.1 8B | Meta | 4.9 GB |
+| Qwen3 8B | Alibaba | 5.0 GB |
+| **Nemotron Nano 9B v2** | NVIDIA | 6.5 GB |
+
+Cada modelo lleva su licencia, su origen y su huella SHA-256. La app **verifica cada archivo antes de usarlo**; si no coincide, lo borra. Los modelos nunca vienen dentro de la app: los descargas tú, y la descarga sigue aunque bloquees la pantalla.
+
+### 📏 ¿Cabe en mi iPhone?
+
+No adivinamos por el nombre del modelo de iPhone. La app mide **cuánta memoria le deja iOS en ese momento** y la compara con lo que necesita cada modelo:
+
+| Etiqueta | Qué significa |
+|---|---|
+| 🟢 **Cabe bien** | Usa menos del 70 % de lo disponible. |
+| 🟡 **Justo** | Puede funcionar, pero otras apps abiertas o chats largos lo pueden tumbar. Te pide confirmar. |
+| 🔴 **Probablemente no cabe** | Pasa a la sección experimental. |
+
+> **¿Y si me arriesgo con uno grande?** Lo peor que pasa es que **iOS cierra la app**, el teléfono se calienta un rato o se llena el almacenamiento. Tus datos y tu iPhone están a salvo. Si la app se cierra, al volver te dice exactamente por qué.
+
+### 💾 No vuelvas a descargar tus modelos
+
+iOS borra los datos de una app cuando la eliminas o cuando la reinstalas con otro identificador, algo común al firmar con iloader o SideStore. Para no perder tus modelos:
+
+1. En la pantalla de GUS toca **Guardar copia** y elige una carpeta **fuera** de iSyCode, por ejemplo *En mi iPhone › Descargas* o iCloud Drive.
+2. Después de reinstalar, toca **Importar desde Archivos** y elige esa carpeta.
+
+La app reconoce cada modelo por su huella, **aunque le hayas cambiado el nombre**, y lo deja listo sin descargar nada.
+
+### 🔒 Lo que GUS no hace
+
+- **No usa herramientas ni toca tus archivos.** Por ahora es un modo de orientación.
+- **No manda nada a la nube** ni tiene respaldo remoto.
+- **No lee otras apps** ni datos privados del teléfono.
+
+Detalles, licencias y procedencia: [aviso de modelos](docs/MODEL_NOTICE.md) · [cómo funciona el catálogo](docs/GUS_MARKETPLACE.md).
+
+---
+
+## 📊 Benchmarks: ¿qué tan rápido va en tu iPhone?
+
+Todos los modelos ya pasaron una prueba en computadora. Lo que falta son **mediciones en iPhones reales**, y ahí entras tú.
+
+1. Descarga un modelo y toca **Benchmark en este iPhone**.
+2. La app corre 4 tareas fijas y mide carga, velocidad (tokens por segundo), memoria máxima y temperatura.
+3. Toca **Publicar en GitHub**, pega el JSON en el formulario y envíalo.
+
+El reporte **no incluye tus mensajes**, solo números. Cuando se aprueba, aparece en la tabla de [**Benchmarks**](docs/BENCHMARKS.md), agrupado por modelo y por iPhone.
+
+> Si iOS cierra la app a media prueba, también sirve: se publica como **KILLED** y le dice a todos dónde deja de caber ese modelo.
+
+---
+
+## 🩺 Si la app se cierra, sabrás por qué
+
+Como esas apps que te muestran un informe cuando algo falla. Antes de cada paso delicado (cargar un modelo, generar una respuesta) la app anota en qué va y cuánta memoria usa. Si iOS la cierra, al volver a abrirla te dice algo como:
+
+> ⚠️ **La app terminó durante la carga del modelo · Qwen3 4B.**
+> Probablemente iOS la cerró por exceder su límite de memoria. Última medición: 2.9 GB en uso, 40 MB disponibles.
+
+- **Historial completo** en **Informes de fallos**.
+- **Confirmación de Apple** cuando llega (MetricKit), con la pila técnica para depurar.
+- **Exporta o reporta** con un toque, usando el [formulario de fallos](https://github.com/DannyBaanks/iSyCodeMovil/issues/new?template=crash-report.yml).
+- **Nunca guarda** el texto de tus mensajes ni de las respuestas.
+
+---
+
+## 💻 Conecta tu computadora
+
+### OpenCode (disponible hoy)
+
+En tu computadora (Node.js 18+ y OpenCode instalados), entra a la carpeta del proyecto y ejecuta:
 
 ```bash
 npx --yes github:DannyBaanks/IysCodeMovil#main link
 ```
 
-El Bridge inicia `opencode serve`, genera una credencial temporal y muestra un enlace de emparejamiento. Copia el enlace completo, abre **Conectar con Bridge anterior** en la app y pégalo allí. Mantén el proceso abierto mientras uses la sesión.
+Copia el enlace que aparece, abre **Conectar con Bridge anterior** en la app y pégalo. Deja la terminal abierta mientras lo uses.
 
-### Codex, experimental
+### Codex (experimental)
 
-Codex App Server permite chat y aprobaciones desde el iPhone dentro de un perfil experimental. La [guía de conexión remota](docs/REMOTE.md#experimental-codex-app-server) explica el emparejamiento, el transporte por Tailscale y sus límites actuales.
+Chat, streaming y aprobaciones por Tailscale. Ver la [guía remota](docs/REMOTE.md#experimental-codex-app-server).
 
-### ¿Estás fuera de casa?
+### Host de iSyCode (en camino)
 
-Usa una VPN privada como Tailscale entre el iPhone y la computadora. El Bridge OpenCode incluido usa HTTP con autenticación Basic; úsalo solo en una red de confianza o dentro de una VPN cifrada. **No expongas el puerto 4096 directamente a Internet.**
+El emparejamiento con PIN de 6 dígitos ya funciona. Las sesiones llegan con la versión de escritorio.
 
-Detalles y transporte: [guía de conexión remota](docs/REMOTE.md).
+> 🌎 **¿Fuera de casa?** Instala [Tailscale](https://tailscale.com) en la computadora y en el iPhone, y usa su dirección. **No expongas el puerto 4096 a Internet**: el Bridge es para tu red de confianza o una VPN.
 
 ---
 
-## 🧪 Sandbox del iPhone
+## 🧪 El sandbox del iPhone
 
-El sandbox ejecuta un agente Swift nativo en el contenedor privado de iOS. Puedes:
+Un agente Swift que trabaja dentro del espacio privado de la app:
 
-- Probar el flujo demo sin conectarte a Internet ni configurar un modelo.
-- Conectar una API compatible para usar un modelo remoto.
-- Conceder una carpeta desde Archivos con el selector oficial de iOS; el permiso puede revocarse en Settings.
-- Ver y aprobar operaciones que cambian archivos antes de ejecutarlas.
-- Adjuntar archivos seleccionados mediante la interfaz de iOS.
+- Prueba el **demo sin internet** o conecta un proveedor en la nube: NVIDIA NIM, xAI, OpenAI API, Gemini u OpenRouter.
+- **Dale una carpeta** desde Archivos si quieres; puedes quitarle el permiso cuando sea.
+- **Aprueba cada cambio** de archivos antes de que ocurra.
 
-Las claves API configuradas por la app se guardan en el Keychain. Si eliges un modelo en la nube, el contenido que envíes y los archivos que el agente lea pueden salir del teléfono hacia ese proveedor.
-
-### Modelos del sandbox
-
-El catálogo incluye NVIDIA NIM, xAI, OpenAI API, Google Gemini y OpenRouter. Los modelos disponibles dependen de la cuenta y de lo que anuncie el endpoint `/models` de cada proveedor. La suscripción de ChatGPT **no** incluye crédito de OpenAI API.
-
-Para empezar, abre **Proveedores** en el selector del sandbox, elige un proveedor y agrega su clave. La app la conserva en el Keychain de ese iPhone.
-
-También puedes elegir **GUS local** y descargar Qwen1.5-1.8B, Qwen2.5-0.5B o SmolLM2-360M. La app muestra licencia, procedencia, tamaño y SHA-256 fijados; cada archivo se verifica antes de instalarse. Puedes conservar varios y activar uno a la vez. La descarga puede continuar si iOS suspende la app o bloqueas la pantalla; forzar el cierre cancela la transferencia. Los GGUF nunca se incluyen en el IPA. GUS mantiene un único rol y sigue siendo guía local sin llamadas a herramientas ni fallback remoto. Consulta el [aviso y procedencia de modelos](docs/MODEL_NOTICE.md).
-
-GUS requiere **iOS 16.4 o posterior**, por el mínimo del runtime iOS de llama.cpp. El IPA de CI sigue sin firmar y requiere una instalación autorizada.
+Tus claves se guardan en el **Keychain** del iPhone. Si eliges un modelo en la nube, lo que le mandes sale hacia ese proveedor. Si eliges **GUS**, no sale nada.
 
 ---
 
 ## ✅ Qué puedes hacer hoy
 
-| Experiencia | Estado | Incluye |
-| --- | --- | --- |
-| **Sandbox en el iPhone** | Disponible | Demo sin conexión, agente Swift, modelos con clave API, archivos privados o carpeta elegida en Archivos y aprobación de cambios. |
-| **OpenCode en tu computadora** | Disponible mediante Bridge | Conversaciones, historial, streaming, acciones y permisos del runtime de escritorio. |
-| **Codex en tu computadora** | Experimental | Chat, streaming e interrupción dentro del perfil de [Codex App Server](docs/REMOTE.md#experimental-codex-app-server). |
-| **Host de la TUI iSyCode** | En desarrollo | El emparejamiento y el inventario v1 ya existen; sesiones y streaming por este host llegarán con la integración de escritorio. |
+| Experiencia | Estado |
+|---|---|
+| Sandbox en el iPhone | ✅ Disponible |
+| GUS: 22 modelos locales, benchmark e informes de fallos | 🧪 Experimental: probado en computadora, pendiente de mediciones en iPhones reales |
+| OpenCode en tu computadora | ✅ Disponible con el Bridge |
+| Codex en tu computadora | 🧪 Experimental |
+| Host de la TUI de iSyCode | 🚧 En desarrollo: emparejamiento listo, sesiones en camino |
 
-La compatibilidad con más runtimes, las acciones nativas del iPhone y la integración MCP avanzan por hitos. Puedes seguir el [roadmap de herramientas](docs/ROADMAP_CLIS.md) y la [propuesta de MCP](docs/CHATGPT_MCP.md).
+### ¿El agente puede usar todo mi iPhone?
 
-### ¿Puede el agente usar todo mi iPhone?
-
-El sandbox empieza en los archivos privados de iSyCode Móvil. Solo ve una carpeta externa si la eliges en Archivos. Las demás funciones del teléfono dependen de los permisos y superficies oficiales de iOS; la app no puede leer datos privados de otras apps ni controlar libremente sus pantallas. [Ver límites de iOS](docs/IOS_LIMITATIONS.md).
+No. Empieza en los archivos privados de la app y solo ve una carpeta externa si tú la eliges. No puede leer datos de otras apps ni controlar tu pantalla. Ver [límites de iOS](docs/IOS_LIMITATIONS.md).
 
 ---
 
 ## 🆘 Si algo no jala
 
-| Lo que ves | Qué revisar |
-| --- | --- |
-| `Could not connect to the server` | En el iPhone no uses `127.0.0.1` para llegar a tu computadora: usa la IP de LAN o Tailscale que muestra el Bridge. Confirma que siga ejecutándose. |
-| El enlace no abre la app | Copia el enlace completo `iyscodemovil://...`; si hace falta, pégalo en la pantalla de conexión. |
-| `Rate limited` | El proveedor rechazó temporalmente llamadas por cuota o frecuencia. Espera el tiempo indicado, revisa la cuota de esa API y evita reenviar el mismo mensaje varias veces. |
-| La app no instala | Revisa que el IPA esté firmado y que confiaste en tu Apple ID en Ajustes → General → VPN y administración de dispositivos. |
-| El sandbox no ve mi carpeta | Selecciónala desde Archivos dentro de la app. Si iOS revocó un permiso anterior, el sandbox abre su espacio privado y te pide volver a elegir la carpeta en Ajustes. |
-| Codex muestra `initialize` o desconecta | Asegúrate de usar una versión de Codex compatible con el perfil del Bridge. Detalles y límites: [guía experimental de Codex](docs/REMOTE.md#experimental-codex-app-server). |
+| Pasa esto | Prueba esto |
+|---|---|
+| `Could not connect to the server` | No uses `127.0.0.1`: usa la IP de tu red o de Tailscale que muestra el Bridge, y revisa que siga abierto. |
+| El enlace no abre la app | Copia el enlace completo `iyscodemovil://…` y pégalo en la pantalla de conexión. |
+| La app no instala o dejó de abrir | Fírmala otra vez (pasaron los 7 días) y confía en tu Apple ID en Ajustes. |
+| Me pide descargar los modelos otra vez | iOS borró los datos al reinstalar. Usa **Importar desde Archivos** con tu copia. Si no tenías copia, descárgalos y toca **Guardar copia**. |
+| La app se cierra al cargar un modelo | Ese modelo no cabe ahora. Cierra otras apps o elige uno marcado 🟢. El detalle está en **Informes de fallos**. |
+| GUS tarda mucho en responder | Los modelos grandes van más lentos y el iPhone se calienta. Prueba uno más chico. |
+| `Rate limited` | El proveedor en la nube limitó tus llamadas. Espera un poco y revisa tu cuota. |
+| El sandbox no ve mi carpeta | Vuelve a elegirla desde Archivos dentro de la app. |
 
 ---
 
 <details>
-<summary>Para desarrolladores: compilar desde el código</summary>
+<summary><b>🛠️ Para desarrolladores: compilar y contribuir</b></summary>
 
 <br>
 
-Necesitas macOS, Xcode y [XcodeGen](https://github.com/yonaskolb/XcodeGen):
+Necesitas macOS, Xcode, [XcodeGen](https://github.com/yonaskolb/XcodeGen) y CMake:
 
 ```bash
-brew install xcodegen
-brew install cmake
-bash scripts/build-llama-xcframework.sh
+brew install xcodegen cmake
+bash scripts/build-llama-xcframework.sh   # llama.cpp fijado a un commit
 xcodegen generate
 open IysCodeMovil.xcodeproj
 ```
 
-En Xcode, elige un iPhone Simulator o un dispositivo conectado y presiona **Run**. También puedes compilar desde terminal:
+- **CI:** cada push a `main` compila la app, corre las pruebas en el iOS Simulator, genera las capturas de este README y publica una pre-release con la IPA y sus SHA-256.
+- **Catálogo de GUS:** `Catalog/models.json` es la fuente de verdad. El workflow *GUS model catalog* resuelve cada modelo en Hugging Face, compila el bridge real de la app en Linux y lo prueba con cada GGUF. Para agregar un modelo, sigue [docs/GUS_MARKETPLACE.md](docs/GUS_MARKETPLACE.md).
+- **Benchmarks:** los reportes se validan con `scripts/benchmarks/validate.py` y se agregan a [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
-```bash
-xcodebuild -scheme IysCodeMovil \
-  -destination 'generic/platform=iOS Simulator' \
-  build
-```
-
-Cada push a `main` compila la app, corre las pruebas en iOS Simulator y genera capturas de las pantallas para este README.
+Más documentación:
+- [Uso detallado](docs/USAGE.md)
+- [Conexión y transporte](docs/REMOTE.md)
+- [Compatibilidad con OpenCode](docs/OPENCODE_COMPAT.md)
+- [Roadmap de runtimes](docs/ROADMAP_CLIS.md)
+- [Propuesta MCP](docs/CHATGPT_MCP.md)
 
 </details>
 
-## 📚 Documentación y comunidad
+## Licencia
 
-- [Roadmap de runtimes CLI](docs/ROADMAP_CLIS.md)
-- [Uso detallado](docs/USAGE.md)
-- [Conexión y transporte](docs/REMOTE.md)
-- [Reporte de compatibilidad](docs/OPENCODE_COMPAT.md)
+El código es **MIT**; ver [LICENSE](LICENSE). Cada modelo de GUS conserva su propia licencia, que ves en la app antes de descargarlo.
 
-El proyecto está bajo licencia MIT; consulta [LICENSE](LICENSE). iSyCode Móvil no está afiliado con OpenCode, Codex, Anthropic, Google, xAI, NVIDIA, OpenRouter ni OpenAI.
+iSyCode Móvil no está afiliado con OpenCode, OpenAI, Anthropic, Google, Meta, Microsoft, Alibaba, NVIDIA, Hugging Face, xAI ni OpenRouter.
