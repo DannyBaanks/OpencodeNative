@@ -184,7 +184,41 @@ void gus_llama_cancel(GUSLlamaContext * context) {
     if (context != NULL) atomic_store(&context->cancelled, true);
 }
 
+GUSSamplingParams gus_llama_default_chat_sampling(void) {
+    GUSSamplingParams p;
+    p.temperature = 0.6f;
+    p.top_p = 0.9f;
+    p.min_p = 0.05f;
+    p.top_k = 40;
+    p.repeat_penalty = 1.15f;
+    p.repeat_last_n = 128;
+    p.seed = LLAMA_DEFAULT_SEED;
+    return p;
+}
+
+static struct llama_sampler * make_sampler(const struct llama_vocab * vocab, const GUSSamplingParams * p) {
+    struct llama_sampler_chain_params params = llama_sampler_chain_default_params();
+    struct llama_sampler * chain = llama_sampler_chain_init(params);
+    if (chain == NULL) return NULL;
+    if (p == NULL) {
+        llama_sampler_chain_add(chain, llama_sampler_init_greedy());
+        return chain;
+    }
+    // Penalties scan candidates, so narrow them with top-k first (llama.h advice).
+    if (p->top_k > 0) llama_sampler_chain_add(chain, llama_sampler_init_top_k(p->top_k));
+    if (p->repeat_penalty > 1.0f && p->repeat_last_n > 0) {
+        llama_sampler_chain_add(chain, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), p->repeat_last_n,
+                                                                    p->repeat_penalty, 0.0f, 0.0f));
+    }
+    if (p->top_p > 0.0f && p->top_p < 1.0f) llama_sampler_chain_add(chain, llama_sampler_init_top_p(p->top_p, 1));
+    if (p->min_p > 0.0f) llama_sampler_chain_add(chain, llama_sampler_init_min_p(p->min_p, 1));
+    llama_sampler_chain_add(chain, llama_sampler_init_temp(p->temperature > 0.0f ? p->temperature : 0.6f));
+    llama_sampler_chain_add(chain, llama_sampler_init_dist(p->seed));
+    return chain;
+}
+
 static char * generate_from_prompt(GUSLlamaContext * state, const char * prompt, uint32_t max_tokens,
+                                   const GUSSamplingParams * sampling,
                                    GUSGenerationStats * stats, char * error, size_t error_capacity) {
     atomic_store(&state->cancelled, false);
     llama_memory_clear(llama_get_memory(state->context), true);
@@ -250,10 +284,8 @@ static char * generate_from_prompt(GUSLlamaContext * state, const char * prompt,
     const double generate_start = now_ms();
     if (stats != NULL) stats->prefill_ms = generate_start - prefill_start;
 
-    struct llama_sampler_chain_params sampler_params = llama_sampler_chain_default_params();
-    struct llama_sampler * sampler = llama_sampler_chain_init(sampler_params);
+    struct llama_sampler * sampler = make_sampler(vocab, sampling);
     if (sampler == NULL) { set_error(error, error_capacity, "Could not initialize local sampler."); return NULL; }
-    llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
 
     size_t output_capacity = (size_t)max_tokens * 32 + 1;
     char * output = calloc(output_capacity, 1);
@@ -275,7 +307,8 @@ static char * generate_from_prompt(GUSLlamaContext * state, const char * prompt,
         }
         llama_token token = llama_sampler_sample(sampler, state->context, -1);
         if (llama_vocab_is_eog(vocab, token)) { stopped_at_eog = 1; break; }
-        llama_sampler_accept(sampler, token);
+        // llama_sampler_sample() already accepted the token; accepting it again
+        // would count every token twice in the repetition penalty.
         generated++;
         int32_t piece_length = llama_token_to_piece(vocab, token, piece, (int32_t)sizeof(piece), 0, false);
         if (piece_length > 0 && output_length + (size_t)piece_length < output_capacity) {
@@ -305,7 +338,7 @@ char * gus_llama_generate(GUSLlamaContext * state, const char * prompt, uint32_t
         set_error(error, error_capacity, "Invalid inference request.");
         return NULL;
     }
-    return generate_from_prompt(state, prompt, max_tokens, NULL, error, error_capacity);
+    return generate_from_prompt(state, prompt, max_tokens, NULL, NULL, error, error_capacity);
 }
 
 static bool valid_role(const char * role) {
@@ -392,6 +425,14 @@ done:
 char * gus_llama_generate_chat(GUSLlamaContext * state, const GUSChatMessage * messages, size_t message_count,
                                const char * template_override, uint32_t max_tokens,
                                GUSGenerationStats * stats, char * error, size_t error_capacity) {
+    return gus_llama_generate_chat_sampled(state, messages, message_count, template_override, max_tokens,
+                                           NULL, stats, error, error_capacity);
+}
+
+char * gus_llama_generate_chat_sampled(GUSLlamaContext * state, const GUSChatMessage * messages, size_t message_count,
+                                       const char * template_override, uint32_t max_tokens,
+                                       const GUSSamplingParams * sampling,
+                                       GUSGenerationStats * stats, char * error, size_t error_capacity) {
     if (max_tokens == 0 || max_tokens > 512) {
         set_error(error, error_capacity, "Invalid inference request.");
         return NULL;
@@ -401,7 +442,7 @@ char * gus_llama_generate_chat(GUSLlamaContext * state, const GUSChatMessage * m
     char * prompt = gus_llama_format_chat(state, messages, message_count, template_override, &source, error, error_capacity);
     if (prompt == NULL) return NULL;
     if (stats != NULL) stats->template_source = source;
-    char * output = generate_from_prompt(state, prompt, max_tokens, stats, error, error_capacity);
+    char * output = generate_from_prompt(state, prompt, max_tokens, sampling, stats, error, error_capacity);
     free(prompt);
     return output;
 }

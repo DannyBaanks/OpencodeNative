@@ -79,6 +79,14 @@ class VisibleAnswerTest {
         assertEquals("Paris", LlamaEngine.visibleAnswer("Paris"))
     }
 
+    @Test fun chatSamplesButBenchmarkStaysGreedy() {
+        assertNull(LlamaEngine.samplingFor(0f))
+        val chat = LlamaEngine.samplingFor(0.6f)!!
+        assertEquals(0.6f, chat[0])
+        assertTrue("repetition penalty on", chat[4] > 1f)
+        assertEquals(128f, chat[5])
+    }
+
     @Test fun nativeStatsDecode() {
         val s = GenerationStats.fromNative(doubleArrayOf(100.0, 500.0, 40.0, 20.0, 1.0, 1.0))
         assertEquals(400.0, s.prefillTokensPerSecond, 1e-9)
@@ -211,7 +219,9 @@ class BenchmarkTest {
     private class FakeEngine(private val answers: Map<String, String>) : LocalEngine {
         override var loadedModelId: String? = null
         override suspend fun load(model: GusModel, file: File, contextTokens: Int) { loadedModelId = model.id }
-        override suspend fun generate(messages: List<ChatMessage>, maxTokens: Int): Generation {
+        var lastTemperature = -1f
+        override suspend fun generate(messages: List<ChatMessage>, maxTokens: Int, temperature: Float): Generation {
+            lastTemperature = temperature
             val q = messages.last().content
             val text = answers.entries.firstOrNull { q.contains(it.key) }?.value ?: "ok"
             return Generation(text, GenerationStats(40, 20, 100.0, 500.0, GenerationStats.TemplateSource.EMBEDDED, true))
@@ -250,6 +260,7 @@ class BenchmarkTest {
         assertTrue(report.tasks.all { it.passed })
         assertFalse(pending.exists())
         assertNull(engine.loadedModelId)
+        assertEquals("the benchmark must decode greedily", 0f, engine.lastTemperature)
         val json = report.json()
         for (key in listOf("\"schema\"", "\"protocol\"", "\"run_id\"", "\"peak_footprint_bytes\"", "\"app_memory_limit_bytes\"",
                 "\"llama_cpp_commit\"", "\"platform\": \"android\"", "\"status\": \"completed\"", "isycode.gus.benchmark/1")) {

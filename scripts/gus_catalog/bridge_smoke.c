@@ -87,6 +87,36 @@ static int run_format(const char * path) {
     return ok ? 0 : 1;
 }
 
+// Share of repeated word 3-grams (0 = none). A looping answer like
+// "fue reelecido ... fue reelecido ..." scores high.
+static double repeat_ratio(const char * text) {
+    if (text == NULL) return 0.0;
+    enum { MAX_WORDS = 512 };
+    char words[MAX_WORDS][32];
+    int n = 0;
+    const char * p = text;
+    while (*p && n < MAX_WORDS) {
+        while (*p == ' ' || *p == '\n' || *p == '\t' || *p == ',' || *p == '.') p++;
+        int len = 0;
+        while (*p && *p != ' ' && *p != '\n' && *p != '\t' && *p != ',' && *p != '.') {
+            if (len < 31) words[n][len++] = *p;
+            p++;
+        }
+        if (len > 0) { words[n][len] = '\0'; n++; }
+    }
+    if (n < 6) return 0.0;
+    int repeated = 0;
+    for (int i = 0; i + 2 < n; i++) {
+        for (int j = 0; j < i; j++) {
+            if (!strcmp(words[i], words[j]) && !strcmp(words[i + 1], words[j + 1]) && !strcmp(words[i + 2], words[j + 2])) {
+                repeated++;
+                break;
+            }
+        }
+    }
+    return (double)repeated / (double)(n - 2);
+}
+
 static int run_smoke(const char * path, const char * override) {
     char err[512] = {0};
     const double t0 = now_ms();
@@ -113,7 +143,26 @@ static int run_smoke(const char * path, const char * override) {
            st.generate_ms > 0 ? st.generated_tokens * 1000.0 / st.generate_ms : 0.0);
     printf(",\"mentions_paris\":%s", out && (strstr(out, "Paris") || strstr(out, "paris")) ? "true" : "false");
     printf(",\"output\":"); json_string(stdout, out ? out : err);
+
+    // The chat path: sampling + repetition penalty on a question that made
+    // small models loop ("Don Zelaya, reelecto hasta 2024").
+    GUSChatMessage history[] = {
+        {"system", "Eres GUS, un asistente local. Responde en español, breve y claro. Si no estás seguro de un dato, dilo."},
+        {"user", "¿Quién fue presidente de México en el año 2000?"},
+    };
+    GUSSamplingParams sampling = gus_llama_default_chat_sampling();
+    sampling.seed = 42;
+    GUSGenerationStats st2;
+    char err2[512] = {0};
+    char * sampled = gus_llama_generate_chat_sampled(ctx, history, 2, override, 160, &sampling, &st2, err2, sizeof(err2));
+    char * greedy = gus_llama_generate_chat(ctx, history, 2, override, 160, NULL, err2, sizeof(err2));
+    printf(",\"sampled_ok\":%s,\"sampled_repeat\":%.2f,\"greedy_repeat\":%.2f",
+           sampled ? "true" : "false", repeat_ratio(sampled), repeat_ratio(greedy));
+    printf(",\"sampled_output\":"); json_string(stdout, sampled ? sampled : err2);
+    printf(",\"greedy_output\":"); json_string(stdout, greedy ? greedy : err2);
     printf("}\n");
+    gus_llama_free_text(sampled);
+    gus_llama_free_text(greedy);
     gus_llama_free_text(desc);
     gus_llama_free_text(out);
     gus_llama_destroy(ctx);

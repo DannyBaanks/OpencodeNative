@@ -47,7 +47,8 @@ data class Generation(val text: String, val stats: GenerationStats)
 /** A loaded local model. Implemented by [LlamaEngine]; faked in tests. */
 interface LocalEngine {
     suspend fun load(model: GusModel, file: File, contextTokens: Int = 2048)
-    suspend fun generate(messages: List<ChatMessage>, maxTokens: Int): Generation
+    /** temperature 0 = greedy (benchmark); > 0 samples with a repetition penalty (chat). */
+    suspend fun generate(messages: List<ChatMessage>, maxTokens: Int, temperature: Float = 0f): Generation
     fun cancel()
     suspend fun unload()
     val loadedModelId: String?
@@ -86,7 +87,7 @@ class LlamaEngine(private val recorder: FlightRecorder? = null) : LocalEngine {
         }
     }
 
-    override suspend fun generate(messages: List<ChatMessage>, maxTokens: Int): Generation = lane.withLock {
+    override suspend fun generate(messages: List<ChatMessage>, maxTokens: Int, temperature: Float): Generation = lane.withLock {
         val current = handle
         check(current != 0L) { "El modelo GUS local no está cargado." }
         withContext(Dispatchers.IO) {
@@ -104,6 +105,7 @@ class LlamaEngine(private val recorder: FlightRecorder? = null) : LocalEngine {
                     messages.map { it.content.toByteArray(Charsets.UTF_8) }.toTypedArray(),
                     templateOverride,
                     maxTokens.coerceIn(1, 512),
+                    samplingFor(temperature),
                     raw,
                 )
             }
@@ -144,6 +146,13 @@ class LlamaEngine(private val recorder: FlightRecorder? = null) : LocalEngine {
     fun description(): String? = handle.takeIf { it != 0L }?.let { NativeLlama.nativeDescription(it) }
 
     companion object {
+        /** Mirrors gus_llama_default_chat_sampling() in the shared bridge. */
+        val CHAT_SAMPLING = floatArrayOf(0.6f, 0.9f, 0.05f, 40f, 1.15f, 128f)
+
+        /** null = greedy (reproducible benchmark); otherwise the chat defaults with [temperature]. */
+        fun samplingFor(temperature: Float): FloatArray? =
+            if (temperature <= 0f) null else CHAT_SAMPLING.copyOf().also { it[0] = temperature.coerceAtMost(1.5f) }
+
         /**
          * Reasoning models (Qwen3, SmolLM3, Nemotron) may emit a think block
          * first; only the answer is shown. Same rules as the iOS app.

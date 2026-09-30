@@ -126,7 +126,7 @@ class GusViewModel(application: Application) : AndroidViewModel(application) {
                     engine.load(model, file)
                     _ui.update { it.copy(loadingModel = false) }
                 }
-                val generation = engine.generate(promptFor(history), maxTokens = 256)
+                val generation = engine.generate(promptFor(history), maxTokens = 256, temperature = 0.6f)
                 val meta = "%.1f tok/s · %d tokens".format(generation.stats.generationTokensPerSecond, generation.stats.generatedTokens)
                 _ui.update { it.copy(messages = it.messages + ChatUiMessage(ChatMessage.Role.ASSISTANT, generation.text.ifBlank { "…" }, meta)) }
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -252,6 +252,7 @@ class GusViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         const val SYSTEM_PROMPT =
             "Eres GUS, el asistente local de iSyCode Móvil. Respondes en el idioma del usuario, de forma breve y clara. " +
-                "Funcionas sin internet y no puedes ejecutar herramientas ni cambiar archivos; si te lo piden, explica el límite y sugiere pasos."
+                "Funcionas sin internet y no puedes ejecutar herramientas ni cambiar archivos; si te lo piden, explica el límite y sugiere pasos. " +
+                "Si no estás seguro de un dato (fechas, nombres, cifras), dilo en lugar de inventarlo."
     }
 }
