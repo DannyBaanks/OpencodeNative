@@ -1,0 +1,76 @@
+name: Benchmark intake
+
+# A maintainer labels a "GUS benchmark result" issue with `benchmark-approved`.
+# Only people with triage access can add labels, so this is the approval gate.
+# The issue body is untrusted: it is passed through a file, strictly validated,
+# and only a re-serialized subset is committed — through a pull request.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: benchmark-intake-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  intake:
+    if: ${{ github.event.label.name == 'benchmark-approved' && contains(github.event.issue.labels.*.name, 'benchmark') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate report
+        id: validate
+        env:
+          BODY: ${{ github.event.issue.body }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          printf '%s' "$BODY" > "$RUNNER_TEMP/body.md"
+          set +e
+          python3 scripts/benchmarks/validate.py --issue-body "$RUNNER_TEMP/body.md" --issue "$ISSUE" --write > "$RUNNER_TEMP/result.txt"
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/result.txt"
+          echo "ok=$([ $code = 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Aggregate and open PR
+        if: steps.validate.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          python3 scripts/benchmarks/aggregate.py
+          branch="benchmarks/issue-$ISSUE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add benchmarks docs/BENCHMARKS.md
+          git commit -m "benchmarks: add result from #$ISSUE"
+          git push --force-with-lease origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "benchmarks: result from #$ISSUE" \
+            --body "Adds the validated benchmark from #$ISSUE and regenerates docs/BENCHMARKS.md. Closes #$ISSUE." \
+            || echo "PR already exists"
+
+      - name: Report back on the issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          OK: ${{ steps.validate.outputs.ok }}
+        run: |
+          result="$(cat "$RUNNER_TEMP/result.txt" 2>/dev/null || echo 'validation did not run')"
+          if [ "$OK" = "true" ]; then
+            msg="Validated ✅ — a pull request adds it to docs/BENCHMARKS.md."
+          else
+            msg="Could not accept this report ❌. Re-export it from the app and paste the JSON unchanged."
+          fi
+          printf '%s\n\n```\n%s\n```\n' "$msg" "$result" > "$RUNNER_TEMP/comment.md"
+          gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/comment.md"

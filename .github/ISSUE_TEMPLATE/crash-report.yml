@@ -1,0 +1,27 @@
+name: Crash report
+description: ISyCode closed unexpectedly. Attach the report exported from Modelos locales → Informes de fallos.
+title: "[crash] "
+labels: [crash]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The exported report says where the app was (phase, model, memory) and why iOS closed it. It never contains your prompts or the model's answers.
+        MetricKit sections may include a call stack; that is safe to share.
+  - type: textarea
+    id: report
+    attributes:
+      label: Crash report JSON
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What were you doing?
+      placeholder: Downloaded Qwen3-4B, selected it, sent a first message…
+  - type: input
+    id: device_name
+    attributes:
+      label: Device name (optional)
+      placeholder: iPhone 15 Pro

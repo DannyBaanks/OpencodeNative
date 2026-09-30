@@ -12,6 +12,7 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
     // A llama_context is mutable; serialize load and decoding across sessions.
     private let inferenceLane = DispatchSemaphore(value: 1)
     private var context: OpaquePointer?
+    private var loadedModelID: String?
     /// Builtin llama.cpp template name from the catalog; nil uses the GGUF's own.
     private let chatTemplateOverride: String?
 
@@ -32,6 +33,8 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
             throw ModelProviderError.unsupportedFeature("GUS solo ofrece perfiles de 2K y 4K experimental.")
         }
         let path = modelURL.path
+        let modelID = GUSModelManifest.all.first { $0.filename == modelURL.lastPathComponent }?.id ?? modelURL.lastPathComponent
+        let recorder = GUSFlightRecorder.shared
         let loaded = await Task.detached(priority: .userInitiated) { [self] in
             inferenceLane.wait()
             defer { inferenceLane.signal() }
@@ -39,15 +42,22 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
             let alreadyLoaded = context != nil
             lock.unlock()
             guard !alreadyLoaded else { return true }
+            recorder.beginPhase("model.load", modelID: modelID, fields: ["context": String(contextTokens)])
+            let started = Date()
             var error = [CChar](repeating: 0, count: 512)
             let created = path.withCString { cPath in
                 error.withUnsafeMutableBufferPointer { buffer in
                     gus_llama_create(cPath, UInt32(contextTokens), buffer.baseAddress, buffer.count)
                 }
             }
+            recorder.endPhase("model.load", fields: [
+                "ok": created == nil ? "false" : "true",
+                "ms": String(Int(Date().timeIntervalSince(started) * 1000))
+            ])
             guard let created else { return false }
             lock.lock()
             context = created
+            loadedModelID = modelID
             lock.unlock()
             return true
         }.value
@@ -71,14 +81,22 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
             defer { inferenceLane.signal() }
             lock.lock()
             let current = context
+            let modelID = loadedModelID
             lock.unlock()
             guard let current else {
                 return .failure(LocalGenerationFailure(message: "El modelo GUS local no está cargado."))
             }
+            // Sizes only; message text is never recorded.
+            GUSFlightRecorder.shared.beginPhase("generate", modelID: modelID, fields: [
+                "messages": String(chat.count),
+                "chars": String(chat.reduce(0) { $0 + $1.content.utf8.count }),
+                "max_tokens": String(maxTokens)
+            ])
             // C strings must outlive the call; strdup keeps each one stable.
             let cStrings = chat.flatMap { [strdup($0.role), strdup($0.content)] }
             defer { cStrings.forEach { free($0) } }
             guard !cStrings.contains(where: { $0 == nil }) else {
+                GUSFlightRecorder.shared.endPhase("generate", fields: ["ok": "false"])
                 return .failure(LocalGenerationFailure(message: "Not enough memory to prepare the prompt."))
             }
             var cMessages = stride(from: 0, to: cStrings.count, by: 2).map { index in
@@ -98,6 +116,14 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
                                                    UInt32(maxTokens), &stats, errorBuffer.baseAddress, errorBuffer.count)
                 }
             }
+            let measured = LocalGenerationStats(stats)
+            GUSFlightRecorder.shared.endPhase("generate", fields: [
+                "ok": text == nil ? "false" : "true",
+                "prompt_tokens": String(measured.promptTokens),
+                "generated_tokens": String(measured.generatedTokens),
+                "gen_tok_s": String(format: "%.1f", measured.generationTokensPerSecond),
+                "template": measured.templateSource.rawValue
+            ])
             guard let text else {
                 let message = error.withUnsafeBufferPointer { pointer in
                     pointer.baseAddress.map { String(cString: $0) } ?? "Local inference failed."
@@ -105,7 +131,7 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
                 return .failure(LocalGenerationFailure(message: message))
             }
             defer { gus_llama_free_text(text) }
-            return .success(LocalGeneration(text: Self.visibleAnswer(String(cString: text)), stats: LocalGenerationStats(stats)))
+            return .success(LocalGeneration(text: Self.visibleAnswer(String(cString: text)), stats: measured))
         }.value
         switch result {
         case .success(let generation): return generation
@@ -138,8 +164,12 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
             lock.lock()
             let current = context
             context = nil
+            loadedModelID = nil
             lock.unlock()
-            if let current { gus_llama_destroy(current) }
+            if let current {
+                gus_llama_destroy(current)
+                GUSFlightRecorder.shared.record("model.unload")
+            }
         }.value
     }
 
@@ -159,7 +189,14 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
     /// Reasoning models (Qwen3, SmolLM3, Nemotron) may emit a think block first;
     /// only the answer is shown. An unterminated block means the budget ran out.
     static func visibleAnswer(_ raw: String) -> String {
-        guard let open = raw.range(of: "<think>") else { return raw }
+        guard let open = raw.range(of: "<think>") else {
+            // Some templates (Nemotron-H) open the think block themselves, so
+            // only the closing tag appears in the output.
+            if let close = raw.range(of: "</think>") {
+                return String(raw[close.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return raw
+        }
         guard let close = raw.range(of: "</think>", range: open.upperBound..<raw.endIndex) else {
             return String(raw[..<open.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
         }

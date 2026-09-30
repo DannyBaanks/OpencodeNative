@@ -11,6 +11,13 @@ if check.returncode != 0:
     print("::error::Catalog/models.json and GUSModelCatalog.generated.swift disagree.", file=sys.stderr)
     raise SystemExit(1)
 
+# Benchmark reports name the llama.cpp commit; it must be the one actually built.
+import re
+build_commit = re.search(r'LLAMA_COMMIT="([0-9a-f]{40})"', (root / "scripts/build-llama-xcframework.sh").read_text()).group(1)
+if f'llamaCppCommit = "{build_commit}"' not in (root / "Sources/Model/GUSBenchmark.swift").read_text(encoding="utf-8"):
+    print("::error::GUSBenchmark.llamaCppCommit does not match scripts/build-llama-xcframework.sh", file=sys.stderr)
+    raise SystemExit(1)
+
 manifest = (root / "Sources/Model/GUSModelCatalog.generated.swift").read_text(encoding="utf-8")
 # The originally approved artifacts must never change silently.
 artifacts = {

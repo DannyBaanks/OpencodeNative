@@ -47,6 +47,8 @@ jobs:
           python3 scripts/gus_catalog/generate.py --check
           python3 scripts/verify-gus-model-manifest.py
           python3 -m unittest discover -s scripts/gus_catalog -p 'test_*.py' -v
+          python3 -m unittest discover -s scripts/benchmarks -p 'test_*.py' -v
+          python3 scripts/benchmarks/aggregate.py --check
 
       - name: Pinned llama.cpp commit
         id: llama
