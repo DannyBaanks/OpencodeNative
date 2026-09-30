@@ -113,6 +113,17 @@ final class GUSBenchmarkTests: XCTestCase {
         XCTAssertEqual(LlamaCppInferenceEngine.visibleAnswer("draft\n</think>\n\nParis\n"), "Paris")
     }
 
+    func testChatSamplesWithRepetitionPenaltyButBenchmarkStaysGreedy() {
+        XCTAssertNil(LlamaCppInferenceEngine.sampling(for: GenerationOptions(temperature: 0, maxTokens: 16)),
+                     "temperature 0 must stay greedy so benchmarks are reproducible")
+        let chat = try! XCTUnwrap(LlamaCppInferenceEngine.sampling(for: GenerationOptions(temperature: 0.7, maxTokens: 256)))
+        XCTAssertEqual(chat.temperature, 0.7, accuracy: 0.0001)
+        XCTAssertGreaterThan(chat.repeat_penalty, 1.0, "small models loop without a repetition penalty")
+        XCTAssertGreaterThan(chat.repeat_last_n, 0)
+        let defaults = try! XCTUnwrap(LlamaCppInferenceEngine.sampling(for: GenerationOptions(maxTokens: 256)))
+        XCTAssertEqual(defaults.temperature, gus_llama_default_chat_sampling().temperature)
+    }
+
     func testToolRoleIsFramedAsUser() {
         let mapped = LlamaCppInferenceEngine.chatMessages([
             ModelMessage(role: .system, content: "s"), ModelMessage(role: .tool, content: "t"),

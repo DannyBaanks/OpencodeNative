@@ -21,6 +21,8 @@ object NativeLlama {
         contents: Array<ByteArray>,
         templateOverride: String?,
         maxTokens: Int,
+        /** null = greedy; else [temperature, top_p, min_p, top_k, repeat_penalty, repeat_last_n]. */
+        sampling: FloatArray?,
         stats: DoubleArray,
     ): ByteArray
     @JvmStatic external fun nativeDescription(handle: Long): String?

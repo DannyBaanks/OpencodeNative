@@ -242,6 +242,7 @@ private fun ChatScreen(vm: GusViewModel, ui: UiState, states: Map<String, ModelS
             if (ui.messages.isEmpty()) {
                 item {
                     Muted("Pregúntale lo que quieras. Todo se procesa en este teléfono; nada sale a internet.", Iys.textFaint)
+                    Muted("Ojo: los modelos pequeños pueden inventar datos (fechas, nombres, cifras). Úsalos para redactar, resumir o explicar, y verifica los hechos importantes.", Iys.orange)
                 }
             }
             items(ui.messages) { MessageBubble(it) }

@@ -26,6 +26,22 @@ typedef struct GUSGenerationStats {
     int32_t stopped_at_eog;     // 1 if the model ended its turn, 0 if max_tokens hit
 } GUSGenerationStats;
 
+/// Sampling for chat. Pass NULL for greedy decoding (deterministic; used by
+/// the benchmark and the classifier). Small models loop without a repetition
+/// penalty, so chat uses a mild one plus low-temperature sampling.
+typedef struct GUSSamplingParams {
+    float temperature;      // > 0
+    float top_p;            // 0 < p <= 1
+    float min_p;            // 0 <= p < 1
+    int32_t top_k;          // <= 0 disables
+    float repeat_penalty;   // 1.0 disables
+    int32_t repeat_last_n;  // tokens considered by the penalty
+    uint32_t seed;          // 0xFFFFFFFF = random
+} GUSSamplingParams;
+
+/// Defaults used by the chat on iOS and Android.
+GUSSamplingParams gus_llama_default_chat_sampling(void);
+
 GUSLlamaContext * gus_llama_create(const char * model_path, uint32_t context_tokens, char * error, size_t error_capacity);
 void gus_llama_destroy(GUSLlamaContext * context);
 void gus_llama_cancel(GUSLlamaContext * context);
@@ -39,6 +55,12 @@ char * gus_llama_generate(GUSLlamaContext * context, const char * prompt, uint32
 char * gus_llama_generate_chat(GUSLlamaContext * context, const GUSChatMessage * messages, size_t message_count,
                                const char * template_override, uint32_t max_tokens,
                                GUSGenerationStats * stats, char * error, size_t error_capacity);
+
+/// Same as gus_llama_generate_chat with explicit sampling (NULL = greedy).
+char * gus_llama_generate_chat_sampled(GUSLlamaContext * context, const GUSChatMessage * messages, size_t message_count,
+                                       const char * template_override, uint32_t max_tokens,
+                                       const GUSSamplingParams * sampling,
+                                       GUSGenerationStats * stats, char * error, size_t error_capacity);
 
 /// Formats without generating; returns the prompt the model would see. Free with gus_llama_free_text.
 char * gus_llama_format_chat(GUSLlamaContext * context, const GUSChatMessage * messages, size_t message_count,

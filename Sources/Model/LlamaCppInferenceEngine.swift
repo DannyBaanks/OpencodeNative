@@ -76,6 +76,9 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
         let chat = Self.chatMessages(messages)
         let maxTokens = min(max(options.maxTokens ?? 256, 1), 256)
         let templateOverride = chatTemplateOverride
+        // temperature 0 = greedy (benchmark, classifier); otherwise sample with a
+        // repetition penalty so small models do not loop.
+        let sampling = Self.sampling(for: options)
         let result: Result<LocalGeneration, LocalGenerationFailure> = await Task.detached(priority: .userInitiated) { [self] in
             inferenceLane.wait()
             defer { inferenceLane.signal() }
@@ -104,16 +107,23 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
             }
             var stats = GUSGenerationStats()
             var error = [CChar](repeating: 0, count: 512)
+            var samplingParams = sampling ?? GUSSamplingParams()
+            let useSampling = sampling != nil
             let text: UnsafeMutablePointer<CChar>? = cMessages.withUnsafeMutableBufferPointer { messagesBuffer in
                 error.withUnsafeMutableBufferPointer { errorBuffer in
-                    if let templateOverride {
-                        return templateOverride.withCString { cTemplate in
-                            gus_llama_generate_chat(current, messagesBuffer.baseAddress, messagesBuffer.count, cTemplate,
-                                                    UInt32(maxTokens), &stats, errorBuffer.baseAddress, errorBuffer.count)
+                    withUnsafePointer(to: &samplingParams) { samplingPointer in
+                        let samplingArg: UnsafePointer<GUSSamplingParams>? = useSampling ? samplingPointer : nil
+                        if let templateOverride {
+                            return templateOverride.withCString { cTemplate in
+                                gus_llama_generate_chat_sampled(current, messagesBuffer.baseAddress, messagesBuffer.count, cTemplate,
+                                                                UInt32(maxTokens), samplingArg, &stats,
+                                                                errorBuffer.baseAddress, errorBuffer.count)
+                            }
                         }
+                        return gus_llama_generate_chat_sampled(current, messagesBuffer.baseAddress, messagesBuffer.count, nil,
+                                                               UInt32(maxTokens), samplingArg, &stats,
+                                                               errorBuffer.baseAddress, errorBuffer.count)
                     }
-                    return gus_llama_generate_chat(current, messagesBuffer.baseAddress, messagesBuffer.count, nil,
-                                                   UInt32(maxTokens), &stats, errorBuffer.baseAddress, errorBuffer.count)
                 }
             }
             let measured = LocalGenerationStats(stats)
@@ -171,6 +181,17 @@ final class LlamaCppInferenceEngine: LocalInferenceEngine, @unchecked Sendable {
                 GUSFlightRecorder.shared.record("model.unload")
             }
         }.value
+    }
+
+    /// nil = greedy. Chat gets the shared defaults (mild repetition penalty,
+    /// low temperature, top-k/top-p/min-p), with the caller's temperature if set.
+    static func sampling(for options: GenerationOptions) -> GUSSamplingParams? {
+        if let temperature = options.temperature, temperature <= 0 { return nil }
+        var params = gus_llama_default_chat_sampling()
+        if let temperature = options.temperature { params.temperature = Float(min(temperature, 1.5)) }
+        if let topP = options.topP, topP > 0, topP <= 1 { params.top_p = Float(topP) }
+        if let seed = options.seed, seed >= 0 { params.seed = UInt32(truncatingIfNeeded: seed) }
+        return params
     }
 
     /// Maps app roles onto chat-template roles. Framing is applied in C with the

@@ -60,7 +60,7 @@ JNIEXPORT jbyteArray JNICALL
 Java_dev_iyscode_movil_gus_NativeLlama_nativeGenerateChat(JNIEnv * env, jclass cls, jlong handle,
                                                           jobjectArray roles, jobjectArray contents,
                                                           jstring template_override, jint max_tokens,
-                                                          jdoubleArray stats_out) {
+                                                          jfloatArray sampling_in, jdoubleArray stats_out) {
     (void)cls;
     GUSLlamaContext * ctx = (GUSLlamaContext *)(intptr_t)handle;
     jsize count = (*env)->GetArrayLength(env, roles);
@@ -89,10 +89,24 @@ Java_dev_iyscode_movil_gus_NativeLlama_nativeGenerateChat(JNIEnv * env, jclass c
     }
     if (template_override != NULL) c_template = (*env)->GetStringUTFChars(env, template_override, NULL);
 
+    // sampling_in: null = greedy; else [temperature, top_p, min_p, top_k, repeat_penalty, repeat_last_n].
+    GUSSamplingParams sampling = gus_llama_default_chat_sampling();
+    const GUSSamplingParams * sampling_arg = NULL;
+    if (sampling_in != NULL && (*env)->GetArrayLength(env, sampling_in) >= 6) {
+        jfloat v[6];
+        (*env)->GetFloatArrayRegion(env, sampling_in, 0, 6, v);
+        sampling.temperature = v[0];
+        sampling.top_p = v[1];
+        sampling.min_p = v[2];
+        sampling.top_k = (int32_t)v[3];
+        sampling.repeat_penalty = v[4];
+        sampling.repeat_last_n = (int32_t)v[5];
+        sampling_arg = &sampling;
+    }
     GUSGenerationStats stats;
     char error[512] = {0};
-    char * text = gus_llama_generate_chat(ctx, messages, (size_t)count, c_template, (uint32_t)max_tokens,
-                                          &stats, error, sizeof(error));
+    char * text = gus_llama_generate_chat_sampled(ctx, messages, (size_t)count, c_template, (uint32_t)max_tokens,
+                                                  sampling_arg, &stats, error, sizeof(error));
     if (stats_out != NULL && (*env)->GetArrayLength(env, stats_out) >= 6) {
         jdouble values[6] = { stats.prefill_ms, stats.generate_ms, (jdouble)stats.prompt_tokens,
                               (jdouble)stats.generated_tokens, (jdouble)stats.template_source,
