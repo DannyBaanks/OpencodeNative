@@ -18,8 +18,9 @@ final class GUSModelSelectionTests: XCTestCase {
         XCTAssertFalse(provider.capabilities.streaming)
     }
     func testGUSModelsAreExplicitlyPinnedAndDoNotAddRemoteOptions() {
-        XCTAssertEqual(GUSModelManifest.all.count, 3)
-        XCTAssertTrue(GUSModelManifest.all.allSatisfy { $0.sourceURL.scheme == "https" })
+        // The catalog grows through Catalog/models.json; every entry stays a pinned HF artifact.
+        XCTAssertGreaterThanOrEqual(GUSModelManifest.all.count, 3)
+        XCTAssertTrue(GUSModelManifest.all.allSatisfy { $0.sourceURL.scheme == "https" && $0.sourceURL.host == "huggingface.co" })
         XCTAssertFalse(SandboxModelProvider.all.contains { $0.id.hasPrefix("qwen") || $0.id.hasPrefix("smollm") })
     }
 
