@@ -165,8 +165,16 @@ public final class NativeSwiftBackend: WorkbenchBackend {
         for providerID in order {
             guard let provider = SandboxModelProvider.provider(id: providerID),
                   let key = try await ps.loadAPIKey(provider: provider.id), !key.isEmpty else { continue }
-            try await installRemoteProvider(id: provider.id, display: provider.name, key: key,
-                baseURL: provider.baseURL, preferred: provider.preferredModels, fallback: provider.fallbackModel)
+            do {
+                try await installRemoteProvider(id: provider.id, display: provider.name, key: key,
+                    baseURL: provider.baseURL, preferred: provider.preferredModels, fallback: provider.fallbackModel)
+            } catch ModelProviderError.authenticationFailed where providerID != preference {
+                continue
+            }
+            // Never switch providers silently: the user picked another one.
+            if providerID != preference, let wanted = SandboxModelProvider.provider(id: preference) {
+                connectionStatusStorage += " · \(wanted.name) no disponible (sin clave); usando \(provider.name)"
+            }
             return
         }
         installOfflineDemo()

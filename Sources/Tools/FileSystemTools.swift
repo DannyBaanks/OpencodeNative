@@ -5,6 +5,7 @@ import Foundation
 public actor FileSystemToolExecutor: @preconcurrency ToolExecutor {
     private let workspace: any Workspace
 
+    static let readOutputLimit = 60_000
     public static let toolNames: Set<String> = [
         "read_file", "write_file", "list_directory", "search_files",
         "file_info", "create_directory", "delete_file", "move_file"
@@ -289,7 +290,13 @@ public actor FileSystemToolExecutor: @preconcurrency ToolExecutor {
         default: stringEncoding = .utf8
         }
         
-        let content = String(data: data, encoding: stringEncoding) ?? "<binary data: \(data.count) bytes>"
+        var content = String(data: data, encoding: stringEncoding) ?? "<binary data: \(data.count) bytes>"
+        // The result is stored in the conversation and sent to the model; a
+        // multi-megabyte file would blow any provider's token limit.
+        if content.count > Self.readOutputLimit {
+            content = String(content.prefix(Self.readOutputLimit))
+                + "\n[truncated: the file has \(data.count) bytes; showing the first \(Self.readOutputLimit) characters]"
+        }
         
         return ToolExecutionResult(
             toolCallId: invocation.id,

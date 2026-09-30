@@ -84,7 +84,10 @@ public struct ModelStreamChunk: Codable, Sendable {
 public enum ModelProviderError: Error, LocalizedError, Sendable {
     case notConfigured(String)
     case networkError(String)
-    case rateLimited(retryAfter: TimeInterval?)
+    case rateLimited(retryAfter: TimeInterval?, detail: String? = nil)
+    /// One request is bigger than the account's per-minute token limit or the
+    /// model's context. OpenAI answers this with a 429 too; waiting never helps.
+    case requestTooLarge(provider: String, detail: String?)
     /// The account has no API credit or quota left (billing, not speed). Retrying will not help.
     case quotaExceeded(provider: String, detail: String?)
     case contextTooLarge(maxTokens: Int)
@@ -104,9 +107,15 @@ public enum ModelProviderError: Error, LocalizedError, Sendable {
             }
             if let detail, !detail.isEmpty { text += " Detalle: \(detail)" }
             return text
-        case .rateLimited(let retry):
-            guard let retry, retry > 0 else { return "El proveedor limitó las solicitudes. Espera un momento antes de volver a intentar." }
-            return "El proveedor limitó las solicitudes. Intenta de nuevo en \(Int(ceil(retry))) s."
+        case .rateLimited(let retry, let detail):
+            var text = "El proveedor limitó las solicitudes."
+            if let retry, retry > 0 { text += " Intenta de nuevo en \(Int(ceil(retry))) s." } else { text += " Espera un momento antes de volver a intentar." }
+            if let detail, !detail.isEmpty { text += " Detalle: \(detail)" }
+            return text
+        case .requestTooLarge(let provider, let detail):
+            var text = "La solicitud es demasiado grande para \(provider) (límite de tokens por minuto o de contexto de tu cuenta). Esperar no lo arregla: empieza una sesión nueva o pide archivos más pequeños."
+            if let detail, !detail.isEmpty { text += " Detalle: \(detail)" }
+            return text
         case .contextTooLarge(let max): return "Context too large, max \(max) tokens"
         case .invalidRequest(let m): return "Invalid request: \(m)"
         case .modelNotFound(let m): return "Model not found: \(m)"
@@ -285,26 +294,70 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         try await fetchModels()
     }
     
+    private func endpoint(_ path: String) -> URL? {
+        guard var base = config?.baseURL, !base.isEmpty else { return nil }
+        while base.hasSuffix("/") { base.removeLast() }
+        return URL(string: base + path)
+    }
+
     private func fetchModels() async throws {
-        guard let config = config, let baseURL = config.baseURL else { return }
-        guard let url = URL(string: baseURL + "/models") else { return }
+        guard let config = config, let url = endpoint("/models") else { return }
         
         var request = URLRequest(url: url)
         request.setValue("Bearer \(config.apiKey ?? "")", forHTTPHeaderField: "Authorization")
         
+        let result: (Data, URLResponse)
         do {
-            let (data, _) = try await session.data(for: request)
-            if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let dataArray = json["data"] as? [[String: Any]] {
-                self.availableModels = dataArray.compactMap { $0["id"] as? String }
-            }
+            result = try await session.data(for: request)
         } catch {
             // The model list is optional. Leave it empty so a failed /models
             // call does not pretend the account has a catalog it never returned.
             self.availableModels = []
+            return
+        }
+        // A rejected key is reported now, not as a vague failure on the first message.
+        if let http = result.1 as? HTTPURLResponse, http.statusCode == 401 || http.statusCode == 403 {
+            self.availableModels = []
+            throw ModelProviderError.authenticationFailed
+        }
+        if let json = try? JSONSerialization.jsonObject(with: result.0) as? [String: Any],
+           let dataArray = json["data"] as? [[String: Any]] {
+            self.availableModels = dataArray.compactMap { $0["id"] as? String }
+        } else {
+            self.availableModels = []
         }
     }
     
+    // MARK: Retries
+
+    /// Retries per request after the first attempt, like the official SDKs.
+    static let maxRetries = 3
+    /// A Retry-After longer than this is surfaced instead of silently waited out.
+    static let maxRetryWait: TimeInterval = 20
+
+    /// Rate limits and 5xx are transient and retried with backoff. Billing,
+    /// oversized requests and bad keys fail at once: retrying cannot fix them.
+    static func retryDelay(after error: ModelProviderError, attempt: Int) -> TimeInterval? {
+        guard attempt < maxRetries else { return nil }
+        switch error {
+        case .rateLimited(let retryAfter, _):
+            if let retryAfter { return retryAfter <= maxRetryWait ? max(retryAfter, 0.5) : nil }
+            return backoff(attempt)
+        case .networkError(let message) where message.hasPrefix("HTTP 5"):
+            return backoff(attempt)
+        default:
+            return nil
+        }
+    }
+
+    static func backoff(_ attempt: Int) -> TimeInterval {
+        min(pow(2, Double(attempt)), 8) + Double.random(in: 0..<0.5)
+    }
+
+    private static func sleep(_ seconds: TimeInterval) async throws {
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+
     public func generate(
         messages: [ModelMessage],
         tools: [ToolDefinition]?,
@@ -315,10 +368,19 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         }
         
         let request = try buildRequest(messages: messages, tools: tools, options: options, stream: false)
-        let (data, response) = try await session.data(for: request)
-        
-        try checkResponse(response, body: data)
-        return try parseResponse(data)
+        var attempt = 0
+        while true {
+            let (data, response) = try await session.data(for: request)
+            do {
+                try checkResponse(response, body: data)
+            } catch let error as ModelProviderError {
+                guard let delay = Self.retryDelay(after: error, attempt: attempt) else { throw error }
+                attempt += 1
+                try await Self.sleep(delay)
+                continue
+            }
+            return try parseResponse(data)
+        }
     }
     
     public func generateStream(
@@ -328,47 +390,65 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
     ) -> AsyncThrowingStream<ModelStreamChunk, Error> {
         AsyncThrowingStream { continuation in
             #if canImport(UIKit) || canImport(AppKit) || os(Linux)
-            Task {
+            let task = Task {
                 do {
-                    guard let config = config else {
+                    guard config != nil else {
                         throw ModelProviderError.notConfigured("Call configure() first")
                     }
-                    _ = config
                     
                     let request = try buildRequest(messages: messages, tools: tools, options: options, stream: true)
-                    let (bytes, response) = try await session.bytes(for: request)
-                    
-                    if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    var attempt = 0
+                    var opened: URLSession.AsyncBytes?
+                    while opened == nil {
+                        let (bytes, response) = try await session.bytes(for: request)
+                        guard let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) else {
+                            opened = bytes
+                            break
+                        }
                         // Read the error body (bounded) so the real reason reaches the user.
                         var body = Data()
                         for try await byte in bytes {
                             body.append(byte)
                             if body.count >= 64 * 1024 { break }
                         }
-                        try checkResponse(response, body: body)
+                        do {
+                            try checkResponse(response, body: body)
+                        } catch let error as ModelProviderError {
+                            // Nothing was streamed yet, so retrying is invisible to the user.
+                            guard let delay = Self.retryDelay(after: error, attempt: attempt) else { throw error }
+                            attempt += 1
+                            try await Self.sleep(delay)
+                        }
                     }
+                    guard let bytes = opened else { throw ModelProviderError.networkError("No response from the provider") }
                     
                     for try await line in bytes.lines {
-                        if line.hasPrefix("data: ") {
-                            let jsonStr = String(line.dropFirst(6))
-                            if jsonStr == "[DONE]" {
-                                continuation.yield(ModelStreamChunk(delta: nil, toolCallDelta: nil, done: true, finishReason: "stop"))
-                                break
+                        guard line.hasPrefix("data:") else { continue }
+                        let jsonStr = String(line.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                        if jsonStr == "[DONE]" {
+                            continuation.yield(ModelStreamChunk(delta: nil, toolCallDelta: nil, done: true, finishReason: "stop"))
+                            break
+                        }
+                        let data = Data(jsonStr.utf8)
+                        if let chunk = try? Self.openAIDecoder.decode(StreamChunkResponse.self, from: data) {
+                            guard let choice = chunk.choices.first else { continue }
+                            let calls = choice.delta.toolCalls ?? []
+                            continuation.yield(ModelStreamChunk(
+                                delta: choice.delta.content,
+                                toolCallDelta: calls.first.map(Self.toolCallDelta),
+                                done: false,
+                                finishReason: choice.finishReason
+                            ))
+                            // Parallel tool calls can share a chunk; keep every one.
+                            for extra in calls.dropFirst() {
+                                continuation.yield(ModelStreamChunk(delta: nil, toolCallDelta: Self.toolCallDelta(extra),
+                                                                    done: false, finishReason: nil))
                             }
-                            if let chunk = try? Self.openAIDecoder.decode(StreamChunkResponse.self, from: Data(jsonStr.utf8)) {
-                                if let choice = chunk.choices.first {
-                                    let delta = choice.delta.content
-                                    let toolCallDelta = choice.delta.toolCalls?.first.map { tc in
-                                        ModelStreamChunk.ToolCallDelta(index: tc.index, id: tc.id, name: tc.function?.name, arguments: tc.function?.arguments)
-                                    }
-                                    continuation.yield(ModelStreamChunk(
-                                        delta: delta,
-                                        toolCallDelta: toolCallDelta,
-                                        done: false,
-                                        finishReason: choice.finishReason
-                                    ))
-                                }
-                            }
+                        } else if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                  object["error"] != nil {
+                            // Providers report mid-stream failures as a data event.
+                            let info = Self.providerErrorInfo(from: data)
+                            throw ModelProviderError.networkError("El proveedor cortó la respuesta: \(info.message ?? String(jsonStr.prefix(300)))")
                         }
                     }
                     continuation.finish()
@@ -376,6 +456,7 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
                     continuation.finish(throwing: error)
                 }
             }
+            continuation.onTermination = { _ in task.cancel() }
             #else
             // Streaming via URLSession.bytes is unavailable on this platform toolchain
             // (e.g. Swift CoreLibs FoundationNetworking on Windows). Non-streaming generate() works.
@@ -383,9 +464,21 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
             #endif
         }
     }
+
+    private static func toolCallDelta(_ call: StreamChunkResponse.StreamChoice.StreamToolCall) -> ModelStreamChunk.ToolCallDelta {
+        ModelStreamChunk.ToolCallDelta(index: call.index, id: call.id, name: call.function?.name, arguments: call.function?.arguments)
+    }
+
+    /// OpenAI reasoning models (o-series, GPT-5) reject `max_tokens` and any
+    /// temperature other than the default. `gpt-5-chat-*` is not a reasoning model.
+    static func isOpenAIReasoningModel(_ model: String) -> Bool {
+        let id = model.lowercased().split(separator: "/").last.map(String.init) ?? model.lowercased()
+        if id.hasPrefix("gpt-5") { return !id.contains("chat") }
+        return id.hasPrefix("o1") || id.hasPrefix("o3") || id.hasPrefix("o4")
+    }
     
     private func buildRequest(messages: [ModelMessage], tools: [ToolDefinition]?, options: GenerationOptions, stream: Bool) throws -> URLRequest {
-        guard let config = config, let baseURL = config.baseURL, let url = URL(string: baseURL + "/chat/completions") else {
+        guard let config = config, let url = endpoint("/chat/completions") else {
             throw ModelProviderError.invalidRequest("Invalid base URL")
         }
         
@@ -395,8 +488,9 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         request.setValue("Bearer \(config.apiKey ?? "")", forHTTPHeaderField: "Authorization")
         config.extraHeaders.forEach { request.setValue($1, forHTTPHeaderField: $0) }
         
+        let model = options.model ?? availableModels.first ?? "gpt-4o-mini"
         var body: [String: Any] = [
-            "model": options.model ?? availableModels.first ?? "gpt-3.5-turbo",
+            "model": model,
             "messages": messages.map { msg in
                 var m: [String: Any] = ["role": msg.role.rawValue, "content": msg.content]
                 if let name = msg.name { m["name"] = name }
@@ -419,9 +513,20 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
             "stream": stream
         ]
         
-        if let temp = options.temperature { body["temperature"] = temp }
-        if let maxTokens = options.maxTokens { body["max_tokens"] = maxTokens }
-        if let topP = options.topP { body["top_p"] = topP }
+        let isOpenAI = url.host?.lowercased() == "api.openai.com"
+        let reasoning = isOpenAI && Self.isOpenAIReasoningModel(model)
+        if !reasoning {
+            if let temp = options.temperature { body["temperature"] = temp }
+            if let topP = options.topP { body["top_p"] = topP }
+        }
+        if let maxTokens = options.maxTokens {
+            if isOpenAI {
+                // Reasoning tokens count against this budget; leave room for the answer.
+                body["max_completion_tokens"] = reasoning ? max(maxTokens, 8192) : maxTokens
+            } else {
+                body["max_tokens"] = maxTokens
+            }
+        }
         if let stop = options.stopSequences { body["stop"] = stop }
         if let seed = options.seed { body["seed"] = seed }
         
@@ -472,13 +577,19 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         if status == 402 || billing.contains(where: haystack.contains) {
             return .quotaExceeded(provider: provider, detail: detail)
         }
+        // OpenAI: 429 "Request too large for gpt-4o … on tokens per min (TPM)";
+        // 400 context_length_exceeded; Anthropic-style 413 request_too_large.
+        let tooLarge = ["request too large", "context_length_exceeded", "request_too_large", "maximum context length"]
+        if status == 413 || tooLarge.contains(where: haystack.contains) {
+            return .requestTooLarge(provider: provider, detail: detail)
+        }
         switch status {
         case 401, 403:
             return .authenticationFailed
         case 404 where haystack.contains("model"):
             return .modelNotFound(detail ?? "HTTP 404")
         case 429:
-            return .rateLimited(retryAfter: retryAfter.flatMap(Self.retryDelay))
+            return .rateLimited(retryAfter: retryAfter.flatMap(Self.retryDelay), detail: detail)
         case 400..<500:
             return .invalidRequest(detail.map { "HTTP \(status): \($0)" } ?? "HTTP \(status)")
         default:
@@ -558,20 +669,41 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
 /// Decode a model-provided JSON arguments string into a flat [String:String] dict.
 /// Returns empty dict on parse failure or non-object payload.
 private func decodeArguments(_ json: String) -> [String:String] {
-    guard let data = json.data(using: .utf8),
-          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-        return [:]
+    ToolArgumentDecoding.flatten(json)
+}
+
+/// Tool arguments arrive as JSON; the tool contract is a flat string map.
+enum ToolArgumentDecoding {
+    static func flatten(_ json: String) -> [String: String] {
+        guard let data = json.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return [:]
+        }
+        return obj.mapValues(Self.string)
     }
-    var out: [String:String] = [:]
-    for (k, v) in obj {
-        switch v {
-        case let s as String: out[k] = s
-        case let n as NSNumber: out[k] = n.stringValue
-        case let b as Bool: out[k] = b ? "true" : "false"
-        default: out[k] = "\(v)"
+
+    /// JSON booleans decode as NSNumber, so `true` used to become "1" and every
+    /// `recursive: true` was read as false. Nested values stay JSON, not Swift dumps.
+    static func string(_ value: Any) -> String {
+        switch value {
+        case let text as String:
+            return text
+        case let number as NSNumber:
+            if String(cString: number.objCType) == "c" { return number.boolValue ? "true" : "false" }
+            return number.stringValue
+        case let flag as Bool:
+            return flag ? "true" : "false"
+        case is NSNull:
+            return ""
+        default:
+            if JSONSerialization.isValidJSONObject(value),
+               let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+               let text = String(data: data, encoding: .utf8) {
+                return text
+            }
+            return "\(value)"
         }
     }
-    return out
 }
 
 /// Serialize a flat [String:String] back to a JSON object string for the API.
