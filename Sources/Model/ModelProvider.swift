@@ -85,6 +85,8 @@ public enum ModelProviderError: Error, LocalizedError, Sendable {
     case notConfigured(String)
     case networkError(String)
     case rateLimited(retryAfter: TimeInterval?)
+    /// The account has no API credit or quota left (billing, not speed). Retrying will not help.
+    case quotaExceeded(provider: String, detail: String?)
     case contextTooLarge(maxTokens: Int)
     case invalidRequest(String)
     case modelNotFound(String)
@@ -95,13 +97,20 @@ public enum ModelProviderError: Error, LocalizedError, Sendable {
         switch self {
         case .notConfigured(let m): return "Provider not configured: \(m)"
         case .networkError(let m): return "Network error: \(m)"
+        case .quotaExceeded(let provider, let detail):
+            var text = "\(provider) rechazó la solicitud por falta de saldo o cuota en la cuenta de API. Revisa la facturación del proveedor; reintentar no lo arregla."
+            if provider.localizedCaseInsensitiveContains("openai") {
+                text += " Ojo: ChatGPT Plus/Pro (y el uso de Codex) no incluye crédito de OpenAI API; ese se compra aparte en platform.openai.com."
+            }
+            if let detail, !detail.isEmpty { text += " Detalle: \(detail)" }
+            return text
         case .rateLimited(let retry):
             guard let retry, retry > 0 else { return "El proveedor limitó las solicitudes. Espera un momento antes de volver a intentar." }
             return "El proveedor limitó las solicitudes. Intenta de nuevo en \(Int(ceil(retry))) s."
         case .contextTooLarge(let max): return "Context too large, max \(max) tokens"
         case .invalidRequest(let m): return "Invalid request: \(m)"
         case .modelNotFound(let m): return "Model not found: \(m)"
-        case .authenticationFailed: return "Authentication failed"
+        case .authenticationFailed: return "El proveedor rechazó la clave de API (revisa que sea correcta y esté activa)."
         case .unsupportedFeature(let m): return "Unsupported feature: \(m)"
         }
     }
@@ -308,7 +317,7 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         let request = try buildRequest(messages: messages, tools: tools, options: options, stream: false)
         let (data, response) = try await session.data(for: request)
         
-        try checkResponse(response)
+        try checkResponse(response, body: data)
         return try parseResponse(data)
     }
     
@@ -329,7 +338,15 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
                     let request = try buildRequest(messages: messages, tools: tools, options: options, stream: true)
                     let (bytes, response) = try await session.bytes(for: request)
                     
-                    try checkResponse(response)
+                    if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                        // Read the error body (bounded) so the real reason reaches the user.
+                        var body = Data()
+                        for try await byte in bytes {
+                            body.append(byte)
+                            if body.count >= 64 * 1024 { break }
+                        }
+                        try checkResponse(response, body: body)
+                    }
                     
                     for try await line in bytes.lines {
                         if line.hasPrefix("data: ") {
@@ -435,17 +452,63 @@ public actor RemoteModelProvider: @preconcurrency ModelProvider {
         return request
     }
     
-    private func checkResponse(_ response: URLResponse) throws {
-        guard let http = response as? HTTPURLResponse else { return }
-        switch http.statusCode {
-        case 200..<300: return
-        case 401: throw ModelProviderError.authenticationFailed
-        case 429:
-            let retry = http.value(forHTTPHeaderField: "Retry-After").flatMap(Self.retryDelay)
-            throw ModelProviderError.rateLimited(retryAfter: retry)
-        case 400..<500: throw ModelProviderError.invalidRequest("HTTP \(http.statusCode)")
-        default: throw ModelProviderError.networkError("HTTP \(http.statusCode)")
+    private func checkResponse(_ response: URLResponse, body: Data) throws {
+        guard let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) else { return }
+        throw Self.classifyHTTPError(status: http.statusCode,
+                                     retryAfter: http.value(forHTTPHeaderField: "Retry-After"),
+                                     body: body, provider: name)
+    }
+
+    /// Turns an HTTP error into a precise error using the provider's JSON body.
+    /// A 429 is often not "too many requests": OpenAI, Gemini and others also use
+    /// it for an account without API credit (`insufficient_quota`), which no
+    /// amount of waiting fixes. OpenRouter uses 402 for the same thing.
+    static func classifyHTTPError(status: Int, retryAfter: String?, body: Data, provider: String) -> ModelProviderError {
+        let info = providerErrorInfo(from: body)
+        let detail = info.message.map { String($0.prefix(300)) }
+        let haystack = [info.code, info.type, info.status, info.message].compactMap { $0?.lowercased() }.joined(separator: " ")
+        let billing = ["insufficient_quota", "insufficient credits", "insufficient_credits", "exceeded your current quota",
+                       "billing", "credit balance", "payment required", "out of credits", "no credits"]
+        if status == 402 || billing.contains(where: haystack.contains) {
+            return .quotaExceeded(provider: provider, detail: detail)
         }
+        switch status {
+        case 401, 403:
+            return .authenticationFailed
+        case 404 where haystack.contains("model"):
+            return .modelNotFound(detail ?? "HTTP 404")
+        case 429:
+            return .rateLimited(retryAfter: retryAfter.flatMap(Self.retryDelay))
+        case 400..<500:
+            return .invalidRequest(detail.map { "HTTP \(status): \($0)" } ?? "HTTP \(status)")
+        default:
+            return .networkError(detail.map { "HTTP \(status): \($0)" } ?? "HTTP \(status)")
+        }
+    }
+
+    struct ProviderErrorInfo { var message: String?; var code: String?; var type: String?; var status: String? }
+
+    /// Understands `{"error": {...}}` (OpenAI, xAI, OpenRouter, NVIDIA), Gemini's
+    /// `[{"error": {...}}]`, and `{"message": ...}` / `{"detail": ...}`.
+    static func providerErrorInfo(from body: Data) -> ProviderErrorInfo {
+        var json = try? JSONSerialization.jsonObject(with: body)
+        if let array = json as? [Any] { json = array.first }
+        guard let root = json as? [String: Any] else {
+            let text = String(data: body.prefix(300), encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return ProviderErrorInfo(message: (text?.isEmpty == false) ? text : nil)
+        }
+        let error = (root["error"] as? [String: Any]) ?? root
+        func string(_ value: Any?) -> String? {
+            if let s = value as? String { return s }
+            if let n = value as? NSNumber { return n.stringValue }
+            return nil
+        }
+        return ProviderErrorInfo(
+            message: string(error["message"]) ?? string(root["error"]) ?? string(root["detail"]) ?? string(root["message"]),
+            code: string(error["code"]),
+            type: string(error["type"]),
+            status: string(error["status"])
+        )
     }
 
     private static func retryDelay(from header: String) -> TimeInterval? {
