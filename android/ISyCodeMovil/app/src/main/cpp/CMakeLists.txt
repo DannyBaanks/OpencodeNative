@@ -26,9 +26,9 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 # No libomp on Android; ggml falls back to its own thread pool.
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+# (No DOWNLOAD_EXTRACT_TIMESTAMP: the SDK's CMake 3.22 predates it.)
 FetchContent_Declare(llama
-  URL "https://github.com/ggml-org/llama.cpp/archive/${LLAMA_COMMIT}.tar.gz"
-  DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+  URL "https://github.com/ggml-org/llama.cpp/archive/${LLAMA_COMMIT}.tar.gz")
 FetchContent_MakeAvailable(llama)
 
 # The bridge includes <llama/llama.h> (xcframework layout); mirror it.
