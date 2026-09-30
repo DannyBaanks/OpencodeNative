@@ -1,0 +1,187 @@
+name: GUS model catalog
+
+# Resolves and smoke-tests every model in Catalog/models.json on Linux:
+#   bridge  builds the pinned llama.cpp and the app's real GUSLlamaBridge.c,
+#           runs the catalog/unit checks and the control-token checks
+#   pin     resolves revision, size, sha256, license and GGUF metadata from HF
+#   smoke   downloads each resolved GGUF, verifies sha256 and generates with the
+#           app bridge (desktop evidence only; phones are measured by the app)
+
+on:
+  pull_request:
+    paths:
+      - Catalog/**
+      - scripts/gus_catalog/**
+      - scripts/benchmarks/**
+      - Sources/Model/GUSLlamaBridge.*
+      - scripts/build-llama-xcframework.sh
+      - .github/workflows/gus-catalog.yml
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Space-separated catalog ids (empty = all)"
+        required: false
+        default: ""
+      smoke:
+        description: "Download and smoke-test resolved models"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gus-catalog-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge:
+    name: Bridge + catalog checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Catalog and script unit tests
+        run: |
+          python3 scripts/gus_catalog/generate.py --check
+          python3 scripts/verify-gus-model-manifest.py
+          python3 -m unittest discover -s scripts/gus_catalog -p 'test_*.py' -v
+
+      - name: Pinned llama.cpp commit
+        id: llama
+        run: echo "commit=$(sed -n 's/^readonly LLAMA_COMMIT="\([0-9a-f]*\)"/\1/p' scripts/build-llama-xcframework.sh)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache llama.cpp build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: llama.cpp
+          key: llama-linux-static-${{ steps.llama.outputs.commit }}-v1
+
+      - name: Build llama.cpp (static, CPU)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --filter=blob:none --no-checkout https://github.com/ggml-org/llama.cpp.git llama.cpp
+          git -C llama.cpp checkout --detach "${{ steps.llama.outputs.commit }}"
+          cmake -S llama.cpp -B llama.cpp/build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF \
+            -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_SERVER=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build llama.cpp/build --target llama -j"$(nproc)"
+
+      - name: Build bridge harness (the app's GUSLlamaBridge.c)
+        run: scripts/gus_catalog/build_bridge_smoke.sh "$PWD/llama.cpp" dist/bridge_smoke
+
+      - name: Chat framing + control-token neutralization on llama.cpp vocab GGUFs
+        run: |
+          set -o pipefail
+          fail=0
+          for f in llama.cpp/models/ggml-vocab-*.gguf; do
+            dist/bridge_smoke format "$f" | tee -a dist/format.jsonl || fail=1
+          done
+          exit $fail
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge-harness
+          path: dist/
+          retention-days: 7
+
+  pin:
+    name: Resolve pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve from Hugging Face
+        env:
+          ONLY: ${{ github.event.inputs.only }}
+        run: |
+          # shellcheck disable=SC2086  # ids are intentionally word-split
+          python3 scripts/gus_catalog/pin.py --out gus-pins.json ${ONLY:+--only $ONLY}
+
+      - name: Cross-check pinned entries
+        run: python3 scripts/gus_catalog/crosscheck.py gus-pins.json
+
+      - name: Smoke matrix
+        id: matrix
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_OUTPUT"
+          import json
+          pins = json.load(open("gus-pins.json"))
+          # Linux runners have ~14 GB free disk and 16 GB RAM: skip anything larger than 7 GB.
+          ok = [{"id": p["id"], "url": p["source_url"], "sha256": p["sha256"], "bytes": p["byte_count"]}
+                for p in pins if p["status"] == "OK" and p["byte_count"] <= 7 * 1024**3]
+          print("matrix=" + json.dumps({"include": ok}))
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gus-pins
+          path: gus-pins.json
+
+  smoke:
+    name: Smoke ${{ matrix.id }}
+    needs: [bridge, pin]
+    if: ${{ needs.pin.outputs.matrix != '{"include":[]}' && github.event.inputs.smoke != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix: ${{ fromJSON(needs.pin.outputs.matrix) }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bridge-harness
+          path: dist
+
+      - name: Download and verify
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --retry-delay 5 -o model.gguf "${{ matrix.url }}"
+          echo "${{ matrix.sha256 }}  model.gguf" | sha256sum -c -
+          test "$(stat -c %s model.gguf)" = "${{ matrix.bytes }}"
+
+      - name: Generate with the app bridge
+        run: |
+          set -o pipefail
+          chmod +x dist/bridge_smoke
+          /usr/bin/time -v dist/bridge_smoke smoke model.gguf > result.json 2> time.txt || true
+          cat result.json
+          rss_kb=$(sed -n 's/.*Maximum resident set size (kbytes): //p' time.txt)
+          python3 - "$rss_kb" <<'EOF'
+          import json, sys
+          try:
+              r = json.load(open("result.json"))
+          except Exception as e:
+              r = {"status": "CRASHED", "error": str(e)}
+          r["id"] = "${{ matrix.id }}"
+          r["max_rss_bytes"] = int(sys.argv[1] or 0) * 1024
+          json.dump(r, open("smoke-${{ matrix.id }}.json", "w"), indent=2, ensure_ascii=False)
+          print(json.dumps(r, indent=2, ensure_ascii=False))
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smoke-${{ matrix.id }}
+          path: smoke-${{ matrix.id }}.json
+
+  report:
+    name: Smoke report
+    needs: [pin, smoke]
+    if: ${{ always() && needs.pin.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Summarize
+        run: python3 scripts/gus_catalog/report.py artifacts/gus-pins/gus-pins.json artifacts >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gus-catalog-report
+          path: artifacts/**/*.json

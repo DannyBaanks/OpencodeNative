@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import subprocess
 import sys
 
 root = Path(__file__).resolve().parents[1]
-manifest = (root / "Sources/Model/GUSModelManifest.swift").read_text(encoding="utf-8")
+
+# Catalog/models.json is the source of truth; the Swift catalog must match it.
+check = subprocess.run([sys.executable, str(root / "scripts/gus_catalog/generate.py"), "--check"])
+if check.returncode != 0:
+    print("::error::Catalog/models.json and GUSModelCatalog.generated.swift disagree.", file=sys.stderr)
+    raise SystemExit(1)
+
+manifest = (root / "Sources/Model/GUSModelCatalog.generated.swift").read_text(encoding="utf-8")
+# The originally approved artifacts must never change silently.
 artifacts = {
     "qwen15-18b-q4km": [
         "07800fcba6d5d1df3dfa36e3763374a2c0d9f91b",
@@ -37,4 +46,4 @@ for path in root.rglob("*"):
         print(f"::error::GGUF weights must not be checked into the repository: {path.relative_to(root)}", file=sys.stderr)
         raise SystemExit(1)
 
-print("All three GUS model artifacts are pinned; no GGUF weight files found in repository files.")
+print("Original GUS model pins intact; catalog generated file current; no GGUF weight files in repository.")

@@ -65,3 +65,5 @@ test-output-clean.log
 
 # Generated
 *.generated.swift
+# The GUS model catalog is generated but committed so reviews see every pin.
+!Sources/Model/GUSModelCatalog.generated.swift

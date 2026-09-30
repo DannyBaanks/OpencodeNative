@@ -4,7 +4,8 @@ import XCTest
 final class GUSModelManifestTests: XCTestCase {
     func testCatalogPinsAllApprovedArtifactsAndProvenance() {
         let manifests = Dictionary(uniqueKeysWithValues: GUSModelManifest.all.map { ($0.id, $0) })
-        XCTAssertEqual(Set(manifests.keys), ["qwen15-18b-q4km", "qwen25-05b-q4km", "smollm2-360m-q4km"])
+        XCTAssertEqual(manifests.count, GUSModelManifest.all.count, "catalog ids must be unique")
+        XCTAssertTrue(Set(manifests.keys).isSuperset(of: ["qwen15-18b-q4km", "qwen25-05b-q4km", "smollm2-360m-q4km"]))
 
         let qwen15 = try! XCTUnwrap(manifests["qwen15-18b-q4km"])
         XCTAssertEqual(qwen15.revision, "07800fcba6d5d1df3dfa36e3763374a2c0d9f91b")
@@ -39,7 +40,32 @@ final class GUSModelManifestTests: XCTestCase {
             XCTAssertEqual(manifest.sourceURL.host, "huggingface.co")
             XCTAssertTrue(manifest.sourceURL.absoluteString.contains("/resolve/\(manifest.revision)/"))
             XCTAssertEqual(manifest.licenseURL.scheme, "https")
+            XCTAssertTrue(manifest.sourceURL.absoluteString.hasSuffix(manifest.filename))
+            XCTAssertEqual(manifest.sha256.count, 64)
+            XCTAssertEqual(manifest.revision.count, 40)
+            XCTAssertGreaterThan(manifest.byteCount, 0)
+            XCTAssertFalse(manifest.family.isEmpty)
         }
+    }
+
+    func testOriginalModelsStayInTheDefaultTier() {
+        for id in ["qwen15-18b-q4km", "qwen25-05b-q4km", "smollm2-360m-q4km"] {
+            XCTAssertEqual(GUSModelManifest.model(id: id)?.isExperimental, false, id)
+        }
+    }
+
+    func testPeakEstimateCountsWeightsKVAndOverhead() {
+        let qwen = GUSModelManifest.qwen25Q4KM
+        let at2K = qwen.estimatedPeakBytes(contextTokens: 2048)
+        let at4K = qwen.estimatedPeakBytes(contextTokens: 4096)
+        XCTAssertGreaterThan(at2K, qwen.byteCount)
+        XCTAssertEqual(at4K - at2K, (qwen.kvBytesPerToken ?? 0) * 2048)
+
+        let unknown = GUSModelManifest(modelName: "u", filename: "u.gguf", revision: "r",
+                                       sourceURL: URL(string: "https://huggingface.co/x/y/resolve/r/u.gguf")!,
+                                       byteCount: 1_000, sha256: String(repeating: "a", count: 64))
+        XCTAssertGreaterThanOrEqual(unknown.estimatedPeakBytes(contextTokens: 2048), 2048 * 256 * 1024,
+                                    "unknown KV geometry must be estimated pessimistically")
     }
 
     func testCatalogLookupRejectsUnknownModelID() {

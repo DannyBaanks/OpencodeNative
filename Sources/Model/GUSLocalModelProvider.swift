@@ -23,10 +23,10 @@ public struct GUSLocalModelProvider: ModelProvider {
 
     // Internal so callers outside the app's verified download path cannot hand
     // an arbitrary file URL to the local runtime.
-    init(modelURL: URL, manifest: GUSModelManifest = .qwen15Q4KM, engine: any LocalInferenceEngine = LlamaCppInferenceEngine()) {
+    init(modelURL: URL, manifest: GUSModelManifest = .qwen15Q4KM, engine: (any LocalInferenceEngine)? = nil) {
         self.modelURL = modelURL
         self.manifest = manifest
-        self.engine = engine
+        self.engine = engine ?? LlamaCppInferenceEngine(chatTemplateOverride: manifest.chatTemplateOverride)
     }
 
     public func load(contextTokens: Int = 2048) async throws {
