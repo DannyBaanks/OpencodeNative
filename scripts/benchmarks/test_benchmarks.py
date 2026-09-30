@@ -67,6 +67,19 @@ class ValidateTests(unittest.TestCase):
         self._reject(lambda d: d.update(peak_footprint_bytes="big"))
         self._reject(lambda d: d["model"].update(context_tokens=4096))
 
+    def test_accepts_android_devices(self):
+        data = sample()
+        data["device"].update(platform="android", model="Google Pixel 8", os="Android 15 (API 35)")
+        out = validate.validate(data, PINNED, COMMIT)
+        self.assertEqual(out["device"]["platform"], "android")
+        self.assertTrue(str(validate.destination(out)).endswith("Google-Pixel-8-0a1b2c3d.json"))
+        data["device"]["model"] = "<script>"
+        with self.assertRaises(validate.Invalid):
+            validate.validate(data, PINNED, COMMIT)
+        data["device"].update(platform="symbian", model="Nokia")
+        with self.assertRaises(validate.Invalid):
+            validate.validate(data, PINNED, COMMIT)
+
     def test_unknown_fields_are_dropped(self):
         data = sample()
         data["prompt_text"] = "secret"

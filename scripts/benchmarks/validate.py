@@ -20,6 +20,11 @@ TASK_IDS = ["short-answer", "json-object", "long-prefill", "sustained-generation
 STATUSES = {"completed", "failed", "killed"}
 THERMAL = {"nominal", "fair", "serious", "critical", "unknown"}
 MAX_BODY = 64 * 1024
+# iOS reports the hardware id (iPhone13,2); Android reports manufacturer + model.
+DEVICE_MODEL = {
+    "ios": r"(iPhone|iPad|iPod|arm64|x86_64)[0-9A-Za-z,._-]{0,20}",
+    "android": r"[A-Za-z0-9][A-Za-z0-9 ,._()+-]{1,60}",
+}
 
 
 class Invalid(ValueError):
@@ -77,6 +82,9 @@ def validate(data: dict, catalog: dict[str, dict], llama_commit: str) -> dict:
     model, device = data.get("model"), data.get("device")
     if not isinstance(model, dict) or not isinstance(device, dict):
         raise Invalid("model and device are required")
+    platform = device.get("platform", "ios")
+    if platform not in DEVICE_MODEL:
+        raise Invalid("device.platform must be ios or android")
     entry = catalog.get(model.get("id"))
     if entry is None:
         raise Invalid("model id is not a pinned catalog model")
@@ -94,7 +102,8 @@ def validate(data: dict, catalog: dict[str, dict], llama_commit: str) -> dict:
         "app_version": _str(data, "app_version", r"[0-9A-Za-z .()_-]{1,40}"),
         "llama_cpp_commit": llama_commit,
         "device": {
-            "model": _str(device, "model", r"(iPhone|iPad|iPod|arm64|x86_64)[0-9A-Za-z,._-]{0,20}"),
+            "platform": platform,
+            "model": _str(device, "model", DEVICE_MODEL[platform]),
             "os": _str(device, "os", r"[0-9A-Za-z .()_-]{1,60}"),
             "ram_bytes": _num(device, "ram_bytes", 1 << 30, 64 << 30, integer=True),
             "app_memory_limit_bytes": _num(device, "app_memory_limit_bytes", 0, 64 << 30, integer=True),
