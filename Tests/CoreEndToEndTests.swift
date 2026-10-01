@@ -97,9 +97,13 @@ final class ToolsDefinitionTests: XCTestCase {
         let ws = try IOSWorkspace(rootName: "tools_test_\(UUID().uuidString)")
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
         let names = await exec.availableTools.map { $0.name }.sorted()
-        let expected = ["append_file","copy_file","create_directory","delete_file","edit_file","file_info","list_directory","move_file","read_file","search_files","write_file"]
+        let expected = [
+            "append_file","copy_file","create_directory","delete_file","edit_file","file_info",
+            "list_directory","move_file","read_file","read_file_range","replace_lines",
+            "search_files","search_text","write_file"
+        ]
         XCTAssertEqual(names, expected)
     }
 
@@ -107,7 +111,7 @@ final class ToolsDefinitionTests: XCTestCase {
         let ws = try IOSWorkspace(rootName: "destructive_test_\(UUID().uuidString)")
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
         let write = await exec.availableTools.first { $0.name == "write_file" }
         XCTAssertTrue(write?.capabilities.isDestructive ?? false)
         XCTAssertTrue(write?.capabilities.requiresApprovalEveryTime ?? false)
@@ -122,7 +126,7 @@ final class ToolsDefinitionTests: XCTestCase {
         try await ws.createDirectory(at: "a/b")
         try await ws.writeFile(at: "a/b/file.txt", data: Data("x".utf8))
 
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
         let result = await exec.execute(ToolInvocation(
             name: "delete_file",
             arguments: ["path": "a", "recursive": "true"]
@@ -143,10 +147,9 @@ final class AgentEndToEndTests: XCTestCase {
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        // Workspace de persisted: usamos un persistence dedicado
         let ps = try IOSPersistence()
         let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
         let ctx = AgentContext(
             conversationId: UUID().uuidString,
             workspace: ws,
@@ -167,7 +170,6 @@ final class AgentEndToEndTests: XCTestCase {
         let final = try await loop.run(userInput: "demo list-read-write-verify")
 
         XCTAssertFalse(final.isEmpty)
-        // El script debe haber emitido tool results sin error (write_file, read_file, list_directory)
         let toolResults = events.compactMap { event -> ToolExecutionResult? in
             if case .toolResult(let r) = event { return r } else { return nil }
         }
@@ -177,7 +179,6 @@ final class AgentEndToEndTests: XCTestCase {
             if case .permissionRequested(let request) = event { return request } else { return nil }
         }
         XCTAssertEqual(permissionRequests.count, 2, "cada write_file debe pedir una aprobación nueva incluso después de allowAlways")
-        // El archivo notes.txt debe existir y tener 2 líneas al final.
         let exists = await ws.fileExists(at: "notes.txt")
         XCTAssertTrue(exists, "notes.txt no creado por el agente")
         let data = try await ws.readFile(at: "notes.txt")
@@ -193,7 +194,7 @@ final class AgentEndToEndTests: XCTestCase {
 
         let ps = try IOSPersistence()
         let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
         let ctx = AgentContext(
             conversationId: UUID().uuidString,
             workspace: ws,
@@ -226,7 +227,7 @@ final class AgentEndToEndTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
         let provider = ScriptedModelProvider(script: ScriptedModelProvider.demoScript())
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
         let ctx = AgentContext(
             conversationId: UUID().uuidString,
             workspace: ws,
@@ -251,6 +252,7 @@ final class AgentEndToEndTests: XCTestCase {
         let fileExistsAfterDenial = await ws.fileExists(at: "notes.txt")
         XCTAssertFalse(fileExistsAfterDenial, "denial must leave the workspace unchanged")
     }
+
     func testConversationContinuesAcrossMultipleUserPrompts() async throws {
         let rootName = "e2e_continuity_\(UUID().uuidString)"
         let ws = try IOSWorkspace(rootName: rootName)
@@ -260,7 +262,7 @@ final class AgentEndToEndTests: XCTestCase {
         let ps = try IOSPersistence()
         let conversationId = UUID().uuidString
         let provider = ScriptedModelProvider(scriptResponses: ["first response", "second response"])
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
         let ctx = AgentContext(
             conversationId: conversationId,
             workspace: ws,
@@ -279,5 +281,4 @@ final class AgentEndToEndTests: XCTestCase {
         let userMessages = saved?.messages.filter { $0.role == .user }.map { $0.content } ?? []
         XCTAssertEqual(userMessages, ["first prompt", "second prompt"])
     }
-
 }
