@@ -13,6 +13,9 @@ public actor MiniAgentFileSystemToolExecutor: @preconcurrency ToolExecutor {
     private static let maximumFileBytes = 10_000_000
     private static let maximumSearchFileBytes: Int64 = 1_000_000
     private static let maximumSearchResults = 200
+    private static let maximumToolOutputCharacters = 60_000
+    private static let maximumSearchOutputBytes = 58_000
+    private static let maximumSearchLineCharacters = 2_000
 
     public static let toolNames = Set(tools.map(\.name))
 
@@ -72,7 +75,7 @@ public actor MiniAgentFileSystemToolExecutor: @preconcurrency ToolExecutor {
         let output = (startLine...endLine).map { line in
             "\(line): \(lines[line - 1])"
         }.joined(separator: "\n")
-        return success(invocation, output, started: started)
+        return success(invocation, boundedOutput(output), started: started)
     }
 
     private func editFile(_ invocation: ToolInvocation, started: Date) async throws -> ToolExecutionResult {
@@ -152,11 +155,14 @@ public actor MiniAgentFileSystemToolExecutor: @preconcurrency ToolExecutor {
         let requestedLimit = Int(invocation.arguments["max_results"] ?? "50") ?? 50
         let limit = min(max(requestedLimit, 1), Self.maximumSearchResults)
         var results: [[String: Any]] = []
+        var estimatedBytes = 2
+        var didTruncate = false
+        var outputBudgetExhausted = false
 
         func walk(_ directory: String) async throws {
-            guard results.count < limit else { return }
+            guard !outputBudgetExhausted, results.count < limit else { return }
             for item in try await workspace.listDirectory(at: directory) {
-                guard results.count < limit else { return }
+                guard !outputBudgetExhausted, results.count < limit else { return }
                 let relative = directory.isEmpty ? item.name : "\(directory)/\(item.name)"
                 if item.isDirectory {
                     try await walk(relative)
@@ -165,15 +171,33 @@ public actor MiniAgentFileSystemToolExecutor: @preconcurrency ToolExecutor {
                 guard item.size <= Self.maximumSearchFileBytes, GlobMatcher.match(pattern, relative) else { continue }
                 guard let text = String(data: try await workspace.readFile(at: relative), encoding: .utf8) else { continue }
                 for (offset, line) in text.components(separatedBy: "\n").enumerated() {
-                    guard results.count < limit else { return }
+                    guard !outputBudgetExhausted, results.count < limit else { return }
                     if line.localizedCaseInsensitiveContains(query) {
-                        results.append(["path": relative, "line": offset + 1, "text": line])
+                        let preview: String
+                        if line.count > Self.maximumSearchLineCharacters {
+                            preview = String(line.prefix(Self.maximumSearchLineCharacters)) + " [truncated]"
+                            didTruncate = true
+                        } else {
+                            preview = line
+                        }
+                        let candidate: [String: Any] = ["path": relative, "line": offset + 1, "text": preview]
+                        let candidateBytes = (try? JSONSerialization.data(withJSONObject: candidate).count) ?? 0
+                        if estimatedBytes + candidateBytes + 2 > Self.maximumSearchOutputBytes {
+                            didTruncate = true
+                            outputBudgetExhausted = true
+                            return
+                        }
+                        results.append(candidate)
+                        estimatedBytes += candidateBytes + 1
                     }
                 }
             }
         }
 
         try await walk(basePath)
+        if didTruncate {
+            results.append(["path": "", "line": 0, "text": "[truncated: long matching text or additional matches omitted]"])
+        }
         let data = try JSONSerialization.data(withJSONObject: results, options: [.prettyPrinted, .sortedKeys])
         return success(invocation, String(data: data, encoding: .utf8) ?? "[]", started: started)
     }
@@ -195,6 +219,13 @@ public actor MiniAgentFileSystemToolExecutor: @preconcurrency ToolExecutor {
             throw WorkspaceError.invalidPath("Content too large: \(data.count) bytes (max 10MB)")
         }
         try await workspace.writeFile(at: path, data: data)
+    }
+
+    private func boundedOutput(_ output: String) -> String {
+        guard output.count > Self.maximumToolOutputCharacters else { return output }
+        let marker = "\n[truncated: tool output exceeded \(Self.maximumToolOutputCharacters) characters]"
+        let prefixCount = max(Self.maximumToolOutputCharacters - marker.count, 0)
+        return String(output.prefix(prefixCount)) + marker
     }
 
     private func required(_ invocation: ToolInvocation, _ key: String) throws -> String {
