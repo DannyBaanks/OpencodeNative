@@ -13,6 +13,9 @@ enum ModelContextBudget {
     static let latestToolOutputLimit = 24_000
     /// About 24K tokens: below OpenAI's lowest tier TPM limit (30K) for gpt-4o.
     static let remoteCharacterCap = 96_000
+    /// Local GUS adds its compact 14-tool contract after this fitter runs.
+    /// Reserve enough room for that catalog plus llama.cpp chat-template framing.
+    static let localBoundaryReserveCharacters = 2_500
 
     static let cancelledToolNote = "Cancelled: the user stopped this step before the tool finished."
 
@@ -22,9 +25,9 @@ enum ModelContextBudget {
         let output = min(capabilities.maxTokens ?? reservedOutputTokens, reservedOutputTokens)
         let available = max(context - output, 256)
         if capabilities.localOnly {
-            // Small local vocabularies tokenize Spanish poorly (~2.5 chars/token);
-            // the margin covers chat-template framing and the local boundary text.
-            return max(Int(Double(available) * 2.5) - 700, 1_000)
+            // Small local vocabularies tokenize Spanish poorly (~2.5 chars/token).
+            // GUS injects the miniagent tool catalog after fit(), so reserve it here.
+            return max(Int(Double(available) * 2.5) - localBoundaryReserveCharacters, 1_000)
         }
         return min(Int(Double(available) * 3.5), remoteCharacterCap)
     }
