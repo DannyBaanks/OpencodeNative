@@ -10,9 +10,9 @@ final class MiniAgentEditingToolTests: XCTestCase {
         let ws = try makeWorkspace("mutation_permissions")
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
         let tools = await exec.availableTools
-        let mutationNames = ["write_file", "edit_file", "append_file", "copy_file", "create_directory", "move_file", "delete_file"]
+        let mutationNames = ["write_file", "edit_file", "replace_lines", "append_file", "copy_file", "create_directory", "move_file", "delete_file"]
 
         for name in mutationNames {
             let tool = try XCTUnwrap(tools.first { $0.name == name }, "missing \(name)")
@@ -26,7 +26,7 @@ final class MiniAgentEditingToolTests: XCTestCase {
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
         try await ws.writeFile(at: "main.swift", data: Data("let answer = 41\nprint(answer)\n".utf8))
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
 
         let result = await exec.execute(ToolInvocation(name: "edit_file", arguments: [
             "path": "main.swift",
@@ -44,7 +44,7 @@ final class MiniAgentEditingToolTests: XCTestCase {
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
         try await ws.writeFile(at: "dupe.txt", data: Data("cat cat".utf8))
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
 
         let denied = await exec.execute(ToolInvocation(name: "edit_file", arguments: [
             "path": "dupe.txt",
@@ -69,7 +69,7 @@ final class MiniAgentEditingToolTests: XCTestCase {
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
         try await ws.writeFile(at: "notes.txt", data: Data("one\n".utf8))
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
 
         let result = await exec.execute(ToolInvocation(name: "append_file", arguments: [
             "path": "notes.txt",
@@ -86,7 +86,7 @@ final class MiniAgentEditingToolTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: rootURL) }
         let original = Data([0x00, 0x01, 0x7f, 0xff])
         try await ws.writeFile(at: "source.bin", data: original)
-        let exec = FileSystemToolExecutor(workspace: ws)
+        let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
 
         let copied = await exec.execute(ToolInvocation(name: "copy_file", arguments: [
             "from": "source.bin",
