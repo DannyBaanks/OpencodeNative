@@ -18,13 +18,13 @@ private actor FixtureLocalInferenceEngine: LocalInferenceEngine {
 }
 
 final class GUSLocalModelProviderTests: XCTestCase {
-    func testProviderDeclaresLocalOnlyAndGuidanceOnlyUntilToolFormatIsValidated() async throws {
+    func testProviderDeclaresLocalOnlyWithStrictToolCalls() async throws {
         let engine = FixtureLocalInferenceEngine()
         let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/verified.gguf"), engine: engine)
         XCTAssertTrue(provider.capabilities.localOnly)
-        XCTAssertFalse(provider.capabilities.toolCalls)
+        XCTAssertTrue(provider.capabilities.toolCalls)
         XCTAssertEqual(provider.id, "gus-local")
-        XCTAssertTrue(provider.capabilities.restrictions.contains { $0.localizedCaseInsensitiveContains("guía") })
+        XCTAssertTrue(provider.capabilities.restrictions.contains { $0.localizedCaseInsensitiveContains("herramient") })
 
         let response = try await provider.generate(
             messages: [ModelMessage(role: .user, content: "hola")],
@@ -41,7 +41,7 @@ final class GUSLocalModelProviderTests: XCTestCase {
             XCTAssertEqual(provider.availableModels, [manifest.id])
             XCTAssertTrue(provider.name.contains(manifest.modelName))
             XCTAssertTrue(provider.capabilities.localOnly)
-            XCTAssertFalse(provider.capabilities.toolCalls)
+            XCTAssertTrue(provider.capabilities.toolCalls)
         }
     }
 
@@ -72,6 +72,30 @@ final class GUSLocalModelProviderTests: XCTestCase {
         XCTAssertNil(loadedURL)
     }
 
+    func testValidTaggedToolCallIsConvertedToExecutableCall() async throws {
+        let engine = FixtureLocalInferenceEngine(response: #"<GUS_TOOL_CALL>{"name":"edit_file","arguments":{"path":"x.swift","old_text":"old","new_text":"new","replace_all":false}}</GUS_TOOL_CALL>"#)
+        let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/verified.gguf"), engine: engine)
+        let response = try await provider.generate(
+            messages: [ModelMessage(role: .user, content: "cambia old por new")],
+            tools: [ToolDefinition(
+                name: "edit_file",
+                description: "fixture",
+                parameters: ToolDefinition.ToolParameters(properties: [
+                    "path": .init(type: "string", description: nil, enumValues: nil),
+                    "old_text": .init(type: "string", description: nil, enumValues: nil),
+                    "new_text": .init(type: "string", description: nil, enumValues: nil),
+                    "replace_all": .init(type: "boolean", description: nil, enumValues: nil)
+                ], required: ["path", "old_text", "new_text"])
+            )],
+            options: GenerationOptions(maxTokens: 64)
+        )
+        let call = try XCTUnwrap(response.toolCalls?.first)
+        XCTAssertEqual(call.name, "edit_file")
+        XCTAssertEqual(call.arguments["path"], "x.swift")
+        XCTAssertEqual(call.arguments["replace_all"], "false")
+        XCTAssertEqual(response.content, "")
+    }
+
     func testToolLookingTextIsNeverConvertedIntoExecutableCall() async throws {
         let engine = FixtureLocalInferenceEngine(response: #"{"tool_calls":[{"name":"write_file","arguments":{"path":"x"}}]}"#)
         let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/verified.gguf"), engine: engine)
@@ -85,5 +109,18 @@ final class GUSLocalModelProviderTests: XCTestCase {
             options: GenerationOptions(maxTokens: 32)
         )
         XCTAssertNil(response.toolCalls)
+    }
+
+    func testUnknownTaggedToolStaysPlainText() async throws {
+        let raw = #"<GUS_TOOL_CALL>{"name":"shell","arguments":{"command":"rm -rf /"}}</GUS_TOOL_CALL>"#
+        let engine = FixtureLocalInferenceEngine(response: raw)
+        let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/verified.gguf"), engine: engine)
+        let response = try await provider.generate(
+            messages: [ModelMessage(role: .user, content: "hazlo")],
+            tools: [ToolDefinition(name: "read_file", description: "fixture", parameters: .init(properties: [:], required: []))],
+            options: GenerationOptions(maxTokens: 32)
+        )
+        XCTAssertNil(response.toolCalls)
+        XCTAssertEqual(response.content, raw)
     }
 }
