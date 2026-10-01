@@ -52,7 +52,8 @@ final class MiniAgentEditingToolTests: XCTestCase {
             "new_text": "dog"
         ]), approval: .allowOnce)
         XCTAssertNotNil(denied.error)
-        XCTAssertEqual(String(data: try await ws.readFile(at: "dupe.txt"), encoding: .utf8), "cat cat")
+        let deniedData = try await ws.readFile(at: "dupe.txt")
+        XCTAssertEqual(String(data: deniedData, encoding: .utf8), "cat cat")
 
         let allowed = await exec.execute(ToolInvocation(name: "edit_file", arguments: [
             "path": "dupe.txt",
@@ -61,7 +62,8 @@ final class MiniAgentEditingToolTests: XCTestCase {
             "replace_all": "true"
         ]), approval: .allowOnce)
         XCTAssertNil(allowed.error)
-        XCTAssertEqual(String(data: try await ws.readFile(at: "dupe.txt"), encoding: .utf8), "dog dog")
+        let allowedData = try await ws.readFile(at: "dupe.txt")
+        XCTAssertEqual(String(data: allowedData, encoding: .utf8), "dog dog")
     }
 
     func testAppendFilePreservesExistingContent() async throws {
@@ -77,7 +79,8 @@ final class MiniAgentEditingToolTests: XCTestCase {
         ]), approval: .allowOnce)
 
         XCTAssertNil(result.error)
-        XCTAssertEqual(String(data: try await ws.readFile(at: "notes.txt"), encoding: .utf8), "one\ntwo\n")
+        let appendedData = try await ws.readFile(at: "notes.txt")
+        XCTAssertEqual(String(data: appendedData, encoding: .utf8), "one\ntwo\n")
     }
 
     func testCopyFileCopiesBytesAndRefusesToOverwriteDestination() async throws {
@@ -93,13 +96,15 @@ final class MiniAgentEditingToolTests: XCTestCase {
             "to": "nested/copy.bin"
         ]), approval: .allowOnce)
         XCTAssertNil(copied.error)
-        XCTAssertEqual(try await ws.readFile(at: "nested/copy.bin"), original)
+        let copiedData = try await ws.readFile(at: "nested/copy.bin")
+        XCTAssertEqual(copiedData, original)
 
         let overwrite = await exec.execute(ToolInvocation(name: "copy_file", arguments: [
             "from": "source.bin",
             "to": "nested/copy.bin"
         ]), approval: .allowOnce)
         XCTAssertNotNil(overwrite.error)
-        XCTAssertEqual(try await ws.readFile(at: "nested/copy.bin"), original)
+        let preservedData = try await ws.readFile(at: "nested/copy.bin")
+        XCTAssertEqual(preservedData, original)
     }
 }
