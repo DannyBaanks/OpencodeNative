@@ -95,4 +95,27 @@ final class MiniAgentEditingToolsTests: XCTestCase {
         XCTAssertTrue(search.output.contains("nested/b.txt"))
         XCTAssertTrue(search.output.contains("hello world"))
     }
+
+    func testReadRangeAndSearchTextBoundToolOutput() async throws {
+        let ws = try makeWorkspace("miniagent_output_bounds")
+        let rootURL = await ws.rootURL
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let executor = MiniAgentFileSystemToolExecutor(workspace: ws)
+        let hugeLine = String(repeating: "x", count: 70_000) + " needle"
+        try await ws.writeFile(at: "huge.txt", data: Data(hugeLine.utf8))
+
+        let read = await executor.execute(.init(name: "read_file_range", arguments: [
+            "path": "huge.txt", "start_line": "1", "end_line": "1"
+        ]))
+        XCTAssertNil(read.error)
+        XCTAssertLessThanOrEqual(read.output.count, 61_000)
+        XCTAssertTrue(read.output.contains("truncated"))
+
+        let search = await executor.execute(.init(name: "search_text", arguments: [
+            "query": "needle", "pattern": "**/*.txt"
+        ]))
+        XCTAssertNil(search.error)
+        XCTAssertLessThanOrEqual(search.output.count, 61_000)
+        XCTAssertTrue(search.output.contains("truncated"))
+    }
 }
