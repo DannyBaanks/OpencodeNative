@@ -390,19 +390,29 @@ public actor FileSystemToolExecutor: @preconcurrency ToolExecutor {
             
             for item in items {
                 let relativePath = dirPath.isEmpty ? item.name : "\(dirPath)/\(item.name)"
+                let rootRelativeItem = FileInfo(
+                    path: relativePath,
+                    name: item.name,
+                    isDirectory: item.isDirectory,
+                    size: item.size,
+                    modificationDate: item.modificationDate,
+                    isReadable: item.isReadable,
+                    isWritable: item.isWritable
+                )
+                let matchesPattern = GlobMatcher.match(pattern, relativePath)
                 
                 // Match filename against glob pattern
-                if GlobMatcher.match(pattern, relativePath) {
-                    matches.append(item)
+                if matchesPattern {
+                    matches.append(rootRelativeItem)
                 }
                 
                 // Content search
-                if let contentQuery = contentQuery, !item.isDirectory {
+                if matchesPattern, let contentQuery = contentQuery, !item.isDirectory {
                     if let fileContent = try? await workspace.readFile(at: relativePath),
                        let text = String(data: fileContent, encoding: .utf8),
                        text.localizedCaseInsensitiveContains(contentQuery) {
-                        if !matches.contains(where: { $0.path == item.path }) {
-                            matches.append(item)
+                        if !matches.contains(where: { $0.path == relativePath }) {
+                            matches.append(rootRelativeItem)
                         }
                     }
                 }

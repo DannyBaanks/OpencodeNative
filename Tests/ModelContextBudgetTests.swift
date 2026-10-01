@@ -65,8 +65,7 @@ final class ModelContextBudgetTests: XCTestCase {
     func testBudgetFollowsTheProvider() {
         let gus = ModelProviderCapabilities(maxTokens: 256, maxContextTokens: 2048, localOnly: true)
         let local = ModelContextBudget.characterBudget(for: gus, reservedOutputTokens: 2048)
-        XCTAssertLessThan(local, 4_500, "GUS keeps the prompt inside its 2K context")
-        XCTAssertGreaterThan(local, 2_500)
+        XCTAssertEqual(local, 1_980, "Reserve context for GUS's 14-tool contract and inference framing")
         let remote = ModelProviderCapabilities(maxTokens: 4096, maxContextTokens: 128_000)
         XCTAssertEqual(ModelContextBudget.characterBudget(for: remote, reservedOutputTokens: 2048), ModelContextBudget.remoteCharacterCap)
     }
