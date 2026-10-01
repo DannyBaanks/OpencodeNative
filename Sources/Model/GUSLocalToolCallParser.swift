@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 /// Fail-closed parser for GUS's local tool proposal format.
 ///
