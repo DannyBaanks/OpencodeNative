@@ -139,11 +139,12 @@ iOS borra los datos de una app cuando la eliminas o cuando la reinstalas con otr
 
 La app reconoce cada modelo por su huella, **aunque le hayas cambiado el nombre**, y lo deja listo sin descargar nada.
 
-### 🔒 Lo que GUS no hace
+### 🔒 Lo que GUS puede y no puede hacer en iPhone
 
-- **No usa herramientas ni toca tus archivos.** Por ahora es un modo de orientación.
-- **No manda nada a la nube** ni tiene respaldo remoto.
-- **No lee otras apps** ni datos privados del teléfono.
+- **Puede trabajar con archivos del sandbox** usando una superficie de miniagente: leer, buscar, editar texto, reemplazar rangos de líneas, append, copiar, mover/renombrar y borrar dentro del workspace autorizado.
+- **Cada cambio pide aprobación visible de nuevo.** Un permiso anterior no autoriza automáticamente la siguiente mutación.
+- **No tiene shell ni puede lanzar procesos**, y tampoco obtiene acceso general al iPhone, otras apps o secretos del Keychain.
+- **No manda la inferencia de GUS a la nube** ni tiene fallback remoto.
 
 Detalles, licencias y procedencia: [aviso de modelos](docs/MODEL_NOTICE.md) · [cómo funciona el catálogo](docs/GUS_MARKETPLACE.md).
 
@@ -218,7 +219,7 @@ Tus claves se guardan en el **Keychain** del iPhone. Si eliges un modelo en la n
 | Experiencia | Estado |
 |---|---|
 | Sandbox en el iPhone | ✅ Disponible |
-| GUS: 22 modelos locales, benchmark e informes de fallos | 🧪 Experimental: probado en computadora, pendiente de mediciones en iPhones reales |
+| GUS: 22 modelos locales, miniagente de archivos, benchmark e informes de fallos | 🧪 Experimental: runtime y CI en validación; mediciones físicas dependen del modelo/iPhone |
 | OpenCode en tu computadora | ✅ Disponible con el Bridge |
 | Codex en tu computadora | 🧪 Experimental |
 | Host de la TUI de iSyCode | 🚧 En desarrollo: emparejamiento listo, sesiones en camino |
