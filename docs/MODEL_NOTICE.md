@@ -28,11 +28,19 @@ The Qwen1.5 license text is included at
 
 ## GUS behavior and boundaries
 
-All three models use the same GUS role prompt. The selected model changes the
+All approved models use the same GUS role prompt. The selected model changes the
 local inference weights only; it does not change GUS instructions or grant
-capabilities. GUS currently provides local guidance with tool calls disabled.
-The app's permissions and approval flow remain the authority for any future
-action. Local inference does not fall back to a remote provider.
+additional capabilities. On iOS, GUS local can request only the miniagent tools
+that the app exposes in the current turn. Its local tool-call format is parsed
+fail-closed: malformed JSON, unknown tools, extra fields, wrong scalar types,
+multiple calls, or surrounding prose are not converted into executable calls.
+
+Filesystem access remains confined to the active app workspace or the exact
+Files folder selected by the user. Read operations do not gain access outside
+that root. Every file mutation requires a fresh visible approval in the app;
+a prior "allow always" choice does not authorize a later mutation. There is no
+shell, process execution, arbitrary iPhone access, or Keychain secret access.
+Local inference does not fall back to a remote provider.
 
 Starting a download is an explicit user action. iOS background transfers can
 continue while the app is suspended or the screen is locked, and iOS may relaunch
