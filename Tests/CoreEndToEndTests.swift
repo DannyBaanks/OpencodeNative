@@ -130,7 +130,7 @@ final class ToolsDefinitionTests: XCTestCase {
         let result = await exec.execute(ToolInvocation(
             name: "delete_file",
             arguments: ["path": "a", "recursive": "true"]
-        ))
+        ), approval: .allowOnce)
 
         XCTAssertNil(result.error)
         let exists = await ws.fileExists(at: "a")
