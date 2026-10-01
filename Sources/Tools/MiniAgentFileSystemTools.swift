@@ -4,8 +4,8 @@ import Foundation
 ///
 /// It deliberately has no shell/process capability. All paths are still
 /// resolved by `Workspace`, so the iOS sandbox / user-selected Files grant is
-/// the authority boundary. AgentLoop performs the visible approval gate for
-/// every tool marked destructive below.
+/// the authority boundary. Mutations require an explicit per-operation approval
+/// even when this executor is invoked outside AgentLoop.
 public actor MiniAgentFileSystemToolExecutor: @preconcurrency ToolExecutor {
     private let workspace: any Workspace
     private let legacy: FileSystemToolExecutor
@@ -24,11 +24,23 @@ public actor MiniAgentFileSystemToolExecutor: @preconcurrency ToolExecutor {
     public var availableTools: [AgentTool] { Self.tools }
 
     public func execute(_ invocation: ToolInvocation) async -> ToolExecutionResult {
+        await execute(invocation, approval: nil)
+    }
+
+    public func execute(_ invocation: ToolInvocation, approval: PermissionResponse.Decision?) async -> ToolExecutionResult {
+        let started = Date()
+        guard let tool = Self.tools.first(where: { $0.name == invocation.name }) else {
+            return failure(invocation, "Unknown tool: \(invocation.name)", started: started)
+        }
+        if tool.capabilities.isDestructive,
+           approval != .allowOnce && approval != .allowAlways {
+            return failure(invocation, "Fresh user approval is required for \(invocation.name).", started: started)
+        }
+
         if FileSystemToolExecutor.toolNames.contains(invocation.name) {
             return await legacy.execute(invocation)
         }
 
-        let started = Date()
         do {
             switch invocation.name {
             case "read_file_range": return try await readFileRange(invocation, started: started)
