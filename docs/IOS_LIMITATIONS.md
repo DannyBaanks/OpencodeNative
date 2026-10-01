@@ -31,14 +31,17 @@
 
 ## C. Lo que el runtime nativo alternativo (no OpenCode) hace
 
-- 8 tools de filesystem (`read_file`/`write_file`/`list_directory`/`search_files`/`file_info`/`create_directory`/`delete_file`/`move_file`).
+- 14 tools de filesystem para miniagente: lectura/listado/metadatos, `read_file_range`, búsqueda por archivo y por líneas (`search_files`/`search_text`), escritura completa, edición exacta (`edit_file`), reemplazo por rango (`replace_lines`), append, copia, creación de carpetas, move/rename y borrado.
+- Todas las mutaciones (`write_file`, `edit_file`, `replace_lines`, `append_file`, `copy_file`, `create_directory`, `move_file`, `delete_file`) pasan por una aprobación visible nueva para cada operación, incluso si antes se eligió permitir siempre.
+- El agente queda confinado al workspace activo; las rutas siguen pasando por `Workspace` y no obtienen shell ni ejecución de procesos.
+- GUS local puede proponer una única tool del catálogo del turno mediante un formato etiquetado y validado fail-closed. JSON malformado, tools no anunciadas, campos extra o tipos incorrectos se quedan como texto y no se ejecutan.
 - Agente async con loop, multi-turn tool calls, persistencia JSONL.
-- Provider LLM remoto **o** provider scripteado offline (sin red ni API key) para demo/tests.
+- Provider LLM remoto, GUS local **o** provider scripteado offline para demo/tests.
 
 ## D. Qué se DELIBERADAMENTE queda fuera (no es falta de control)
 
 - Imitar la terminal/PTY de OpenCode con escapes ANSI fake — fuera; no simula lo inexistente.
-- "Bash tool" sin PTY — proyectado pero no entregado como fake; el `AgentLoop` aquí expone solo tools de fs.
+- "Bash tool" sin PTY — no se entrega como fake; el miniagente móvil trabaja con la superficie de filesystem y las capacidades nativas explícitamente proyectadas por la app.
 - Compilar libgit2 o tree-sitter para iOS — fuera del alcance de este experimento.
 - App móvil convencional con chips/bubbles — reemplazada por consola TUI-first.
 
@@ -50,10 +53,11 @@
   cambiar o revocar la carpeta.
 - El agente queda confinado a esa raíz. El acceso no se extiende a carpetas
   vecinas, datos privados de otras apps ni al sistema. File Provider I/O se
-  coordina con `NSFileCoordinator`; escrituras y borrados continúan sujetos a
-  la aprobación de herramientas de la sesión.
+  coordina con `NSFileCoordinator`; todas las mutaciones de archivos continúan sujetas a
+  una aprobación visible por operación.
 - Si se usa un modelo remoto, el contenido de archivos que el agente lea puede
   viajar al proveedor configurado. La UI lo informa antes de conceder acceso.
+- Con GUS local, la inferencia y los tool-calls permanecen en el dispositivo; una tool solo recibe la autoridad que la app ya expuso para ese turno y el workspace activo.
 - No hay permiso general para leer la pantalla, automatizar taps o controlar
   otras apps. La vía soportada para acciones entre apps es la superficie que
   cada app exponga mediante App Intents, Atajos o el picker/hoja Compartir.
