@@ -32,7 +32,7 @@ final class MiniAgentEditingToolTests: XCTestCase {
             "path": "main.swift",
             "old_text": "let answer = 41",
             "new_text": "let answer = 42"
-        ]))
+        ]), approval: .allowOnce)
 
         XCTAssertNil(result.error)
         let data = try await ws.readFile(at: "main.swift")
@@ -50,7 +50,7 @@ final class MiniAgentEditingToolTests: XCTestCase {
             "path": "dupe.txt",
             "old_text": "cat",
             "new_text": "dog"
-        ]))
+        ]), approval: .allowOnce)
         XCTAssertNotNil(denied.error)
         XCTAssertEqual(String(data: try await ws.readFile(at: "dupe.txt"), encoding: .utf8), "cat cat")
 
@@ -59,7 +59,7 @@ final class MiniAgentEditingToolTests: XCTestCase {
             "old_text": "cat",
             "new_text": "dog",
             "replace_all": "true"
-        ]))
+        ]), approval: .allowOnce)
         XCTAssertNil(allowed.error)
         XCTAssertEqual(String(data: try await ws.readFile(at: "dupe.txt"), encoding: .utf8), "dog dog")
     }
@@ -74,7 +74,7 @@ final class MiniAgentEditingToolTests: XCTestCase {
         let result = await exec.execute(ToolInvocation(name: "append_file", arguments: [
             "path": "notes.txt",
             "content": "two\n"
-        ]))
+        ]), approval: .allowOnce)
 
         XCTAssertNil(result.error)
         XCTAssertEqual(String(data: try await ws.readFile(at: "notes.txt"), encoding: .utf8), "one\ntwo\n")
@@ -91,14 +91,14 @@ final class MiniAgentEditingToolTests: XCTestCase {
         let copied = await exec.execute(ToolInvocation(name: "copy_file", arguments: [
             "from": "source.bin",
             "to": "nested/copy.bin"
-        ]))
+        ]), approval: .allowOnce)
         XCTAssertNil(copied.error)
         XCTAssertEqual(try await ws.readFile(at: "nested/copy.bin"), original)
 
         let overwrite = await exec.execute(ToolInvocation(name: "copy_file", arguments: [
             "from": "source.bin",
             "to": "nested/copy.bin"
-        ]))
+        ]), approval: .allowOnce)
         XCTAssertNotNil(overwrite.error)
         XCTAssertEqual(try await ws.readFile(at: "nested/copy.bin"), original)
     }
