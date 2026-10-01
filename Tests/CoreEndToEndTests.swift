@@ -93,23 +93,24 @@ final class PersistenceTests: XCTestCase {
 }
 
 final class ToolsDefinitionTests: XCTestCase {
-    func testAllEightToolsPresent() async throws {
+    func testAllMiniAgentToolsPresent() async throws {
         let ws = try IOSWorkspace(rootName: "tools_test_\(UUID().uuidString)")
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
         let exec = FileSystemToolExecutor(workspace: ws)
         let names = await exec.availableTools.map { $0.name }.sorted()
-        let expected = ["create_directory","delete_file","file_info","list_directory","move_file","read_file","search_files","write_file"]
+        let expected = ["append_file","copy_file","create_directory","delete_file","edit_file","file_info","list_directory","move_file","read_file","search_files","write_file"]
         XCTAssertEqual(names, expected)
     }
 
-    func testWriteFileIsMarkedDestructive() async throws {
+    func testWriteFileIsMarkedDestructiveAndAlwaysApproved() async throws {
         let ws = try IOSWorkspace(rootName: "destructive_test_\(UUID().uuidString)")
         let rootURL = await ws.rootURL
         defer { try? FileManager.default.removeItem(at: rootURL) }
         let exec = FileSystemToolExecutor(workspace: ws)
         let write = await exec.availableTools.first { $0.name == "write_file" }
         XCTAssertTrue(write?.capabilities.isDestructive ?? false)
+        XCTAssertTrue(write?.capabilities.requiresApprovalEveryTime ?? false)
     }
 
     func testRecursiveDeleteRemovesNestedTree() async throws {
@@ -175,7 +176,7 @@ final class AgentEndToEndTests: XCTestCase {
         let permissionRequests = events.compactMap { event -> PermissionRequest? in
             if case .permissionRequested(let request) = event { return request } else { return nil }
         }
-        XCTAssertEqual(permissionRequests.count, 1, "allowAlways debe evitar repetir el permiso para write_file")
+        XCTAssertEqual(permissionRequests.count, 2, "cada write_file debe pedir una aprobación nueva incluso después de allowAlways")
         // El archivo notes.txt debe existir y tener 2 líneas al final.
         let exists = await ws.fileExists(at: "notes.txt")
         XCTAssertTrue(exists, "notes.txt no creado por el agente")
