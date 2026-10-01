@@ -8,7 +8,10 @@ final class GUSLocalToolCallParserTests: XCTestCase {
                 name: "read_file",
                 description: "Read a file",
                 parameters: .init(
-                    properties: ["path": .init(type: "string", description: nil, enumValues: nil)],
+                    properties: [
+                        "path": .init(type: "string", description: nil, enumValues: nil),
+                        "encoding": .init(type: "string", description: nil, enumValues: ["utf-8", "utf-16"])
+                    ],
                     required: ["path"]
                 )
             ),
@@ -55,6 +58,14 @@ final class GUSLocalToolCallParserTests: XCTestCase {
 
         let wrongType = #"<GUS_TOOL_CALL>{"name":"edit_file","arguments":{"path":"a","old_text":"x","new_text":"y","replace_all":"yes"}}</GUS_TOOL_CALL>"#
         XCTAssertNil(GUSLocalToolCallParser.parse(wrongType, allowedTools: tools))
+    }
+
+    func testRejectsStringOutsideDeclaredEnum() {
+        let invalid = #"<GUS_TOOL_CALL>{"name":"read_file","arguments":{"path":"README.md","encoding":"utf-32"}}</GUS_TOOL_CALL>"#
+        XCTAssertNil(GUSLocalToolCallParser.parse(invalid, allowedTools: tools))
+
+        let valid = #"<GUS_TOOL_CALL>{"name":"read_file","arguments":{"path":"README.md","encoding":"utf-8"}}</GUS_TOOL_CALL>"#
+        XCTAssertEqual(GUSLocalToolCallParser.parse(valid, allowedTools: tools)?.arguments["encoding"], "utf-8")
     }
 
     func testRejectsMultipleCallsOrSurroundingText() {
