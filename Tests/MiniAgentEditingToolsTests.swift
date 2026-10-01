@@ -33,7 +33,8 @@ final class MiniAgentEditingToolsTests: XCTestCase {
 
         let denied = await executor.execute(.init(name: "write_file", arguments: ["path": "blocked.txt", "content": "no"]), approval: nil)
         XCTAssertNotNil(denied.error)
-        XCTAssertFalse(await ws.fileExists(at: "blocked.txt"))
+        let blockedExists = await ws.fileExists(at: "blocked.txt")
+        XCTAssertFalse(blockedExists)
     }
 
     func testEditFileReplacesOneExactOccurrenceAndRejectsAmbiguity() async throws {
