@@ -50,7 +50,7 @@ public actor NativeCapabilityToolExecutor: @preconcurrency ToolExecutor {
 
     public func execute(_ invocation: ToolInvocation, approval: PermissionResponse.Decision?) async -> ToolExecutionResult {
         if MiniAgentFileSystemToolExecutor.toolNames.contains(invocation.name) {
-            return await fileSystem.execute(invocation)
+            return await fileSystem.execute(invocation, approval: approval)
         }
         let started = Date()
         guard projectedNativeNames.contains(invocation.name) else {
