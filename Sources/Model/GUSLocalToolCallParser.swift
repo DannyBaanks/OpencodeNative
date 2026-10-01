@@ -37,7 +37,8 @@ enum GUSLocalToolCallParser {
         var normalized: [String: String] = [:]
         for (key, value) in arguments {
             guard let schema = definition.parameters.properties[key],
-                  let string = scalar(value, expectedType: schema.type) else { return nil }
+                  let string = scalar(value, expectedType: schema.type),
+                  schema.enumValues?.contains(string) != false else { return nil }
             normalized[key] = string
         }
         return ToolCall(name: name, arguments: normalized)
