@@ -11,10 +11,10 @@ final class GUSModelSelectionTests: XCTestCase {
         XCTAssertTrue(SandboxModelProvider.sandboxOptions.contains { $0.id == "gus-local" })
     }
 
-    func testLocalProviderNeverLooksLikeARemoteModel() {
+    func testLocalProviderStaysLocalWhileSupportingMiniAgentTools() {
         let provider = GUSLocalModelProvider(modelURL: URL(fileURLWithPath: "/fixture/model.gguf"))
         XCTAssertTrue(provider.capabilities.localOnly)
-        XCTAssertFalse(provider.capabilities.toolCalls)
+        XCTAssertTrue(provider.capabilities.toolCalls)
         XCTAssertFalse(provider.capabilities.streaming)
     }
     func testGUSModelsAreExplicitlyPinnedAndDoNotAddRemoteOptions() {
