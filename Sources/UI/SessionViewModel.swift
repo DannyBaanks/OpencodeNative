@@ -39,7 +39,7 @@ public final class SessionViewModel: ObservableObject {
     private var workspace: IOSWorkspace?
     private var persistence: IOSPersistence?
     private var modelProvider_any: (any ModelProvider)?
-    private var toolExecutor: FileSystemToolExecutor?
+    private var toolExecutor: MiniAgentFileSystemToolExecutor?
     private var agentLoop: AgentLoop?
     private var permissionContinuation: CheckedContinuation<PermissionResponse, Never>?
     private var agentTask: Task<Void, Never>?
@@ -155,7 +155,7 @@ public final class SessionViewModel: ObservableObject {
                 provider = remote
             }
             self.modelProvider_any = provider
-            let exec = FileSystemToolExecutor(workspace: ws)
+            let exec = MiniAgentFileSystemToolExecutor(workspace: ws)
             self.toolExecutor = exec
             let ctx = AgentContext(
                 conversationId: conversationId,

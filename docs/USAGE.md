@@ -74,19 +74,29 @@ CI runs this automatically on every push.
 ## D. GUS local (experimental)
 
 Choose **GUS local** in the sandbox provider picker. The model screen lists
-three fixed GGUF artifacts: Qwen1.5-1.8B Q4_K_M, Qwen2.5-0.5B Q4_K_M, and
-SmolLM2-360M Q4_K_M. Each card shows its pinned source revision, exact size,
-license, attribution, and SHA-256. Tap **Descargar** to fetch a model directly
-to the iPhone; it is not part of the IPA. The app verifies exact byte count and
-digest before making it selectable. Multiple approved models can remain
-installed, but GUS loads the explicitly selected model only. Delete each model
-individually to reclaim storage.
+pinned GGUF artifacts with source revision, exact size, license, attribution,
+and SHA-256. Tap **Descargar** to fetch a model directly to the iPhone; model
+weights are not part of the IPA. The app verifies exact byte count and digest
+before making a model selectable. Multiple approved models can remain installed,
+but GUS loads the explicitly selected model only.
 
-All three models receive the same GUS role and safety boundary. This version is
-guidance-only: it does not execute native tools, add iOS permissions, or fall
-back to a cloud model. Background transfers can continue while iOS suspends the
-app or the screen is locked. A user force-quit cancels the transfer; reopen the
-app to retry, and the download may restart from zero. See
+All models receive the same GUS role and safety boundary. On iOS, GUS local can
+act as a sandboxed miniagent: the current turn receives a bounded filesystem
+tool catalog, and a valid local tool request must be exactly one tagged JSON
+call matching that advertised schema. Unknown tools, malformed payloads, extra
+fields, wrong types, multiple calls, or surrounding prose remain text and are
+not executed.
+
+The iOS miniagent exposes 14 filesystem tools: full and ranged reads, directory
+listing, metadata, file and line-oriented search, full writes, exact text edits,
+line-range replacement, append, copy, directory creation, move/rename, and
+deletion. Every mutation pauses for a fresh visible approval even after an
+`allowAlways` response. Paths remain confined to the active workspace or the
+exact Files folder selected by the user. GUS gets no shell, process execution,
+arbitrary iPhone access, new iOS permissions, or cloud fallback.
+
+Background model transfers can continue while iOS suspends the app or the screen
+is locked. A user force-quit cancels the transfer; reopen the app to retry. See
 [MODEL_NOTICE.md](MODEL_NOTICE.md) for provenance, licenses, and safeguards.
 
 ### Test Suites
@@ -99,8 +109,10 @@ app to retry, and the download may restart from zero. See
 | `OpenCodeBootAttemptTests` | Boot transcript content |
 | `WorkspaceTests` | Create, read, list, move, delete, path traversal |
 | `PersistenceTests` | Conversation save/load, JSONL events, config |
-| `ToolsDefinitionTests` | 8 tools present, write marked destructive |
-| `AgentEndToEndTests` | Scripted agent writes `notes.txt` end-to-end |
+| `ToolsDefinitionTests` | 14 miniagent filesystem tools and mutation approval metadata |
+| `GUSLocalToolCallParserTests` | Strict allowlisted local tool-call parsing and fail-closed rejection |
+| `MiniAgentEditingToolsTests` | Exact edits, line ranges, append/copy/search, fresh mutation approvals |
+| `AgentEndToEndTests` | Scripted agent writes `notes.txt` end-to-end through the miniagent executor |
 
 ---
 

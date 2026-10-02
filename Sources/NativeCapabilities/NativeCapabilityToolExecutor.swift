@@ -24,13 +24,13 @@ public enum NativeCapabilityToolProjection {
 /// Combines local filesystem tools with narrowly projected iPhone capabilities.
 /// The only execution entry that can perform effects is the approval-aware overload.
 public actor NativeCapabilityToolExecutor: @preconcurrency ToolExecutor {
-    private let fileSystem: FileSystemToolExecutor
+    private let fileSystem: MiniAgentFileSystemToolExecutor
     private let broker = NativeCapabilityBroker()
     private let defaults: UserDefaults
     private var projectedNativeNames = Set<String>()
 
     public init(workspace: any Workspace, defaults: UserDefaults = .standard) {
-        self.fileSystem = FileSystemToolExecutor(workspace: workspace)
+        self.fileSystem = MiniAgentFileSystemToolExecutor(workspace: workspace)
         self.defaults = defaults
     }
 
@@ -49,8 +49,8 @@ public actor NativeCapabilityToolExecutor: @preconcurrency ToolExecutor {
     }
 
     public func execute(_ invocation: ToolInvocation, approval: PermissionResponse.Decision?) async -> ToolExecutionResult {
-        if FileSystemToolExecutor.toolNames.contains(invocation.name) {
-            return await fileSystem.execute(invocation)
+        if MiniAgentFileSystemToolExecutor.toolNames.contains(invocation.name) {
+            return await fileSystem.execute(invocation, approval: approval)
         }
         let started = Date()
         guard projectedNativeNames.contains(invocation.name) else {
