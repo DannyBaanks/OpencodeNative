@@ -226,10 +226,12 @@ public actor IOSWorkspace: Workspace {
                 let values = try? fileURL.resourceValues(forKeys: [
                     .isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .isReadableKey, .isWritableKey
                 ])
+                var directoryFlag = ObjCBool(false)
+                _ = fileManager.fileExists(atPath: fileURL.path, isDirectory: &directoryFlag)
                 return FileInfo(
                     path: fileURL.path.replacingOccurrences(of: coordinatedURL.path + "/", with: ""),
                     name: fileURL.lastPathComponent,
-                    isDirectory: values?.isDirectory ?? false,
+                    isDirectory: directoryFlag.boolValue,
                     size: Int64(values?.fileSize ?? 0),
                     modificationDate: values?.contentModificationDate ?? Date(),
                     isReadable: values?.isReadable ?? false,
@@ -325,10 +327,12 @@ public actor IOSWorkspace: Workspace {
             let values = try coordinatedURL.resourceValues(forKeys: [
                 .isDirectoryKey, .fileSizeKey, .contentModificationDateKey, .isReadableKey, .isWritableKey
             ])
+            var directoryFlag = ObjCBool(false)
+            _ = fileManager.fileExists(atPath: coordinatedURL.path, isDirectory: &directoryFlag)
             return FileInfo(
                 path: path,
                 name: coordinatedURL.lastPathComponent,
-                isDirectory: values.isDirectory ?? false,
+                isDirectory: directoryFlag.boolValue,
                 size: Int64(values.fileSize ?? 0),
                 modificationDate: values.contentModificationDate ?? Date(),
                 isReadable: values.isReadable ?? false,

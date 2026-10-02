@@ -98,6 +98,8 @@ final class MiniAgentEditingToolsTests: XCTestCase {
         XCTAssertNil(copied.error)
         let copiedData = try await ws.readFile(at: "nested/b.txt")
         XCTAssertEqual(String(data: copiedData, encoding: .utf8), "hello world")
+        let rootItems = try await ws.listDirectory(at: "")
+        XCTAssertTrue(rootItems.first(where: { $0.name == "nested" })?.isDirectory == true)
 
         let search = await executor.execute(.init(name: "search_text", arguments: [
             "query": "world", "pattern": "**/*.txt"
