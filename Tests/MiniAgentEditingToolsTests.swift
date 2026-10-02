@@ -100,13 +100,16 @@ final class MiniAgentEditingToolsTests: XCTestCase {
         XCTAssertEqual(String(data: copiedData, encoding: .utf8), "hello world")
         let rootItems = try await ws.listDirectory(at: "")
         XCTAssertTrue(rootItems.first(where: { $0.name == "nested" })?.isDirectory == true)
+        let nestedItems = try await ws.listDirectory(at: "nested")
+        XCTAssertEqual(nestedItems.map(\.name), ["b.txt"])
+        XCTAssertTrue(GlobMatcher.match("**/*.txt", "nested/b.txt"))
 
         let search = await executor.execute(.init(name: "search_text", arguments: [
             "query": "world", "pattern": "**/*.txt"
         ]))
         XCTAssertNil(search.error)
         XCTAssertTrue(search.output.contains("a.txt"))
-        XCTAssertTrue(search.output.contains("nested/b.txt"))
+        XCTAssertTrue(search.output.contains("nested/b.txt"), search.output)
         XCTAssertTrue(search.output.contains("hello world"))
     }
 
