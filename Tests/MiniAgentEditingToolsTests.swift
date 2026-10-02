@@ -108,8 +108,8 @@ final class MiniAgentEditingToolsTests: XCTestCase {
             "query": "world", "pattern": "**/*.txt"
         ]))
         XCTAssertNil(search.error)
-        XCTAssertTrue(search.output.contains("a.txt"))
-        XCTAssertTrue(search.output.contains("nested/b.txt"), search.output)
+        let matches = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(search.output.utf8)) as? [[String: Any]])
+        XCTAssertEqual(Set(matches.compactMap { $0["path"] as? String }), ["a.txt", "nested/b.txt"])
         XCTAssertTrue(search.output.contains("hello world"))
     }
 
